@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.venv/
+venv/
+env/
+
+# Node
+node_modules/
+dist/
+build/
+.npm/
+
+# Environment variables
+.env
+
+# Media / temporary files
+*.mp3
+*.wav
+*.mp4
+out.mp3
+teste*.mp3
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Modelos pesados e arquivos de cache
+data/cache/
+*.onnx
+*.bin
+*.pt

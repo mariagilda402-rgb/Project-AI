@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Assistente — Visualizador</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *,
+    *::before,
+    *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --bg: #060812;
+      --surface: rgba(255, 255, 255, 0.04);
+      --border: rgba(255, 255, 255, 0.08);
+      --text: #e0e4f0;
+      --text-dim: #6b7280;
+
+      /* State accent colors */
+      --c-idle: #6d28d9;
+      --c-thinking: #7c3aed;
+      --c-speaking: #0891b2;
+      --c-listening: #059669;
+      --c-error: #dc2626;
+
+      --radius: 20px;
+      --transition: 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    body {
+      background: var(--bg);
+      font-family: 'Inter', system-ui, sans-serif;
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* ─── Ambient background gradient ─── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 60% 50% at 20% 80%, rgba(109, 40, 217, .12) 0%, transparent 60%),
+        radial-gradient(ellipse 50% 60% at 80% 20%, rgba(8, 145, 178, .10) 0%, transparent 60%);
+      pointer-events: none;
+      transition: background 1s ease;
+    }
+
+    /* ─── Header ─── */
+    header {
+      position: fixed;
+      top: 28px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 8px 20px;
+      border-radius: 100px;
+      backdrop-filter: blur(12px);
+      z-index: 10;
+    }
+
+    header .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent, #6d28d9);
+      box-shadow: 0 0 8px var(--accent, #6d28d9);
+      transition: background .5s, box-shadow .5s;
+      animation: pulse-dot 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; }
+      50% { opacity: .4; }
+    }
+
+    header span {
+      font-size: .82rem;
+      font-weight: 500;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+    }
+
+    header #state-label {
+      color: var(--accent, #a78bfa);
+      transition: color .5s;
+    }
+
+    /* ─── Connection indicator ─── */
+    .connection-status {
+      position: fixed;
+      top: 28px;
+      right: 28px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 6px 14px;
+      border-radius: 100px;
+      backdrop-filter: blur(12px);
+      z-index: 10;
+      font-size: .72rem;
+      color: var(--text-dim);
+      transition: all .5s;
+    }
+
+    .connection-status .conn-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #ef4444;
+      transition: background .5s;
+    }
+
+    .connection-status.connected .conn-dot {
+      background: #22c55e;
+      box-shadow: 0 0 6px rgba(34, 197, 94, .6);
+    }
+
+    /* ─── Main layout ─── */
+    main {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0;
+    }
+
+    /* ─── Orb ring wrapper ─── */
+    .orb-wrapper {
+      position: relative;
+      width: 340px;
+      height: 340px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Animated status ring */
+    .status-ring {
+      position: absolute;
+      inset: -14px;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      background:
+        linear-gradient(var(--bg), var(--bg)) padding-box,
+        conic-gradient(var(--ring-color, #6d28d9) var(--ring-fill, 0%), transparent 0%) border-box;
+      transition: --ring-color .6s;
+      animation: ring-spin 4s linear infinite;
+    }
+
+    @keyframes ring-spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Outer glow halo */
+    .orb-halo {
+      position: absolute;
+      inset: -30px;
+      border-radius: 50%;
+      background: radial-gradient(circle, var(--halo-color, rgba(109, 40, 217, .15)) 0%, transparent 70%);
+      transition: background .6s;
+      filter: blur(8px);
+      animation: halo-breathe 3s ease-in-out infinite;
+    }
+
+    @keyframes halo-breathe {
+      0%, 100% { transform: scale(1); opacity: .7; }
+      50% { transform: scale(1.08); opacity: 1; }
+    }
+
+    /* Actual orb container */
+    #orb-container {
+      width: 320px;
+      height: 320px;
+      border-radius: 50%;
+      overflow: hidden;
+      position: relative;
+      z-index: 1;
+      transition: transform .4s cubic-bezier(.34, 1.56, .64, 1), box-shadow .5s;
+      box-shadow:
+        0 0 40px rgba(109, 40, 217, .25),
+        0 0 80px rgba(109, 40, 217, .12),
+        inset 0 0 40px rgba(0, 0, 0, .4);
+    }
+
+    #orb-container[data-orb-state="thinking"] {
+      box-shadow: 0 0 50px rgba(124, 58, 237, .35), 0 0 100px rgba(124, 58, 237, .15), inset 0 0 40px rgba(0, 0, 0, .4);
+    }
+
+    #orb-container[data-orb-state="speaking"] {
+      box-shadow: 0 0 60px rgba(8, 145, 178, .4), 0 0 120px rgba(8, 145, 178, .18), inset 0 0 40px rgba(0, 0, 0, .4);
+    }
+
+    #orb-container[data-orb-state="listening"] {
+      box-shadow: 0 0 50px rgba(5, 150, 105, .35), 0 0 100px rgba(5, 150, 105, .15), inset 0 0 40px rgba(0, 0, 0, .4);
+    }
+
+    #orb-container[data-orb-state="error"] {
+      box-shadow: 0 0 60px rgba(220, 38, 38, .5), 0 0 120px rgba(220, 38, 38, .2), inset 0 0 40px rgba(0, 0, 0, .4);
+      animation: error-shake .08s linear infinite;
+    }
+
+    @keyframes error-shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-1.5px); }
+      75% { transform: translateX(1.5px); }
+    }
+
+    /* ─── Subtitle bar ─── */
+    .subtitle-bar {
+      position: fixed;
+      bottom: 40px;
+      left: 50%;
+      transform: translateX(-50%);
+      max-width: 700px;
+      width: 90vw;
+      text-align: center;
+      z-index: 10;
+    }
+
+    .subtitle-text {
+      font-size: 1rem;
+      font-weight: 400;
+      color: var(--text);
+      opacity: 0;
+      transition: opacity .3s ease;
+      text-shadow: 0 0 20px rgba(0, 0, 0, .8);
+      line-height: 1.5;
+      padding: 12px 24px;
+      background: rgba(6, 8, 18, .6);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      backdrop-filter: blur(12px);
+    }
+
+    .subtitle-text.visible {
+      opacity: 1;
+    }
+
+    /* ─── State info (small, bottom-left) ─── */
+    .state-info {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      font-size: .7rem;
+      color: var(--text-dim);
+      opacity: .5;
+    }
+
+    /* ─── Audio activation overlay ─── */
+    .audio-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(6, 8, 18, .85);
+      backdrop-filter: blur(12px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      cursor: pointer;
+      transition: opacity .5s ease;
+    }
+
+    .audio-overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .audio-overlay .audio-icon {
+      font-size: 4rem;
+      margin-bottom: 20px;
+      animation: audio-pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes audio-pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.1); opacity: .7; }
+    }
+
+    .audio-overlay .audio-text {
+      font-size: 1.2rem;
+      font-weight: 500;
+      color: var(--text);
+      margin-bottom: 8px;
+    }
+
+    .audio-overlay .audio-sub {
+      font-size: .85rem;
+      color: var(--text-dim);
+    }
+
+    /* ─── Error subtitle styling ─── */
+    .subtitle-text.error-subtitle {
+      border-color: rgba(220, 38, 38, .4);
+      background: rgba(220, 38, 38, .1);
+      color: #fca5a5;
+    }
+
+    /* Caixa de Texto Flutuante */
+    #chatBox {
+      position: absolute;
+      bottom: 120px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 400px;
+      background: rgba(20, 20, 30, 0.7);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 20px;
+      padding: 15px;
+      z-index: 500;
+      display: none; /* Controlado pelo state.show_input_box */
+      flex-direction: row;
+      align-items: center;
+      gap: 10px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      cursor: grab;
+    }
+    #chatBox:active { cursor: grabbing; }
+    #chatBox input {
+      flex: 1;
+      background: rgba(0,0,0,0.3);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 15px;
+      padding: 10px 15px;
+      color: white;
+      font-size: 1rem;
+      font-family: inherit;
+      outline: none;
+    }
+    #chatBox button {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 15px;
+      padding: 10px 20px;
+      color: white;
+      cursor: pointer;
+      font-weight: bold;
+      transition: all 0.2s ease;
+    }
+    #chatBox button:hover { background: rgba(255, 255, 255, 0.2); }
+  </style>
+</head>
+
+<body>
+
+  <!-- Audio activation overlay -->
+  <div class="audio-overlay" id="audio-overlay">
+    <div class="audio-icon">🔊</div>
+    <div class="audio-text">Clique para ativar o áudio</div>
+    <div class="audio-sub">Necessário para animação reativa à voz da IA</div>
+  </div>
+
+  <header>
+    <div class="dot" id="header-dot"></div>
+    <span>AI Assistente &nbsp;·&nbsp; <span id="state-label">idle</span></span>
+  </header>
+
+  <div class="connection-status" id="conn-status">
+    <div class="conn-dot"></div>
+    <span id="conn-label">Desconectado</span>
+  </div>
+
+  <main>
+    <div class="orb-wrapper">
+      <div class="orb-halo" id="orb-halo"></div>
+      <div class="status-ring" id="status-ring"></div>
+      <div id="orb-container"></div>
+    </div>
+  </main>
+
+  <div class="subtitle-bar">
+    <div class="subtitle-text" id="subtitle"></div>
+  </div>
+
+  <div id="chatBox">
+    <input type="text" id="chatInput" placeholder="Digite uma mensagem..." />
+    <button id="sendBtn">Enviar</button>
+  </div>
+
+  <div class="state-info" id="state-info">WebSocket: aguardando...</div>
+
+  <script src="./orb.js"></script>
+  <script>
+    /* ── Orb init ── */
+    const container = document.getElementById('orb-container');
+    const orb = new OrbRenderer(container, {
+      hue: 0,
+      backgroundColor: [0.024, 0.031, 0.071]
+    });
+
+    /* ── State metadata ── */
+    const STATE_META = {
+      idle: {
+        accent: '#6d28d9',
+        halo: 'rgba(109,40,217,.20)',
+        ring: '#6d28d9',
+        ringFill: '25%',
+      },
+      thinking: {
+        accent: '#7c3aed',
+        halo: 'rgba(124,58,237,.25)',
+        ring: '#a855f7',
+        ringFill: '60%',
+      },
+      speaking: {
+        accent: '#0891b2',
+        halo: 'rgba(8,145,178,.25)',
+        ring: '#38bdf8',
+        ringFill: '80%',
+      },
+      listening: {
+        accent: '#059669',
+        halo: 'rgba(5,150,105,.22)',
+        ring: '#34d399',
+        ringFill: '45%',
+      },
+      error: {
+        accent: '#dc2626',
+        halo: 'rgba(220,38,38,.30)',
+        ring: '#ef4444',
+        ringFill: '100%',
+      },
+      loading: {
+        accent: '#3b82f6',
+        halo: 'rgba(59,130,246,.22)',
+        ring: '#60a5fa',
+        ringFill: '50%',
+      },
+      success: {
+        accent: '#22c55e',
+        halo: 'rgba(34,197,94,.28)',
+        ring: '#4ade80',
+        ringFill: '100%',
+      },
+      sleeping: {
+        accent: '#6366f1',
+        halo: 'rgba(99,102,241,.12)',
+        ring: '#818cf8',
+        ringFill: '10%',
+      },
+      warning: {
+        accent: '#f59e0b',
+        halo: 'rgba(245,158,11,.25)',
+        ring: '#fbbf24',
+        ringFill: '70%',
+      },
+    };
+
+    /* ── Map backend states to orb states ── */
+    function mapState(backendStatus) {
+      const mapping = {
+        'idle': 'idle',
+        'speaking': 'speaking',
+        'thinking': 'thinking',
+        'listening': 'listening',
+        'error': 'error',
+        'loading': 'loading',
+        'success': 'success',
+        'sleeping': 'sleeping',
+        'warning': 'warning',
+      };
+      return mapping[backendStatus] || 'idle';
+    }
+
+    let currentState = 'idle';
+
+    /* State name translations for display */
+    const STATE_LABELS = {
+      idle: 'Inativo',
+      thinking: 'Pensando',
+      speaking: 'Falando',
+      listening: 'Escutando',
+      error: 'Erro',
+      loading: 'Carregando',
+      success: 'Sucesso',
+      sleeping: 'Dormindo',
+      warning: 'Aviso',
+    };
+
+    function setOrbState(name) {
+      if (name === currentState) return;
+      currentState = name;
+
+      /* Update orb */
+      orb.setState(name);
+      if (name !== 'speaking') orb.setVolume(0);
+
+      const meta = STATE_META[name] || STATE_META.idle;
+
+      /* Update header */
+      document.getElementById('state-label').textContent = STATE_LABELS[name] || name;
+      const dot = document.getElementById('header-dot');
+      dot.style.setProperty('--accent', meta.accent);
+      dot.style.background = meta.accent;
+      dot.style.boxShadow = `0 0 8px ${meta.accent}`;
+
+      /* Update halo */
+      document.getElementById('orb-halo').style.background =
+        `radial-gradient(circle, ${meta.halo} 0%, transparent 70%)`;
+
+      /* Update ring */
+      const ring = document.getElementById('status-ring');
+      ring.style.setProperty('--ring-color', meta.ring);
+      ring.style.setProperty('--ring-fill', meta.ringFill);
+    }
+
+    /* ── Subtitle ── */
+    function setSubtitle(text, isError = false) {
+      const el = document.getElementById('subtitle');
+      if (text && text.trim()) {
+        el.textContent = text;
+        el.classList.add('visible');
+        el.classList.toggle('error-subtitle', isError);
+      } else {
+        el.classList.remove('visible');
+        el.classList.remove('error-subtitle');
+      }
+    }
+
+    /* ── Audio Context for analyzing audio and driving animation ── */
+    let audioContext = null;
+    let audioAnalyser = null;
+    let audioDataArray = null;
+    let currentAudioSource = null;
+    let audioAnimFrame = null;
+    let audioReady = false;
+
+    function ensureAudioContext() {
+      if (!audioContext) {
+        try {
+          audioContext = new (window.AudioContext || window.webkitAudioContext)();
+          audioAnalyser = audioContext.createAnalyser();
+          audioAnalyser.fftSize = 256;
+          audioAnalyser.smoothingTimeConstant = 0.7;
+          audioAnalyser.connect(audioContext.destination);
+          audioDataArray = new Uint8Array(audioAnalyser.frequencyBinCount);
+          audioReady = true;
+          console.log('[Audio] AudioContext criado com sucesso');
+        } catch (e) {
+          console.error('[Audio] Falha ao criar AudioContext:', e);
+        }
+      }
+      if (audioContext && audioContext.state === 'suspended') {
+        audioContext.resume().then(() => {
+          audioReady = true;
+          console.log('[Audio] AudioContext resumido');
+        });
+      }
+    }
+
+    /* Audio overlay activation */
+    const audioOverlay = document.getElementById('audio-overlay');
+    audioOverlay.addEventListener('click', () => {
+      ensureAudioContext();
+      audioOverlay.classList.add('hidden');
+      setTimeout(() => { audioOverlay.style.display = 'none'; }, 600);
+    });
+
+    function startVolumeAnimation() {
+      if (audioAnimFrame) return;
+      function animate() {
+        if (!audioAnalyser || currentState !== 'speaking') {
+          orb.setVolume(0);
+          audioAnimFrame = null;
+          return;
+        }
+        audioAnalyser.getByteFrequencyData(audioDataArray);
+        let sum = 0;
+        for (let i = 0; i < audioDataArray.length; i++) sum += audioDataArray[i];
+        let amplitude = (sum / audioDataArray.length) / 255.0;
+        // Boost para ficar mais reativo
+        amplitude = Math.min(1.0, amplitude * 2.0);
+        orb.setVolume(amplitude);
+        audioAnimFrame = requestAnimationFrame(animate);
+      }
+      audioAnimFrame = requestAnimationFrame(animate);
+    }
+
+    async function playAudioFromUrl(url) {
+      if (!audioReady) {
+        console.warn('[Audio] AudioContext não está pronto — clique na página primeiro');
+        // Tenta ativar mesmo sem gesto
+        ensureAudioContext();
+      }
+
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('Fetch failed: ' + res.status);
+        const arrayBuffer = await res.arrayBuffer();
+        
+        if (!audioContext) {
+          console.error('[Audio] AudioContext não disponível');
+          fetch('/api/audio_finished', { method: 'POST' }).catch(() => { });
+          return;
+        }
+        
+        const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+        // Stop previous if still playing
+        if (currentAudioSource) {
+          try { currentAudioSource.stop(); } catch (e) { }
+        }
+
+        const source = audioContext.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(audioAnalyser);
+        currentAudioSource = source;
+
+        source.onended = () => {
+          currentAudioSource = null;
+          orb.setVolume(0);
+          // Notifica o backend que o audio terminou
+          fetch('/api/audio_finished', { method: 'POST' }).catch(() => { });
+        };
+
+        source.start(0);
+        startVolumeAnimation();
+        console.log('[Audio] Reproduzindo áudio...');
+      } catch (e) {
+        console.error('[Audio] Erro ao tocar:', e);
+        orb.setVolume(0);
+        fetch('/api/audio_finished', { method: 'POST' }).catch(() => { });
+      }
+    }
+
+    /* ── WebSocket Connection ── */
+    let ws = null;
+    let wsReconnectTimer = null;
+    const connStatus = document.getElementById('conn-status');
+    const connLabel = document.getElementById('conn-label');
+    const stateInfo = document.getElementById('state-info');
+
+    function connectWebSocket() {
+      const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${location.host}/ws`;
+
+      try {
+        ws = new WebSocket(wsUrl);
+      } catch (e) {
+        scheduleReconnect();
+        return;
+      }
+
+      ws.onopen = () => {
+        connStatus.classList.add('connected');
+        connLabel.textContent = 'Conectado';
+        stateInfo.textContent = 'WebSocket: conectado ✓';
+        // Ensure audio context is ready (needs user gesture first time)
+        document.addEventListener('click', () => ensureAudioContext(), { once: true });
+        document.addEventListener('keydown', () => ensureAudioContext(), { once: true });
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+
+          if (data.type === 'state') {
+            const orbState = mapState(data.status || 'idle');
+            setOrbState(orbState);
+
+            // Subtitle
+            if (data.subtitle) {
+              setSubtitle(data.subtitle, orbState === 'error');
+            } else if (orbState !== 'speaking') {
+              setSubtitle('');
+            }
+
+            const label = STATE_LABELS[orbState] || orbState;
+            stateInfo.textContent = `Estado: ${label} | ${new Date().toLocaleTimeString()}`;
+          }
+
+          if (data.type === 'play_audio' && data.url) {
+            ensureAudioContext();
+            playAudioFromUrl(data.url);
+          }
+
+          if (data.type === 'stop_audio') {
+            if (currentAudioSource) {
+              try { currentAudioSource.stop(); } catch (e) { }
+              currentAudioSource = null;
+            }
+            orb.setVolume(0);
+          }
+
+          if (data.type === 'ping') {
+            // keep alive
+          }
+
+        } catch (e) {
+          console.error('[WS] Parse error:', e);
+        }
+      };
+
+      ws.onclose = () => {
+        connStatus.classList.remove('connected');
+        connLabel.textContent = 'Desconectado';
+        stateInfo.textContent = 'WebSocket: desconectado';
+        scheduleReconnect();
+      };
+
+      ws.onerror = () => {
+        connStatus.classList.remove('connected');
+        connLabel.textContent = 'Erro';
+      };
+    }
+
+    function scheduleReconnect() {
+      if (wsReconnectTimer) return;
+      wsReconnectTimer = setTimeout(() => {
+        wsReconnectTimer = null;
+        connectWebSocket();
+      }, 2000);
+    }
+
+    /* ── Fallback polling (when WS is down) ── */
+    let lastPolledState = '';
+    async function pollFallback() {
+      if (ws && ws.readyState === WebSocket.OPEN) return;
+      try {
+        const res = await fetch('/api/state');
+        if (res.ok) {
+          const data = await res.json();
+          const stateStr = JSON.stringify(data);
+          if (stateStr !== lastPolledState) {
+            lastPolledState = stateStr;
+            const orbState = mapState(data.status || 'idle');
+            setOrbState(orbState);
+            if (data.subtitle) setSubtitle(data.subtitle);
+            else if (orbState !== 'speaking') setSubtitle('');
+
+            if (data.audio_ready && data.audio_file) {
+              ensureAudioContext();
+              playAudioFromUrl('/api/audio?t=' + Date.now());
+            }
+          }
+        }
+      } catch (e) { }
+    }
+    setInterval(pollFallback, 300);
+
+    /* ── Start WS connection ── */
+    connectWebSocket();
+    // --- Drag and drop da caixa de chat ---
+    const chatBoxElement = document.getElementById('chatBox');
+    let isDragging = false;
+    let dragStartX, dragStartY;
+    let initialLeft, initialTop;
+
+    chatBoxElement.addEventListener('mousedown', (e) => {
+      if(e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return;
+      isDragging = true;
+      dragStartX = e.clientX;
+      dragStartY = e.clientY;
+      const rect = chatBoxElement.getBoundingClientRect();
+      initialLeft = rect.left;
+      initialTop = rect.top;
+      // desabilita o tranform translateX para poder mover via absolute px
+      chatBoxElement.style.transform = 'none';
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      const dx = e.clientX - dragStartX;
+      const dy = e.clientY - dragStartY;
+      chatBoxElement.style.left = `${initialLeft + dx}px`;
+      chatBoxElement.style.top = `${initialTop + dy}px`;
+      chatBoxElement.style.bottom = 'auto'; // cancela o CSS base
+    });
+
+    window.addEventListener('mouseup', () => { isDragging = false; });
+
+    // --- Envio de chat ---
+    const chatInput = document.getElementById('chatInput');
+    const sendBtn = document.getElementById('sendBtn');
+    
+    function sendChat() {
+      const text = chatInput.value.trim();
+      if (!text) return;
+      fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text })
+      });
+      chatInput.value = '';
+    }
+    
+    sendBtn.addEventListener('click', sendChat);
+    chatInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') sendChat();
+    });
+
+  </script>
+</body>
+
+</html>
