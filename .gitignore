@@ -14,7 +14,7 @@ build/
 .npm/
 
 # Environment variables
-.env
+# .env foi removido propositalmente para sincronizar as chaves
 
 # Media / temporary files
 *.mp3
