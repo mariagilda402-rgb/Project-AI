@@ -102,7 +102,6 @@ class Settings:
     tts_model: str
     tts_voice: str
     use_mic: bool
-    require_critical_confirmation: bool
     gemini_max_rpm: int
     gemini_retry_attempts: int
     gemini_use_function_calling: bool
@@ -122,6 +121,8 @@ class Settings:
     enable_visualizer: bool
     kokoro_voice: str
     kokoro_speed: float
+    require_critical_confirmation: bool = True
+    enable_command_logs: bool = True
 
 
 def load_settings() -> Settings:
@@ -164,6 +165,7 @@ def load_settings() -> Settings:
         gemini_use_function_calling=_as_bool(
             os.getenv("GEMINI_USE_FUNCTION_CALLING"), default=True
         ),
+        enable_command_logs=_as_bool(os.getenv("ENABLE_COMMAND_LOGS"), default=True),
         stt_language=os.getenv("STT_LANGUAGE", "pt-BR"),
         tts_provider=os.getenv("TTS_PROVIDER", "local"),
         murf_api_key=os.getenv("MURF_API_KEY", ""),

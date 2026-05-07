@@ -39,25 +39,7 @@ def build_agent_tool() -> types.Tool:
                     required=["query"],
                 ),
             ),
-            types.FunctionDeclaration(
-                name="open_or_run",
-                description=(
-                    "Abre app, URL específica, navegador ou executa comando desktop para o usuário ver na tela dele. "
-                    "Exemplos de target: 'Spotify', 'notepad', 'chrome', "
-                    "'https://youtube.com', 'https://google.com/search?q=gatos'. "
-                    "USE SOMENTE quando o usuário PEDIR EXPLICITAMENTE para ABRIR uma página, janela ou navegador. "
-                    "NUNCA use para VOCÊ pesquisar coisas (use search_web para isso)."
-                ),
-                parameters=types.Schema(
-                    type=types.Type.OBJECT,
-                    properties={
-                        "target": _str_prop(
-                            "Nome do app, URL completa, ou 'chrome'."
-                        ),
-                    },
-                    required=["target"],
-                ),
-            ),
+
             types.FunctionDeclaration(
                 name="run_utility",
                 description=(
@@ -155,6 +137,81 @@ def build_agent_tool() -> types.Tool:
                         "message": _str_prop("Texto da mensagem a enviar."),
                     },
                     required=["target", "message"],
+                ),
+            ),
+            types.FunctionDeclaration(
+                name="control_spotify",
+                description=(
+                    "Controla o Spotify Desktop localmente. Acoes:\n"
+                    "- play / pause: alterna play/pause\n"
+                    "- next / skip: proxima musica\n"
+                    "- previous: musica anterior\n"
+                    "- current: mostra a musica tocando agora\n"
+                    "- search_and_play: busca e tenta tocar uma musica/artista (argument = nome)\n"
+                    "- open: abre o Spotify"
+                ),
+                parameters=types.Schema(
+                    type=types.Type.OBJECT,
+                    properties={
+                        "action": _str_prop("Acao: play, pause, next, previous, current, search_and_play, open"),
+                        "argument": _str_prop("Nome da musica/artista para search_and_play."),
+                    },
+                    required=["action"],
+                ),
+            ),
+            types.FunctionDeclaration(
+                name="manage_files",
+                description=(
+                    "Gerencia arquivos e pastas do Windows do usuario. Acoes:\n"
+                    "- list_dir: lista conteudo de uma pasta\n"
+                    "- count_files: conta arquivos (argument = extensao opcional)\n"
+                    "- file_info: info de um arquivo\n"
+                    "- search_files: busca recursiva (argument = termo)\n"
+                    "- create_dir: cria pasta\n"
+                    "- move_file: move (argument = destino)\n"
+                    "- copy_file: copia (argument = destino)\n"
+                    "- delete_file: deleta\n"
+                    "- rename_file: renomeia (argument = novo nome)\n"
+                    "- disk_usage: espaco usado\n"
+                    "- read_text_file: le conteudo de arquivo texto\n"
+                    "- write_text_file: escreve/cria arquivo (argument = conteudo)\n"
+                    "Pastas aceitas: downloads, documentos, desktop, imagens, musicas, videos."
+                ),
+                parameters=types.Schema(
+                    type=types.Type.OBJECT,
+                    properties={
+                        "action": _str_prop("Acao a executar."),
+                        "path": _str_prop("Caminho ou alias da pasta (ex: 'downloads', 'documentos', 'Downloads/subfolder')."),
+                        "argument": _str_prop("Argumento extra: destino, novo nome, filtro, conteudo."),
+                    },
+                    required=["action", "path"],
+                ),
+            ),
+            types.FunctionDeclaration(
+                name="open_windows_app",
+                description=(
+                    "USE ESTA FERRAMENTA SEMPRE que o usuário pedir para abrir, fechar ou interagir com QUALQUER aplicativo ou janela (Bloco de Notas, Chrome, Spotify, etc). "
+                    "Ações: open_app, close_app, list_installed, list_running, focus_app, write_to_notepad."
+                ),
+                parameters=types.Schema(
+                    type=types.Type.OBJECT,
+                    properties={
+                        "action": _str_prop("Acao: open_app, close_app, list_installed, list_running, focus_app, write_to_notepad"),
+                        "target": _str_prop("Nome do app (ex: 'notepad'), URL, ou texto."),
+                        "argument": _str_prop("Extra."),
+                    },
+                    required=["action"],
+                ),
+            ),
+            types.FunctionDeclaration(
+                name="set_ai_volume",
+                description="Ajusta o volume da voz da própria IA (TTS).",
+                parameters=types.Schema(
+                    type=types.Type.OBJECT,
+                    properties={
+                        "volume": _str_prop("Volume em porcentagem (ex: '100%', '50%', '+10%', '-20%')."),
+                    },
+                    required=["volume"],
                 ),
             ),
         ]
@@ -260,5 +317,42 @@ def build_openai_agent_tools() -> list[dict]:
                 "message": {"type": "string", "description": "Mensagem."},
             },
             ["target", "message"],
+        ),
+        _openai_fn(
+            "control_spotify",
+            "Controla Spotify Desktop: play, pause, next, previous, current, search_and_play (argument=nome), open.",
+            {
+                "action": {"type": "string", "description": "play, pause, next, previous, current, search_and_play, open"},
+                "argument": {"type": "string", "description": "Nome da musica/artista."},
+            },
+            ["action"],
+        ),
+        _openai_fn(
+            "manage_files",
+            "Gerencia arquivos/pastas: list_dir, count_files, file_info, search_files, create_dir, move_file, copy_file, delete_file, rename_file, disk_usage, read_text_file, write_text_file. Pastas: downloads, documentos, desktop, imagens, musicas, videos.",
+            {
+                "action": {"type": "string", "description": "Acao a executar."},
+                "path": {"type": "string", "description": "Caminho ou alias (ex: downloads)."},
+                "argument": {"type": "string", "description": "Argumento extra."},
+            },
+            ["action", "path"],
+        ),
+        _openai_fn(
+            "manage_apps",
+            "Gerencia apps Windows: list_installed, list_running, open_app, open_batch (virgulas), close_app, focus_app, write_to_notepad.",
+            {
+                "action": {"type": "string", "description": "Acao."},
+                "target": {"type": "string", "description": "Nome do app ou texto."},
+                "argument": {"type": "string", "description": "Argumento extra."},
+            },
+            ["action"],
+        ),
+        _openai_fn(
+            "set_ai_volume",
+            "Ajusta o volume da voz da própria IA (TTS).",
+            {
+                "volume": {"type": "string", "description": "Volume em % (ex: 100%, +10%, -20%)."},
+            },
+            ["volume"],
         ),
     ]

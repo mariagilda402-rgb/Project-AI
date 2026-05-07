@@ -36,7 +36,11 @@ class ToolRegistry:
             "note": "notes",
             "vol": "media_control",
             "prod": "productivity",
-            "fin": "finance"
+            "fin": "finance",
+            "spot": "spotify",
+            "file": "file_manager",
+            "fs": "file_manager",
+            "apps": "app_manager",
         }
         if kind_l in compact_map:
             kind_l = compact_map[kind_l]
@@ -136,6 +140,24 @@ class ToolRegistry:
             if not fin: return ToolResult(False, "Financas indisponivel.")
             return fin.run(arg or user_line)
 
+        # ── Spotify ──
+        if kind_l == "spotify":
+            sp = self._find_tool("spotify")
+            if not sp: return ToolResult(False, "Spotify indisponivel.")
+            return sp.run(arg or user_line)
+
+        # ── File Manager ──
+        if kind_l == "file_manager":
+            fm = self._find_tool("file_manager")
+            if not fm: return ToolResult(False, "File Manager indisponivel.")
+            return fm.run(arg or user_line)
+
+        # ── App Manager ──
+        if kind_l == "app_manager":
+            am = self._find_tool("app_manager")
+            if not am: return ToolResult(False, "App Manager indisponivel.")
+            return am.run(arg or user_line)
+
         return ToolResult(False, f"Ferramenta desconhecida: {kind}.")
 
 
@@ -192,6 +214,9 @@ class ToolRegistry:
         if tool_name == "notes":
             return any(x in lowered for x in ["nota", "anota", "anotacao", "anotação"])
         if tool_name == "media_control":
+            # Nao intercepta se o usuario mencionou Spotify explicitamente
+            if "spotify" in lowered:
+                return False
             return any(
                 x in lowered
                 for x in [
@@ -204,6 +229,47 @@ class ToolRegistry:
                     "proxima musica",
                     "próxima música",
                     "pula",
+                ]
+            )
+        if tool_name == "spotify":
+            return any(
+                x in lowered
+                for x in [
+                    "spotify",
+                    "que musica",
+                    "que música",
+                    "tocando",
+                    "toque ",
+                    "tocar ",
+                ]
+            )
+        if tool_name == "file_manager":
+            return any(
+                x in lowered
+                for x in [
+                    "pasta ",
+                    "arquivo",
+                    "downloads",
+                    "documentos",
+                    "quantos arquivo",
+                    "liste a pasta",
+                    "mover ",
+                    "copiar ",
+                    "deletar ",
+                    "renomear ",
+                ]
+            )
+        if tool_name == "app_manager":
+            return any(
+                x in lowered
+                for x in [
+                    "apps instalad",
+                    "programas aberto",
+                    "janelas aberta",
+                    "feche o ",
+                    "fecha o ",
+                    "traga o ",
+                    "escreva no bloco",
                 ]
             )
         return False

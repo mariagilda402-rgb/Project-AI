@@ -151,22 +151,25 @@ class LLMService:
         tools: list[types.Tool],
         on_function_call: Callable[[str, dict[str, Any]], str],
         max_rounds: int = 8,
+        force_tool: bool = False,
     ) -> str:
         """
         Loop Gemini com function calling nativo. Executa callbacks locais e devolve texto final.
-        Retorna string vazia se nao houver cliente Gemini ou se todas as tentativas falharem.
         """
         if not self.gemini_client or not tools:
             return ""
         contents = self._messages_to_gemini_contents(messages)
         if not contents:
             return ""
+            
+        mode = types.FunctionCallingConfigMode.ANY if force_tool else types.FunctionCallingConfigMode.AUTO
+        
         config = types.GenerateContentConfig(
             system_instruction=system_instruction.strip(),
             tools=tools,
             tool_config=types.ToolConfig(
                 function_calling_config=types.FunctionCallingConfig(
-                    mode=types.FunctionCallingConfigMode.AUTO,
+                    mode=mode,
                 )
             ),
         )
@@ -191,6 +194,7 @@ class LLMService:
                 fr_parts: list[types.Part] = []
                 for fc in function_calls:
                     args = self._normalize_function_args(fc.args)
+                    print(f"\n[🛠️ GEMINI TOOL CALL] {fc.name}({args})")
                     try:
                         out = on_function_call(fc.name or "", args)
                     except Exception as exc:
@@ -301,6 +305,7 @@ class LLMService:
                         args = {}
                     if not isinstance(args, dict):
                         args = {}
+                    print(f"\n[🛠️ OPENAI/GROQ TOOL CALL] {tc.function.name}({args})")
                     try:
                         out = on_function_call(tc.function.name, args)
                     except Exception as exc:

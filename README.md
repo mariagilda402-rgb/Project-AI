@@ -1,91 +1,144 @@
-# IA Assistente Autonoma (Windows MVP)
+# 🌌 IA Assistente Autônoma (Windows Personal AI)
 
-Projeto MVP baseado no plano definido:
-- Voz (entrada/saida)
-- Visao de tela sob demanda
-- Orquestracao com tools
-- Memoria curta e longa
-- Integracao inicial com produtividade (Super Productivity via conector local)
+Uma assistente virtual de alto desempenho para Windows, projetada para ser sua companheira digital autônoma. Este projeto integra visão computacional, processamento de voz avançado, memória persistente e uma interface visual reativa (Orb) baseada em WebGL.
 
-## 1) Setup
+---
 
-1. Crie e ative um ambiente virtual Python 3.10+.
-2. Instale dependencias:
-   - `pip install -r requirements.txt`
-3. Copie `.env.example` para `.env` e preencha:
-   - `GEMINI_API_KEY` (principal)
-   - opcionais para fallback: `OPENROUTER_API_KEY`, `NVIDIA_API_KEY`
+## ✨ Principais Funcionalidades
 
-## 2) Rodar
+- **🎙️ Interface de Voz Inteligente**: Entrada via microfone (STT) e resposta via áudio (TTS) com suporte a interrupções em tempo real.
+- **👁️ Visão de Tela Multimodal**: Capacidade de "enxergar" e analisar o que você está fazendo no Windows usando Gemini Vision.
+- **🔮 Orb Visual Reativo**: Um visualizador WebGL dinâmico que expressa emoções e estados da IA (pensando, ouvindo, falando).
+- **🧠 Memória Evolutiva**: Sistema de memória curta e longa (SQLite) com Mini-RAG para recordar fatos, preferências e evoluir a persona.
+- **🛠️ Orquestração de Ferramentas**: Automação real de tarefas no sistema, finanças, produtividade e comunicação.
+- **📱 Integração WhatsApp**: Envio de mensagens de forma invisível via Mudslide CLI.
 
-- Execucao principal:
-  - `python -m src.main`
-- Diagnostico de audio:
-  - `python -m src.check_audio`
+---
 
-### Teste "IA de verdade" (Gemini + tela)
+## 🚀 Guia Rápido
 
-- Confirme `GEMINI_API_KEY` e (opcional) `USE_MIC=true` para voz.
-- Diga algo como: **"olha minha tela e me diz o que voce ve"** ou **"veja minha tela e de sua opiniao sobre o video"**.
-- O app captura o monitor, envia ao **Gemini multimodal** e responde com o prompt estruturado em `src/agent/prompts.py` (`build_vision_instruction`).
-- **Roteamento de tools:** hoje as acoes (gasto, habito, abrir app, etc.) disparam por **palavras-chave** + fila de tools; o chat usa o **prompt de sistema** em `CHAT_SYSTEM_PROMPT`. Para ambiguidade (sem frase obvia), ative `USE_LLM_INTENT_ROUTER=true`: ai o Gemini classifica `vision` / `action` / `chat` antes de responder (uma chamada extra por mensagem quando nao houve match direto).
+### 1. Requisitos e Setup
+1. **Python 3.10+** instalado.
+2. Clone o repositório e crie um ambiente virtual:
+   ```bash
+   python -m venv .venv
+   source .venv/bin/activate  # ou .venv\Scripts\activate no Windows
+   ```
+3. Instale as dependências:
+   ```bash
+   pip install -r requirements.txt
+   ```
+4. Configure suas chaves no `.env` (use `.env.example` como base):
+   - `GEMINI_API_KEY`: Essencial para visão e lógica principal.
+   - `OPENROUTER_API_KEY` / `NVIDIA_API_KEY`: Fallbacks para chat.
+   - `MURF_API_KEY`: Opcional para voz premium.
 
-Modo padrao:
-- entrada por texto (mais simples para validar fluxo)
-- voz de resposta via `pyttsx3` (fallback local)
-- LLM e visao com `Gemini 2.5 Flash` (quando `GEMINI_API_KEY` estiver configurada)
-- STT: `SpeechRecognition` + Google (`STT_LANGUAGE`, padrao `pt-BR`) — bom para PT com termos em ingles ocasionais
-- TTS configuravel: `local` (padrao) ou `murf`
+### 2. Execução
+- **Modo Completo (Recomendado)**:
+  ```bash
+  python -m src.main
+  ```
+- **Diagnóstico de Áudio**:
+  ```bash
+  python -m src.check_audio
+  ```
 
-Para usar microfone:
-- defina `USE_MIC=true` no `.env`
-- garanta suporte do sistema para `SpeechRecognition`/`PyAudio`
-- ajuste `STT_LANGUAGE` se quiser outro idioma primario (ex.: `en-US`)
+---
 
-## 3) Comandos de exemplo
+## 📂 Arquitetura do Projeto
 
-- `abra o bloco de notas`
-- `olha minha tela e me diga o que voce ve`
-- `adicione habito dormir as 22h`
-- `modifique tarefa estudar python para prioridade alta`
-- `adicione gasto de hoje feijao 20`
-- `me mostre gastos de hoje`
-- `crie alarme para 22:00`
+```mermaid
+graph TD
+    User((Usuário)) -->|Voz/Texto| Main[main.py]
+    Main -->|Orquestração| Agent[AgentOrchestrator]
+    Agent -->|Visão| Vision[VisionService]
+    Agent -->|Memória| DB[(SQLite Memory)]
+    Agent -->|Tools| Registry[ToolRegistry]
+    
+    Registry --> Tool1[WhatsApp]
+    Registry --> Tool2[Productivity]
+    Registry --> Tool3[Finance]
+    Registry --> Tool4[System Control]
+    Registry --> Tool5[Spotify]
+    Registry --> Tool6[File Manager]
+    Registry --> Tool7[App Manager]
+    
+    Main -->|Feedback Visual| Orb[Visualizer WebGL]
+    Agent -->|Resposta Voz| TTS[TTS Service]
+```
 
-## 4) Estrutura
+---
 
-- `src/main.py`: loop principal
-- `src/agent/orchestrator.py`: decide entre conversa e tools
-- `src/services/*`: STT, TTS, LLM e visao
-- `src/tools/*`: tool-calling e automacao
-- `src/memory/store.py`: memoria em SQLite
-- `src/integrations/super_productivity.py`: conector de tarefas/habitos
+## 🛠️ Ferramentas Disponíveis (Toolbox)
 
-## 5) Seguranca
+| Ferramenta | Comando de Exemplo | Descrição |
+| :--- | :--- | :--- |
+| **🎵 Spotify** | `"toque Bohemian Rhapsody"`, `"que música tá tocando?"` | Controle local do Spotify Desktop (play, pause, skip, busca). |
+| **📂 Gerenciador de Arquivos** | `"quantos arquivos tem na pasta Downloads?"` | Lista, conta, move, copia, deleta e lê arquivos. |
+| **🖥️ Gerenciador de Apps** | `"abre Chrome, Spotify e VS Code"` | Lista apps instalados/abertos, abre em batch, fecha e foca janelas. |
+| **📱 WhatsApp** | `"mande um zap para João falando que chego em 5min"` | Envio via Mudslide CLI com anti-spam. |
+| **👁️ Visão** | `"olha minha tela e resume esse documento"` | Captura de tela + análise Gemini. |
+| **💰 Finanças** | `"adicione gasto de 50 reais com pizza"` | Controle financeiro local. |
+| **📋 Produtividade** | `"adicione tarefa estudar python na prioridade alta"` | Integração com Super Productivity. |
+| **🔊 Sistema/Mídia** | `"aumente o volume"`, `"info do sistema"` | Controle de mídia e informações do PC. |
+| **🧠 Memória** | `"lembre que eu gosto de café sem açúcar"` | Persistência de fatos e preferências. |
+| **📝 Clipboard** | `"resuma esse texto e copie pra mim"` | Lê e escreve na área de transferência. |
+| **✏️ Notepad** | `"escreva 'olá mundo' no bloco de notas"` | Escreve texto diretamente no Bloco de Notas. |
 
-- Acoes criticas pedem confirmacao (configuravel por env)
-- Somente tools registradas podem ser executadas
-- O agente sugere passos, mas nao modifica codigo sozinho
+---
 
-## 6) Roteamento de provedores
+## 🎵 Spotify (Sem Premium)
 
-Ordem de tentativa no chat:
-1. Gemini (`GEMINI_API_KEY`)
-2. OpenRouter (`OPENROUTER_API_KEY`)
-3. NVIDIA (`NVIDIA_API_KEY`)
+Controle local do aplicativo desktop do Spotify — sem precisar de conta Premium ou API Web:
+- **Buscar e tocar**: Abre a busca dentro do app e tenta reproduzir automaticamente.
+- **Controles básicos**: Play, Pause, Próxima, Anterior via teclas de mídia do Windows.
+- **Identificar música**: Lê o título da janela do Spotify para saber o que está tocando.
 
-## 7) Controle de cota Gemini
+## 📂 Gerenciador de Arquivos
 
-- `GEMINI_MAX_RPM`: limita chamadas por minuto (default: `10`)
-- `GEMINI_RETRY_ATTEMPTS`: tentativas com backoff exponencial (default: `3`)
+Acesso restrito às pastas mais usadas do seu usuário:
+- **Downloads**, **Documentos**, **Desktop**, **Imagens**, **Músicas**, **Vídeos**
+- Ações: listar, contar, buscar, mover, copiar, deletar, renomear, ler e escrever arquivos.
+- Pastas sensíveis do sistema (Windows, Program Files) são **bloqueadas** automaticamente.
 
-## 8) Voz e reconhecimento (estilo do tutorial)
+## 🖥️ Gerenciador de Apps
 
-- `STT_LANGUAGE=pt-BR` (reconhecimento online; costuma lidar melhor com nomes em ingles do que modelos locais so em PT)
-- `TTS_PROVIDER=local` ou `TTS_PROVIDER=murf`
-- Para Murf:
-  - `MURF_API_KEY`
-  - `MURF_VOICE_ID`
-  - `MURF_API_URL` (default no `.env.example`)
-  - O ultimo MP3 gerado fica em `data/cache/murf_last.mp3` (evita apagar o arquivo antes do player abrir no Windows).
-  - Por padrao o som toca **dentro do Python** (pygame), sem abrir Groove/Filmes. Se instalar FFmpeg no PATH, pode usar `ffplay` em segundo plano (`-nodisp`). So use `TTS_ALLOW_SYSTEM_PLAYER=true` se quiser voltar a abrir o reprodutor do Windows quando tudo mais falhar.
+Controle completo dos aplicativos do Windows:
+- **Listar apps instalados** (via Registro do Windows) e **janelas abertas**.
+- **Abertura em batch**: `"abre Chrome, Spotify e VS Code"` — abre todos de uma vez.
+- **Fechar apps** por nome e **focar janelas** que estão em segundo plano.
+
+---
+
+## 🎨 Visualizador (Orb)
+
+O visualizador (`src/services/visualizer_web`) é uma aplicação Flask/WebSocket que roda um Orb reativo.
+- **Auto-Abertura**: O navegador abre automaticamente em `http://localhost:5123`.
+- **Estados Visuais**:
+  - 🔵 **Listening**: Ouve sua voz.
+  - 🟣 **Thinking**: Processa a resposta na LLM.
+  - 🟢 **Speaking**: Sincroniza a animação com a fala.
+  - 🔴 **Error**: Alerta visual para falhas de API ou conexão.
+
+---
+
+## ⚙️ Configurações Avançadas (.env)
+
+- `USE_MIC=true`: Habilita a escuta contínua.
+- `STT_LANGUAGE=pt-BR`: Idioma para reconhecimento de voz.
+- `TTS_PROVIDER=murf`: Use `murf` para voz realista ou `local` para offline rápido.
+- `GEMINI_MAX_RPM=10`: Controle de cota para evitar bloqueios na API gratuita.
+- `REQUIRE_CRITICAL_CONFIRMATION=true`: Pede confirmação por voz para ações sensíveis (como deletar arquivos).
+
+---
+
+## 🛡️ Segurança e Privacidade
+
+- **Local-First**: Suas notas, memórias e registros financeiros são salvos em um banco SQLite local (`data/memory.db`).
+- **Controle de Ações**: Ações críticas (deletar, mover, fechar apps) são filtradas pelo `ToolRegistry` e exigem permissão explícita.
+- **Acesso Restrito a Arquivos**: O gerenciador de arquivos só acessa pastas do usuário (Downloads, Documents, Desktop, etc.). Pastas do sistema são bloqueadas.
+- **Invisibilidade**: Automações como WhatsApp rodam em background para não interromper seu fluxo de trabalho.
+
+---
+
+✨ *Desenvolvido para ser a interface definitiva entre você e seu PC.*

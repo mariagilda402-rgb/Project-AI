@@ -1,6 +1,12 @@
 from __future__ import annotations
 
 import speech_recognition as sr
+from typing import Any
+
+try:
+    from groq import Groq
+except (ImportError, ModuleNotFoundError):
+    Groq = None
 
 
 class STTService:
@@ -15,31 +21,40 @@ class STTService:
         self.language = language.strip() or "pt-BR"
         self.recognizer = sr.Recognizer()
         
-        # Ajustes de sensibilidade
-        self.recognizer.energy_threshold = 300
+        # Ajustes de sensibilidade para evitar inputs fantasma
+        self.recognizer.energy_threshold = 800  # Aumentado de 300 para 800 (menos sensível)
         self.recognizer.dynamic_energy_threshold = True
-        self.recognizer.pause_threshold = 1.2  # Espera 1.2s de silêncio antes de cortar (evita cortar frases)
-        self.recognizer.non_speaking_duration = 0.8  # Margem extra de silêncio
+        self.recognizer.dynamic_energy_adjustment_damping = 0.15 # Mais lento para se ajustar
+        self.recognizer.pause_threshold = 1.0
+        self.recognizer.non_speaking_duration = 0.5
         
         self.groq_client = None
-        if groq_api_key:
+        if groq_api_key and Groq:
             try:
-                from groq import Groq
                 self.groq_client = Groq(api_key=groq_api_key)
-            except ImportError:
-                pass
+            except Exception as e:
+                print(f"[STT] Erro ao inicializar cliente Groq: {e}")
+        elif groq_api_key and not Groq:
+            print("[STT] Aviso: biblioteca 'groq' não encontrada. Usando Google Speech como fallback.")
         
         # Calibração inicial
         self.calibrated = False
 
-    def calibrate(self, duration: float = 1.0):
-        """Ajusta o reconhecedor ao ruído ambiente."""
+    def calibrate(self, duration: float = 2.0):
+        """Ajusta o reconhecedor ao ruído ambiente com um piso mínimo de segurança."""
         try:
             with sr.Microphone() as source:
                 print(f"[STT] Calibrando ruído ambiente ({duration}s)...")
+                # Reduzimos um pouco a sensibilidade do ajuste automático
                 self.recognizer.adjust_for_ambient_noise(source, duration=duration)
+                
+                # PISO DE SEGURANÇA: Nunca deixa o threshold ser menor que 1000. 
+                # Valores abaixo disso pegam até o barulho do processador/respiração.
+                if self.recognizer.energy_threshold < 1000:
+                    self.recognizer.energy_threshold = 1000
+                
                 self.calibrated = True
-                print(f"[STT] Calibração concluída. Threshold: {self.recognizer.energy_threshold}")
+                print(f"[STT] Calibração concluída. Threshold final: {self.recognizer.energy_threshold}")
         except Exception as e:
             print(f"[STT] Erro na calibração: {e}")
 
@@ -52,6 +67,12 @@ class STTService:
             pass
 
     def _transcribe(self, audio: sr.AudioData) -> str:
+        # Filtro de duração: se o som durar menos de 0.6 segundos, ignoramos (provável tosse ou clique)
+        duration = len(audio.get_raw_data()) / (audio.sample_rate * audio.sample_width)
+        if duration < 0.6:
+            return ""
+
+        text = ""
         if self.groq_client:
             import tempfile
             import os
@@ -68,12 +89,38 @@ class STTService:
                         language="pt" if "pt" in self.language.lower() else "en"
                     )
                 os.remove(tmp_name)
-                return transcription.text.strip()
+                text = transcription.text.strip()
             except Exception as e:
                 print(f"Groq Whisper falhou ({e}), usando Google como fallback...")
                 pass
                 
-        return self.recognizer.recognize_google(audio, language=self.language)
+        if not text:
+            try:
+                text = self.recognizer.recognize_google(audio, language=self.language)
+            except Exception:
+                return ""
+        
+        # Filtro de alucinação (frases curtas ou comuns em erros de STT)
+        lowered = text.strip().lower().replace(".", "").replace("!", "").replace("?", "").replace(",", "")
+        
+        # Lista de "lixo" que o Whisper costuma inventar no silêncio (PT-BR)
+        hallucinations = [
+            "legenda por", "legendas por", "sônia ruberti", "sonia ruberti", 
+            "transmissão por", "obrigado", "obrigada", "valeu", "tchau",
+            "e aí", "e ai", "oi", "hmmm", "hum", "geraldump", "geral dump", 
+            "ok", "ah", "eh", "cachou", "teste 1 2 3", "testando 1 2 3"
+        ]
+        
+        # Se contiver QUALQUER dessas frases soltas como a única coisa dita, descarta
+        if lowered in hallucinations or any(lowered.startswith(h) and len(lowered) < len(h) + 10 for h in hallucinations):
+            return ""
+            
+        # Filtro para frases extremamente curtas (ruído)
+        words = lowered.split()
+        if len(words) <= 2 and lowered in ["a", "o", "e", "é", "não", "sim"]:
+            return ""
+
+        return text.strip()
 
     def listen(self) -> str:
         if not self.use_mic:
@@ -136,7 +183,7 @@ class STTService:
         _running = [True]
         _speech_active = [False]
         _silence_count = [0]
-        SILENCE_LIMIT = 8  # ~500ms de silêncio
+        SILENCE_LIMIT = 15  # ~1s de silêncio para evitar jitter na UI
         recognizer = self.recognizer
         stt_self = self
 

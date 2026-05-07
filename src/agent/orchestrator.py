@@ -109,6 +109,7 @@ class AgentOrchestrator:
                     messages=history,
                     tools=[build_agent_tool()],
                     on_function_call=on_fc,
+                    force_tool=False  # O LLM decide naturalmente quando agir
                 )
                 or ""
             ).strip()
@@ -267,16 +268,24 @@ class AgentOrchestrator:
 
         return "\n\n".join(c for c in chunks if c.strip())
 
-    def _execute_function_tool(self, user_text: str, name: str, args: dict) -> str:
+    def _execute_function_tool(self, name: str, args: dict, user_text: str) -> str:
         args = args or {}
+        
+        # Log de comando (se habilitado nas configurações)
+        from src.config import load_settings
+        if load_settings().enable_command_logs:
+            print(f"\n[🛠️ TOOL CALL] {name}({args})")
 
         # 1) analyze_screen
         if name == "analyze_screen":
             instr = (args.get("instruction") or "").strip()
             vision_prompt = self._vision_context(user_text, instr)
-            return self.vision.describe_screen(
+            res = self.vision.describe_screen(
                 build_vision_instruction(vision_prompt)
             )
+            if load_settings().enable_command_logs:
+                print(f"[✅ RESULT] analyze_screen concluído.")
+            return res
 
         # 2) search_web
         if name == "search_web":
@@ -284,10 +293,7 @@ class AgentOrchestrator:
             r = self.tools.run_by_marker("web_search", query, user_text)
             return r.message or "Sem resultados."
 
-        # 3) open_or_run (consolidado: app, URL, notepad, browser, desktop)
-        if name == "open_or_run":
-            target = (args.get("target") or "").strip()
-            return self._handle_open_or_run(target, user_text)
+
 
         # 4) run_utility (consolidado: clipboard, timer, system_info, media, notes)
         if name == "run_utility":
@@ -333,6 +339,39 @@ class AgentOrchestrator:
             if not wa: return "WhatsApp indisponivel."
             r = wa.run(f"{target}|{msg}")
             return r.message or ("Enviado." if r.ok else "Falhou.")
+
+        # 10) control_spotify
+        if name == "control_spotify":
+            action = (args.get("action") or "").strip().lower()
+            argument = (args.get("argument") or "").strip()
+            r = self.tools.run_by_marker("spotify", f"{action}|{argument}", user_text)
+            return r.message or "Feito."
+
+        # 11) manage_files
+        if name == "manage_files":
+            action = (args.get("action") or "").strip().lower()
+            path = (args.get("path") or "").strip()
+            argument = (args.get("argument") or "").strip()
+            r = self.tools.run_by_marker("file_manager", f"{action}|{path}|{argument}", user_text)
+            return r.message or "Feito."
+
+        # 12) open_windows_app (Antigo manage_apps)
+        if name == "open_windows_app":
+            action = (args.get("action") or "").strip().lower()
+            target = (args.get("target") or "").strip()
+            argument = (args.get("argument") or "").strip()
+            res = self.tools.run_by_marker("app_manager", f"{action}|{target}|{argument}", user_text)
+            if load_settings().enable_command_logs:
+                print(f"[✅ RESULT] {res.message}")
+            return res.message or "Feito."
+
+        # 13) set_ai_volume
+        if name == "set_ai_volume":
+            volume = (args.get("volume") or "").strip()
+            if self.tts:
+                self.tts.set_volume(volume)
+                return f"Volume da minha voz ajustado para {volume}."
+            return "Serviço de voz indisponível."
 
         return f"Funcao desconhecida: {name}"
 

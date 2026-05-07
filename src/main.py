@@ -8,10 +8,11 @@ root_dir = Path(__file__).resolve().parent.parent
 if str(root_dir) not in sys.path:
     sys.path.append(str(root_dir))
 
-import logging
+    import logging
 import threading
 import time
 import keyboard
+import json
 
 from src.agent.orchestrator import AgentOrchestrator
 from src.config import load_settings
@@ -34,6 +35,9 @@ from src.tools.timer import TimerTool
 from src.tools.web_search import WebSearchTool
 from src.tools.whatsapp import WhatsAppTool
 from src.tools.visualizer_control import VisualizerControlTool
+from src.tools.spotify import SpotifyTool
+from src.tools.file_manager import FileManagerTool
+from src.tools.app_manager import AppManagerTool
 
 
 def _viz_set(func_name: str, *args, **kwargs):
@@ -100,6 +104,9 @@ def main() -> None:
             TimerTool(),
             SystemInfoTool(),
             NotesTool(),
+            SpotifyTool(),
+            AppManagerTool(),
+            FileManagerTool(),
             MediaControlTool(),
             MemoryManagerTool(),
             WhatsAppTool(),
@@ -136,7 +143,9 @@ def main() -> None:
                 # Se o usuário interrompeu enquanto ela pensava, não fala.
                 if not tts._interrupt_event.is_set():
                     print(f"IA{tag}: {response}", flush=True)
+                    _viz_set("set_speaking")
                     tts.speak(response)
+                    _viz_set("set_idle")
                 else:
                     print(f"[IA{tag} Interrompida antes de falar]")
                     tts._interrupt_event.clear()
@@ -166,11 +175,20 @@ def main() -> None:
     # Callback para quando a voz for detectada em background
     def on_voice_recognized(text: str):
         nonlocal is_processing
+        if not text.strip(): return
+        
         print(f"\nVoce (Voz): {text}")
         if is_processing:
             print("[Interrupção!] Parando a IA para ouvir a nova instrução...")
             tts.stop() # Para a fala atual imediatamente
-            # O texto novo será enfileirado e processado em seguida
+            
+            # Limpa a fila de tarefas pendentes para focar apenas na nova
+            while not task_queue.empty():
+                try:
+                    task_queue.get_nowait()
+                    task_queue.task_done()
+                except queue.Empty:
+                    break
         
         task_queue.put((text, "Voz"))
 
@@ -182,8 +200,15 @@ def main() -> None:
         nonlocal stop_listening_bg
         if stop_listening_bg is None:
             print("\n[Voz] Microfone ativado. Fale a qualquer momento.")
-            stop_listening_bg = stt.start_continuous_listening(on_voice_recognized)
-            _viz_set("set_listening")
+            # Callbacks para o visualizador reagir ao som em tempo real
+            stop_listening_bg = stt.start_continuous_listening(
+                on_voice_recognized,
+                on_speech_start=lambda: _viz_set("set_listening"),
+                on_speech_end=lambda: _viz_set("set_idle") if not is_processing else None
+            )
+            # Começa em IDLE, não em LISTENING
+            if not is_processing:
+                _viz_set("set_idle")
 
     def _stop_mic():
         nonlocal stop_listening_bg
@@ -212,7 +237,12 @@ def main() -> None:
                     for line in lines:
                         t = line.strip()
                         if t:
-                            if is_processing: tts.stop()
+                            if is_processing:
+                                tts.stop()
+                                # Limpa fila
+                                while not task_queue.empty():
+                                    try: task_queue.get_nowait(); task_queue.task_done()
+                                    except queue.Empty: break
                             task_queue.put((t, "Web"))
                 except Exception:
                     pass
@@ -244,6 +274,10 @@ def main() -> None:
             if user_text:
                 if is_processing:
                     tts.stop() # Permite interromper digitando também
+                    # Limpa fila
+                    while not task_queue.empty():
+                        try: task_queue.get_nowait(); task_queue.task_done()
+                        except queue.Empty: break
                 task_queue.put((user_text, "Texto"))
         except (KeyboardInterrupt, EOFError):
             break

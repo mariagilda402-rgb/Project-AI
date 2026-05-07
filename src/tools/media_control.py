@@ -1,105 +1,103 @@
-"""Controle de volume e midia do Windows via teclas virtuais (sem deps extras)."""
-from __future__ import annotations
-
 import ctypes
+import re
+
+try:
+    from ctypes import cast, POINTER
+    from comtypes import CLSCTX_ALL
+    from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
+    _PYCAW_AVAILABLE = True
+except ImportError:
+    _PYCAW_AVAILABLE = False
 
 from .base import ToolResult
 
-# Virtual Key Codes (Windows)
-_VK_VOLUME_MUTE = 0xAD
-_VK_VOLUME_DOWN = 0xAE
-_VK_VOLUME_UP = 0xAF
-_VK_MEDIA_NEXT = 0xB0
-_VK_MEDIA_PREV = 0xB1
-_VK_MEDIA_STOP = 0xB2
-_VK_MEDIA_PLAY_PAUSE = 0xB3
-_KEYEVENTF_EXTENDEDKEY = 0x0001
-_KEYEVENTF_KEYUP = 0x0002
+
+def _set_system_volume(percent: int):
+    """Define o volume do sistema para uma porcentagem especifica (0-100)."""
+    if not _PYCAW_AVAILABLE:
+        return False
+    try:
+        devices = AudioUtilities.GetSpeakers()
+        interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+        volume = cast(interface, POINTER(IAudioEndpointVolume))
+        # Volume no pycaw vai de 0.0 a 1.0 ou em decibeis. Usamos escalar.
+        volume.SetMasterVolumeLevelScalar(percent / 100.0, None)
+        return True
+    except Exception:
+        return False
 
 
 def _press(vk: int) -> None:
-    ctypes.windll.user32.keybd_event(vk, 0, _KEYEVENTF_EXTENDEDKEY, 0)
-    ctypes.windll.user32.keybd_event(vk, 0, _KEYEVENTF_EXTENDEDKEY | _KEYEVENTF_KEYUP, 0)
+    ctypes.windll.user32.keybd_event(vk, 0, 0x0001, 0)
+    ctypes.windll.user32.keybd_event(vk, 0, 0x0001 | 0x0002, 0)
 
 
 class MediaControlTool:
     name = "media_control"
-    description = "Controle de volume e midia (play, pause, volume, proximo, anterior)."
+    description = "Controle de volume e midia (play, pause, volume especifico, proximo, anterior)."
     critical = False
 
     _ACTIONS = {
-        "volume_up": (_VK_VOLUME_UP, "Volume aumentado."),
-        "volume_down": (_VK_VOLUME_DOWN, "Volume diminuido."),
-        "mute": (_VK_VOLUME_MUTE, "Mute alternado."),
-        "unmute": (_VK_VOLUME_MUTE, "Mute alternado."),
-        "play_pause": (_VK_MEDIA_PLAY_PAUSE, "Play/Pause alternado."),
-        "play": (_VK_MEDIA_PLAY_PAUSE, "Play/Pause alternado."),
-        "pause": (_VK_MEDIA_PLAY_PAUSE, "Play/Pause alternado."),
-        "next": (_VK_MEDIA_NEXT, "Proxima faixa."),
-        "previous": (_VK_MEDIA_PREV, "Faixa anterior."),
-        "stop": (_VK_MEDIA_STOP, "Midia parada."),
+        "volume_up": ("Volume aumentado."),
+        "volume_down": ("Volume diminuido."),
+        "mute": ("Mute alternado."),
+        "unmute": ("Mute alternado."),
+        "play_pause": ("Play/Pause alternado."),
+        "play": ("Play/Pause alternado."),
+        "pause": ("Play/Pause alternado."),
+        "next": ("Proxima faixa."),
+        "previous": ("Faixa anterior."),
+        "stop": ("Midia parada."),
     }
 
-    # Mapeamento de linguagem natural para action key.
-    _NL_MAP = {
-        "aumenta": "volume_up",
-        "sobe": "volume_up",
-        "mais alto": "volume_up",
-        "louder": "volume_up",
-        "abaixa": "volume_down",
-        "diminui": "volume_down",
-        "mais baixo": "volume_down",
-        "lower": "volume_down",
-        "mudo": "mute",
-        "mute": "mute",
-        "silenci": "mute",
-        "play": "play_pause",
-        "pause": "play_pause",
-        "toca": "play_pause",
-        "pausa": "play_pause",
-        "resume": "play_pause",
-        "proximo": "next",
-        "próximo": "next",
-        "proxima": "next",
-        "próxima": "next",
-        "pula": "next",
-        "skip": "next",
-        "next": "next",
-        "anterior": "previous",
-        "volta": "previous",
-        "previous": "previous",
-        "para": "stop",
-        "stop": "stop",
+    _VK_MAP = {
+        "volume_up": 0xAF,
+        "volume_down": 0xAE,
+        "mute": 0xAD,
+        "play_pause": 0xB3,
+        "next": 0xB0,
+        "previous": 0xB1,
+        "stop": 0xB2
     }
 
-    def control(self, action: str) -> ToolResult:
-        key = (action or "").strip().lower().replace("-", "_").replace(" ", "_")
-        # Tenta match direto.
-        if key in self._ACTIONS:
-            vk, msg = self._ACTIONS[key]
-            steps = int(key == "volume_up" or key == "volume_down") * 2 or 1
-            for _ in range(steps):
-                _press(vk)
-            return ToolResult(True, msg)
-        return ToolResult(False, f"Acao de midia desconhecida: {action}")
-
-    def control_nl(self, text: str) -> ToolResult:
-        """Interpreta linguagem natural e executa a acao correspondente."""
-        lowered = (text or "").lower()
-        for keyword, action in self._NL_MAP.items():
-            if keyword in lowered:
-                # Volume: repetir tecla para mudanca perceptivel.
-                if action in ("volume_up", "volume_down"):
-                    vk = self._ACTIONS[action][0]
-                    for _ in range(5):
-                        _press(vk)
-                    return ToolResult(True, self._ACTIONS[action][1])
-                return self.control(action)
-        return ToolResult(False, f"Nao entendi a acao de midia: {text}")
+    def set_volume(self, value: int) -> ToolResult:
+        """Define o volume do sistema para um valor especifico."""
+        val = max(0, min(100, value))
+        if _set_system_volume(val):
+            return ToolResult(True, f"Volume do sistema definido para {val}%.")
+        
+        # Fallback se pycaw falhar: tenta aproximar com teclas (lento e impreciso)
+        return ToolResult(False, "Nao consegui ajustar o volume preciso via software.")
 
     def run(self, command: str) -> ToolResult:
-        # Tenta como action direta, senao como linguagem natural.
-        key = (command or "").strip().lower().replace("-", "_").replace(" ", "_")
-        if key in self._ACTIONS:
-            return self.control(key)
-        return self.control_nl(command)
+        cmd = (command or "").strip().lower()
+        
+        # 1. Tenta encontrar um numero no comando (ex: "volume 50")
+        numbers = re.findall(r"\d+", cmd)
+        if numbers and ("volume" in cmd or "definir" in cmd or "colocar" in cmd):
+            return self.set_volume(int(numbers[0]))
+
+        # 2. Mapeamento de linguagem natural
+        nl_map = {
+            "aumenta": "volume_up", "sobe": "volume_up", "mais alto": "volume_up",
+            "abaixa": "volume_down", "diminui": "volume_down", "mais baixo": "volume_down",
+            "mudo": "mute", "mute": "mute", "silenci": "mute",
+            "play": "play_pause", "pause": "play_pause", "toca": "play_pause", "pausa": "play_pause",
+            "proximo": "next", "próximo": "next", "pula": "next", "skip": "next",
+            "anterior": "previous", "volta": "previous", "para": "stop"
+        }
+
+        for kw, action in nl_map.items():
+            if kw in cmd:
+                if action in ("volume_up", "volume_down"):
+                    vk = self._VK_MAP[action]
+                    # Repete 5 vezes para mudanca perceptivel
+                    for _ in range(5): _press(vk)
+                    return ToolResult(True, self._ACTIONS[action])
+                
+                vk = self._VK_MAP.get(action)
+                if vk:
+                    _press(vk)
+                    return ToolResult(True, self._ACTIONS.get(action, "Feito."))
+
+        return ToolResult(False, f"Nao entendi o comando de midia: {command}")

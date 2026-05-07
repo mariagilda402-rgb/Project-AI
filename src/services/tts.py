@@ -285,21 +285,33 @@ class TTSService:
             pass
 
     def stop(self) -> None:
-        """Sinaliza para parar a fala atual."""
+        """Sinaliza para parar a fala atual imediatamente."""
         self._interrupt_event.set()
+        
+        # Para o áudio local (pygame)
         try:
-            if self._pygame_ready and pygame.mixer.get_init():
+            if pygame.mixer.get_init():
                 pygame.mixer.music.stop()
+                pygame.mixer.music.unload()
         except Exception:
             pass
             
+        # Para o áudio no visualizador (navegador)
         try:
             from src.services import visualizer
             if visualizer.is_browser_connected():
                 import requests
-                requests.post(f"http://localhost:{visualizer._server_port}/api/stop_audio", timeout=1)
+                # Envia sinal de stop para o frontend
+                requests.post(f"http://localhost:{visualizer._server_port}/api/stop_audio", timeout=0.5)
         except Exception:
             pass
+            
+        print("[TTS] Interrompido pelo usuário.")
+
+    def set_volume(self, volume: str) -> None:
+        """Ajusta o volume do Edge-TTS (ex: '+0%', '-50%', '100%')."""
+        self.edge_tts_volume = volume
+        print(f"[TTS] Volume da IA ajustado para: {volume}")
 
     def speak(self, text: str) -> None:
         self._interrupt_event.clear()
@@ -533,42 +545,17 @@ class TTSService:
             self.last_error = f"Erro no Kokoro TTS: {exc!r}"
             return False
 
-
-    def _play_wav(self, path: Path) -> None:
-        """Toca um WAV usando o visualizador, ffplay ou pygame."""
+    def _play_file(self, path: Path) -> None:
+        """Toca o áudio apenas no PC (Alto-falantes)."""
         abs_path = path.resolve()
         if not abs_path.is_file():
-            raise FileNotFoundError(str(abs_path))
-
-        # Tenta pelo visualizador do navegador (audio-reativo)
-        played_in_browser = False
-        try:
-            from src.services import visualizer
-            if visualizer.is_browser_connected():
-                import requests
-                r = requests.post(f"http://localhost:{visualizer._server_port}/api/play_audio", json={"path": str(abs_path)}, timeout=5)
-                if r.status_code == 200:
-                    played_in_browser = True
-                    for _ in range(600):
-                        if self._interrupt_event.is_set():
-                            break
-                        time.sleep(0.5)
-                        try:
-                            sr = requests.get(f"http://localhost:{visualizer._server_port}/api/state", timeout=2)
-                            if sr.status_code == 200 and not sr.json().get("audio_ready", False):
-                                break
-                        except Exception:
-                            pass
-        except Exception:
-            pass
-        if played_in_browser:
             return
 
-        # Tenta ffplay (sem janela)
+        # 1. Tenta FFPlay (muito estável, sem interface)
         if self._try_play_with_ffplay(abs_path):
             return
 
-        # Fallback: pygame
+        # 2. Fallback: Pygame
         try:
             self._init_pygame_mixer(abs_path)
             pygame.mixer.music.stop()
@@ -578,13 +565,22 @@ class TTSService:
                 pass
             pygame.mixer.music.load(str(abs_path))
             pygame.mixer.music.play()
-            time.sleep(0.08)
+            
             clock = pygame.time.Clock()
             while pygame.mixer.music.get_busy():
-                clock.tick(60)
+                if self._interrupt_event.is_set():
+                    pygame.mixer.music.stop()
+                    break
+                clock.tick(30)
             return
         except Exception as exc:
-            raise RuntimeError(f"Nao foi possivel tocar o WAV. pygame: {exc!r}")
+            print(f"[TTS] Falha no player local: {exc}")
+
+    def _play_wav(self, path: Path) -> None:
+        self._play_file(path)
+
+    def _play_audio_file(self, path: Path) -> None:
+        self._play_file(path)
 
     def _speak_with_murf(self, text: str) -> bool:
 
