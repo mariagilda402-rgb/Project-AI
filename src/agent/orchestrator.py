@@ -11,6 +11,7 @@ from src.agent.prompts import (
 )
 from src.agent.tool_markers import parse_tool_markers
 from src.memory.store import MemoryStore
+from src.memory.vector_db import SemanticMemory
 from src.services.llm import LLMService
 from src.services.vision import VisionService
 from src.tools.registry import ToolRegistry
@@ -59,18 +60,20 @@ class AgentOrchestrator:
         self.memory = memory
         self.use_function_calling = use_function_calling
         self.assistant_base_persona = assistant_base_persona or ""
+        self.semantic_memory = SemanticMemory()
 
     def handle_user_message(self, text: str) -> str:
         # Contexto invisivel: data, hora, janela
         ctx = build_proactive_context()
         
-        # Mini-RAG: busca fatos relevantes na memoria
-        mm = self.tools._find_tool("memory_manager")
+        # RAG Semântico (JARVIS)
         rag_context = ""
-        if isinstance(mm, MemoryManagerTool):
-            rag = mm.auto_retrieve(text)
-            if rag:
-                rag_context = f" [Memoria relevante: {rag}]"
+        if self.semantic_memory.enabled:
+            emb = self.llm.generate_embedding(text)
+            if emb:
+                memories = self.semantic_memory.search_memories(emb, top_k=2)
+                if memories:
+                    rag_context = " [Fatos que você sabe sobre o usuário: " + " | ".join(memories) + "]"
                 
         enriched_text = f"{ctx}{rag_context} {text}"
         
@@ -164,7 +167,41 @@ class AgentOrchestrator:
         # Auto-sumarizacao: condensa mensagens antigas quando a sessao cresce.
         self._maybe_summarize()
 
+        # RAG - Extração de Memórias Assíncrona
+        if self.semantic_memory.enabled:
+            import threading
+            threading.Thread(target=self._extract_semantic_memory, args=(text, final), daemon=True).start()
+
         return final
+
+    def _extract_semantic_memory(self, user_text: str, assistant_text: str):
+        """Thread em background que extrai fatos definitivos da conversa para o ChromaDB."""
+        from src.agent.prompts import EXTRACT_MEMORY_PROMPT
+        
+        # Envia os dois lados da conversa e pede ao LLM para extrair
+        prompt = f"Usuário disse: {user_text}\nVocê respondeu: {assistant_text}"
+        
+        try:
+            # Usando skip_gemini se o primary for gemini já estourou quota, mas o ideal é rodar direto.
+            # Aqui usamos o método chat simplificado do LLM.
+            extracted = self.llm.chat(
+                system_prompt=EXTRACT_MEMORY_PROMPT,
+                messages=[{"role": "user", "content": prompt}]
+            )
+            
+            if extracted and "vazio" not in extracted.lower():
+                lines = [line.strip() for line in extracted.split("\n") if line.strip() and "vazio" not in line.lower()]
+                for fact in lines:
+                    emb = self.llm.generate_embedding(fact)
+                    if emb:
+                        self.semantic_memory.save_memory(fact, emb)
+                        print(f"[RAG JARVIS] Novo fato aprendido: {fact}")
+        except Exception as e:
+            import traceback
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"[RAG JARVIS] Erro na thread de extração de memória: {e}")
+            logger.debug(traceback.format_exc())
 
     def _maybe_summarize(self) -> None:
         """Se ha mensagens suficientes, usa o LLM para resumir as mais antigas."""

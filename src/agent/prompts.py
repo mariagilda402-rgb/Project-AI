@@ -46,6 +46,12 @@ REGRAS ABSOLUTAS:
 4. A data/hora atual ja vem no contexto. NAO use ferramentas para saber a hora.
 Responda em portugues BR conversacional."""
 
+EXTRACT_MEMORY_PROMPT = """Você é o subconsciente da Assistente Virtual.
+Analise a última interação do usuário com você e extraia APENAS novos fatos, preferências, projetos ou informações persistentes sobre o usuário.
+Exemplos de extração: "O usuário gosta da banda X", "O usuário está trabalhando no projeto Y em Unity", "O nome do cachorro é Z".
+Se a conversa foi apenas casual ou execução de comandos de sistema, retorne a string vazia: "VAZIO".
+Não responda à conversa. Apenas extraia fatos curtos e absolutos. Se houver mais de um, liste-os um por linha."""
+
 
 def build_marker_agent_system_prompt(
     base_persona: str, evolution_notes: list[str]

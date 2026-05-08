@@ -578,3 +578,26 @@ class LLMService:
             lines.append(f"{role}: {content}")
         lines.append("assistant:")
         return "\n".join(lines)
+
+    def generate_embedding(self, text: str) -> list[float]:
+        """Gera embedding matemático para um texto usando text-embedding-004."""
+        if not self.gemini_client or not text.strip():
+            return []
+            
+        try:
+            self.gemini_limiter.wait_for_slot()
+            result = self.gemini_client.models.embed_content(
+                model='text-embedding-004',
+                contents=text.strip(),
+            )
+            if hasattr(result, "embeddings") and result.embeddings:
+                return result.embeddings[0].values
+            elif hasattr(result, "embedding") and result.embedding:
+                # O formato pode variar dependendo da versão do SDK, try fallback
+                return result.embedding.values if hasattr(result.embedding, "values") else result.embedding
+            elif isinstance(result, list):
+                 return result
+            return []
+        except Exception as e:
+            logger.warning("Falha ao gerar embedding: %s", e)
+            return []
