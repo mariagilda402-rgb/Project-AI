@@ -10,6 +10,7 @@ from src.agent.prompts import (
     build_vision_instruction,
 )
 from src.agent.tool_markers import parse_tool_markers
+from src.agents.agent_model import AgentManager
 from src.memory.store import MemoryStore
 from src.memory.vector_db import SemanticMemory
 from src.services.llm import LLMService
@@ -61,17 +62,35 @@ class AgentOrchestrator:
         self.use_function_calling = use_function_calling
         self.assistant_base_persona = assistant_base_persona or ""
         self.semantic_memory = SemanticMemory()
+        self.agent_manager = AgentManager()
+
+    @property
+    def _active_persona(self) -> str:
+        """Retorna a persona do agente ativo (ou a persona base como fallback)."""
+        try:
+            return self.agent_manager.get_active_agent().persona
+        except Exception:
+            return self.assistant_base_persona
+
+    @property
+    def _active_memory_collection(self) -> str:
+        """Retorna o nome da coleção de memória do agente ativo."""
+        try:
+            return self.agent_manager.get_active_agent().memory_collection
+        except Exception:
+            return "user_memories"
 
     def handle_user_message(self, text: str) -> str:
         # Contexto invisivel: data, hora, janela
         ctx = build_proactive_context()
         
-        # RAG Semântico (JARVIS)
+        # RAG Semântico — busca na coleção do agente ativo
         rag_context = ""
+        agent_collection = self._active_memory_collection
         if self.semantic_memory.enabled:
             emb = self.llm.generate_embedding(text)
             if emb:
-                memories = self.semantic_memory.search_memories(emb, top_k=2)
+                memories = self.semantic_memory.search_memories(emb, top_k=2, collection_name=agent_collection)
                 if memories:
                     rag_context = " [Fatos que você sabe sobre o usuário: " + " | ".join(memories) + "]"
                 
@@ -91,7 +110,7 @@ class AgentOrchestrator:
 
         pref_text = str(prefs[-5:])
         system_fc = build_function_calling_system_prompt(
-            self.assistant_base_persona,
+            self._active_persona,
             persona_notes if isinstance(persona_notes, list) else [],
             pref_text,
         )
@@ -167,14 +186,18 @@ class AgentOrchestrator:
         # Auto-sumarizacao: condensa mensagens antigas quando a sessao cresce.
         self._maybe_summarize()
 
-        # RAG - Extração de Memórias Assíncrona
+        # RAG - Extração de Memórias Assíncrona (na coleção do agente ativo)
         if self.semantic_memory.enabled:
             import threading
-            threading.Thread(target=self._extract_semantic_memory, args=(text, final), daemon=True).start()
+            threading.Thread(
+                target=self._extract_semantic_memory,
+                args=(text, final, agent_collection),
+                daemon=True
+            ).start()
 
         return final
 
-    def _extract_semantic_memory(self, user_text: str, assistant_text: str):
+    def _extract_semantic_memory(self, user_text: str, assistant_text: str, collection_name: str):
         """Thread em background que extrai fatos definitivos da conversa para o ChromaDB."""
         from src.agent.prompts import EXTRACT_MEMORY_PROMPT
         
@@ -182,8 +205,6 @@ class AgentOrchestrator:
         prompt = f"Usuário disse: {user_text}\nVocê respondeu: {assistant_text}"
         
         try:
-            # Usando skip_gemini se o primary for gemini já estourou quota, mas o ideal é rodar direto.
-            # Aqui usamos o método chat simplificado do LLM.
             extracted = self.llm.chat(
                 system_prompt=EXTRACT_MEMORY_PROMPT,
                 messages=[{"role": "user", "content": prompt}]
@@ -194,8 +215,9 @@ class AgentOrchestrator:
                 for fact in lines:
                     emb = self.llm.generate_embedding(fact)
                     if emb:
-                        self.semantic_memory.save_memory(fact, emb)
-                        print(f"[RAG JARVIS] Novo fato aprendido: {fact}")
+                        self.semantic_memory.save_memory(fact, emb, collection_name=collection_name)
+                        agent_name = self.agent_manager.get_active_agent().name
+                        print(f"[RAG {agent_name}] Novo fato aprendido: {fact}")
         except Exception as e:
             import traceback
             import logging
@@ -261,7 +283,7 @@ class AgentOrchestrator:
         skip_gemini: bool = False,
     ) -> str:
         system_prompt = build_marker_agent_system_prompt(
-            self.assistant_base_persona, persona_notes
+            self._active_persona, persona_notes
         )
         context_messages = history + [
             {

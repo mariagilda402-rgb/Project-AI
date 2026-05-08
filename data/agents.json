@@ -1,0 +1,35 @@
+{
+  "active_agent_id": "ba875fc04f0e",
+  "agents": [
+    {
+      "id": "ba875fc04f0e",
+      "name": "Assistente",
+      "persona": "Você é uma assistente virtual inteligente, amigável e direta. Responda em português BR de forma natural e concisa.",
+      "tts_provider": "edge",
+      "tts_voice": "pt-BR-FranciscaNeural",
+      "tts_speed": 1.0,
+      "edge_tts_rate": "+10%",
+      "edge_tts_volume": "-20%",
+      "kokoro_voice": "pf_dora",
+      "memory_collection": "agent_assistente_ba875f",
+      "is_active": true,
+      "created_at": "2026-05-07T22:31:02.556001",
+      "updated_at": "2026-05-07T22:31:02.556001"
+    },
+    {
+      "id": "1edddc8ea599",
+      "name": "JARVIS",
+      "persona": "Voce e o JARVIS, assistente de inteligencia artificial avancada. Frio, calculista, e extremamente eficiente.",
+      "tts_provider": "edge",
+      "tts_voice": "pt-BR-AntonioNeural",
+      "tts_speed": 1.0,
+      "edge_tts_rate": "+10%",
+      "edge_tts_volume": "-20%",
+      "kokoro_voice": "pf_dora",
+      "memory_collection": "agent_jarvis_1edddc",
+      "is_active": true,
+      "created_at": "2026-05-07T22:31:02.558000",
+      "updated_at": "2026-05-07T22:31:02.558000"
+    }
+  ]
+}

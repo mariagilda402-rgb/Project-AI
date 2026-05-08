@@ -48,7 +48,7 @@
 **Objetivo:** Permitir criar múltiplos agentes de IA, cada um com sua própria personalidade, voz, memória e comportamento.
 
 ### 2.1 — Estrutura de Dados do Agente
-- [ ] Criar modelo `Agent` com os seguintes campos:
+- [x] Criar modelo `Agent` com os seguintes campos:
   - `id` (UUID único)
   - `name` (ex: "JARVIS", "Deadpool", "Assistente Técnico")
   - `persona` (prompt de personalidade completo)
@@ -57,18 +57,18 @@
   - `memory_collection` (nome da coleção ChromaDB isolada, ex: `"jarvis_memory"`)
   - `created_at`, `updated_at`
   - `is_active` (se está habilitado no momento)
-- [ ] Salvar agentes em `data/agents.json` ou numa tabela SQLite dedicada
-- [ ] Cada agente tem sua própria coleção no ChromaDB (memórias isoladas)
+- [x] Salvar agentes em `data/agents.json` ou numa tabela SQLite dedicada
+- [x] Cada agente tem sua própria coleção no ChromaDB (memórias isoladas)
 
 ### 2.2 — CRUD de Agentes (no Painel)
-- [ ] Botão **"+"** para criar novo agente (wizard de criação: nome, personalidade, voz)
-- [ ] Editar agente existente (alterar personalidade, nome, voz, velocidade)
-- [ ] Deletar agente (vai para a **Lixeira**, não deleta permanentemente)
-- [ ] **Lixeira de Agentes e Memórias:**
+- [x] Botão **"+"** para criar novo agente (wizard de criação: nome, personalidade, voz)
+- [x] Editar agente existente (alterar personalidade, nome, voz, velocidade)
+- [x] Deletar agente (vai para a **Lixeira**, não deleta permanentemente)
+- [x] **Lixeira de Agentes e Memórias:**
   - Agentes deletados ficam na lixeira por 30 dias
   - O usuário pode restaurar agentes e suas memórias
   - Opção de deletar permanentemente (irreversível)
-- [ ] Limpar apenas memórias de um agente específico (sem deletar o agente)
+- [x] Limpar apenas memórias de um agente específico (sem deletar o agente)
 
 ---
 
