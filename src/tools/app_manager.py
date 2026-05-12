@@ -178,6 +178,7 @@ class _AppCache:
                 score = len(name_l) / len(key)
                 if score > best_score:
                     best_score = score
+                    best_match = path
         return best_match
 
 
@@ -285,6 +286,25 @@ class AppManagerTool:
         # 1. Resolve Alias (PT-BR -> executável)
         name_l = name.lower()
         resolved = APP_ALIASES.get(name_l, name_l)
+
+        # 1.5 Paths infames comuns não registrados no Windows (Spotify, Discord, etc)
+        # Muitos apps se escondem em AppData/LocalAppData e não vão pro PATH global.
+        infamous_paths = {
+            "spotify": r"%APPDATA%\Spotify\Spotify.exe",
+            "discord": r"%LOCALAPPDATA%\Discord\Update.exe --processStart Discord.exe",
+            "whatsapp": r"%LOCALAPPDATA%\WhatsApp\WhatsApp.exe",
+            "telegram": r"%APPDATA%\Telegram Desktop\Telegram.exe"
+        }
+        if resolved in infamous_paths:
+            path_expanded = os.path.expandvars(infamous_paths[resolved])
+            # Para comandos compostos como o discord, testamos se o exe real existe primeiro
+            base_exe = path_expanded.split(" --")[0]
+            if Path(base_exe).is_file():
+                try:
+                    subprocess.Popen(path_expanded, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    return ToolResult(True, f"Aberto (caminho oculto): {resolved}")
+                except Exception as e:
+                    return ToolResult(False, f"Erro no caminho oculto: {e}")
 
         # 2. Comandos globais do Windows (notepad, calc, etc)
         if resolved in _SYSTEM_COMMANDS:
@@ -451,7 +471,14 @@ class AppManagerTool:
         if not cmd:
             return ToolResult(False, "Comando vazio.")
 
-        parts = cmd.split("|")
+        # Suporta tanto action|target quanto action:target
+        if "|" in cmd:
+            parts = cmd.split("|")
+        elif ":" in cmd:
+            parts = cmd.split(":", 1)
+        else:
+            parts = [cmd]
+            
         action = parts[0].strip().lower()
         target = parts[1].strip() if len(parts) > 1 else ""
         argument = parts[2].strip() if len(parts) > 2 else ""

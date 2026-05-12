@@ -7,10 +7,9 @@ def _str_prop(desc: str) -> types.Schema:
     return types.Schema(type=types.Type.STRING, description=desc)
 
 
-def build_agent_tool() -> types.Tool:
-    """Declaracoes Gemini (function calling) — 7 funcoes consolidadas."""
-    return types.Tool(
-        function_declarations=[
+def build_agent_tool(dynamic_tools: list = None) -> types.Tool:
+    """Declaracoes Gemini (function calling) — funcoes consolidadas + skills dinamicas."""
+    declarations = [
             types.FunctionDeclaration(
                 name="analyze_screen",
                 description=(
@@ -214,8 +213,127 @@ def build_agent_tool() -> types.Tool:
                     required=["volume"],
                 ),
             ),
-        ]
-    )
+            types.FunctionDeclaration(
+                name="delegate_to_agent",
+                description="Delega uma tarefa, dúvida, ou instrução para outro agente especializado do sistema (ex: JARVIS para programação ou Assistente para conversas). Use isso para debater ou pedir ajuda.",
+                parameters=types.Schema(
+                    type=types.Type.OBJECT,
+                    properties={
+                        "target_agent": _str_prop("Nome exato do agente destino (ex: JARVIS)."),
+                        "query": _str_prop("A pergunta, problema ou mensagem que você quer enviar a ele."),
+                    },
+                    required=["target_agent", "query"],
+                ),
+            ),
+            types.FunctionDeclaration(
+                name="generate_image",
+                description=(
+                    "Gera uma imagem usando IA a partir de um texto descritivo. "
+                    "Salva automaticamente na pasta de imagens geradas com nome identificável. "
+                    "Após gerar, use show_image para exibir se o usuário pedir."
+                ),
+                parameters=types.Schema(
+                    type=types.Type.OBJECT,
+                    properties={
+                        "prompt": _str_prop("Descrição detalhada da imagem em inglês (ex: 'beautiful waterfall in a tropical forest, 4k')."),
+                        "label": _str_prop("Nome curto em português para identificar a imagem depois (ex: 'cachoeira', 'gato fofo', 'pôr do sol')."),
+                    },
+                    required=["prompt"],
+                ),
+            ),
+            types.FunctionDeclaration(
+                name="show_image",
+                description=(
+                    "Exibe uma imagem gerada anteriormente em uma janela flutuante. "
+                    "Pode receber o caminho completo OU o nome/label da imagem (ex: 'cachoeira'). "
+                    "Busca automaticamente no histórico de imagens geradas."
+                ),
+                parameters=types.Schema(
+                    type=types.Type.OBJECT,
+                    properties={
+                        "filepath": _str_prop("Caminho do arquivo OU nome/label da imagem (ex: 'cachoeira')."),
+                    },
+                    required=["filepath"],
+                ),
+            ),
+            types.FunctionDeclaration(
+                name="list_generated_images",
+                description="Lista todas as imagens geradas pela IA com seus nomes e datas.",
+                parameters=types.Schema(
+                    type=types.Type.OBJECT,
+                    properties={},
+                ),
+            ),
+            types.FunctionDeclaration(
+                name="agent_task",
+                description=(
+                    "Executa tarefas COMPLEXAS que exigem múltiplos passos e ferramentas diferentes. "
+                    "A IA cria um plano automático, executa cada passo com retry e replan. "
+                    "Exemplos: 'pesquise X e salve em arquivo', 'organize meus downloads'. "
+                    "NÃO use para comandos simples de 1 ação."
+                ),
+                parameters=types.Schema(
+                    type=types.Type.OBJECT,
+                    properties={
+                        "goal": _str_prop("Descrição completa do objetivo a realizar."),
+                        "priority": _str_prop("low | normal | high (default: normal)"),
+                    },
+                    required=["goal"],
+                ),
+            ),
+            types.FunctionDeclaration(
+                name="save_memory",
+                description=(
+                    "Salva um fato pessoal importante do usuário na memória de longo prazo. "
+                    "Chame SILENCIOSAMENTE quando o usuário revelar: nome, idade, cidade, profissão, "
+                    "preferências, hobbies, relacionamentos, projetos ou planos futuros. "
+                    "NÃO chame para: clima, comandos, pesquisas. NÃO anuncie que está salvando."
+                ),
+                parameters=types.Schema(
+                    type=types.Type.OBJECT,
+                    properties={
+                        "category": _str_prop(
+                            "identity | preferences | projects | relationships | wishes | notes"
+                        ),
+                        "key": _str_prop("Chave snake_case (ex: name, favorite_food, best_friend)"),
+                        "value": _str_prop("Valor conciso (ex: Jamil, pizza, João)"),
+                    },
+                    required=["category", "key", "value"],
+                ),
+            ),
+    ]
+    if dynamic_tools:
+        # Ferramentas que já foram declaradas estaticamente acima
+        manually_declared = {
+            "manage_files", "open_windows_app", "set_ai_volume", "delegate_to_agent",
+            "generate_image", "show_image", "list_generated_images", "run_finance_command",
+            "control_visualizer", "whatsapp_send", "control_spotify"
+        }
+        for tool in dynamic_tools:
+            if tool.name in manually_declared:
+                continue
+
+            # Converte a spec do Tool para Schema
+            props = {}
+            required = []
+            if getattr(tool, "parameters", None) and "properties" in tool.parameters:
+                for k, v in tool.parameters["properties"].items():
+                    props[k] = _str_prop(v.get("description", ""))
+                required = tool.parameters.get("required", [])
+            
+            declarations.append(
+                types.FunctionDeclaration(
+                    name=tool.name,
+                    description=tool.description,
+                    parameters=types.Schema(
+                        type=types.Type.OBJECT,
+                        properties=props,
+                        required=required,
+                    ) if props else None,
+                )
+            )
+            
+    return types.Tool(function_declarations=declarations)
 
 
 def _openai_fn(
@@ -238,9 +356,9 @@ def _openai_fn(
     }
 
 
-def build_openai_agent_tools() -> list[dict]:
-    """7 funcoes consolidadas no formato OpenAI (Groq / NVIDIA)."""
-    return [
+def build_openai_agent_tools(dynamic_tools: list = None) -> list[dict]:
+    """funcoes consolidadas no formato OpenAI (Groq / NVIDIA) + skills dinamicas."""
+    funcs = [
         _openai_fn(
             "analyze_screen",
             "Captura a tela e interpreta com modelo de visao. Nao use em saudacoes.",
@@ -305,18 +423,24 @@ def build_openai_agent_tools() -> list[dict]:
         ),
         _openai_fn(
             "control_visualizer",
-            "Controla o visualizador de midia ou modo de exibicao.",
-            {"command": {"type": "string", "description": "Comando para o visualizador."}},
+            "Move a janela visualizadora (ex. top_right, hide).",
+            {"command": {"type": "string", "description": "top_right, bottom_left, hide, etc."}},
             ["command"],
         ),
         _openai_fn(
-            "whatsapp_send",
-            "Envia mensagem de WhatsApp. IMPORTANTE: Confirme o número e a mensagem com o usuário ANTES de usar.",
+            "set_ai_volume",
+            "Ajusta volume do TTS.",
+            {"volume": {"type": "string", "description": "ex: '100%'"}},
+            ["volume"],
+        ),
+        _openai_fn(
+            "delegate_to_agent",
+            "Consulta ou passa o bastão para outro agente especializado do sistema (ex: JARVIS).",
             {
-                "target": {"type": "string", "description": "Numero ou nome."},
-                "message": {"type": "string", "description": "Mensagem."},
+                "target_agent": {"type": "string", "description": "Nome do agente"},
+                "query": {"type": "string", "description": "Mensagem para ele"}
             },
-            ["target", "message"],
+            ["target_agent", "query"],
         ),
         _openai_fn(
             "control_spotify",
@@ -355,4 +479,40 @@ def build_openai_agent_tools() -> list[dict]:
             },
             ["volume"],
         ),
+        _openai_fn(
+            "agent_task",
+            "Executa tarefas COMPLEXAS multi-step com planejamento automático, retry e replan. Ex: 'pesquise X e salve em arquivo'. NÃO use para comandos simples.",
+            {
+                "goal": {"type": "string", "description": "Descrição completa do objetivo."},
+                "priority": {"type": "string", "description": "low | normal | high (default: normal)"},
+            },
+            ["goal"],
+        ),
+        _openai_fn(
+            "save_memory",
+            "Salva fato pessoal do usuário na memória de longo prazo (silenciosamente). Categorias: identity, preferences, projects, relationships, wishes, notes.",
+            {
+                "category": {"type": "string", "description": "identity | preferences | projects | relationships | wishes | notes"},
+                "key": {"type": "string", "description": "Chave snake_case (ex: name, hobby)"},
+                "value": {"type": "string", "description": "Valor conciso"},
+            },
+            ["category", "key", "value"],
+        ),
     ]
+    
+    if dynamic_tools:
+        for tool in dynamic_tools:
+            props = {}
+            required = []
+            if getattr(tool, "parameters", None) and "properties" in tool.parameters:
+                props = tool.parameters["properties"]
+                required = tool.parameters.get("required", [])
+            
+            funcs.append(_openai_fn(
+                tool.name,
+                tool.description,
+                props,
+                required
+            ))
+            
+    return funcs

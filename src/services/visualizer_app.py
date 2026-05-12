@@ -87,15 +87,29 @@ def main():
     def index():
         return send_from_directory(str(static_dir), "index.html")
 
-    @app.route("/orb.js")
-    def orb_js():
-        return send_from_directory(str(static_dir), "orb.js")
+    @app.route("/<path:filename>")
+    def serve_static(filename):
+        """Serve qualquer arquivo da pasta visualizer_web (orb.js, CSS, etc)."""
+        response = send_from_directory(str(static_dir), filename)
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        return response
+
+    @app.route("/nexus")
+    def nexus_dashboard():
+        nexus_dir = Path(__file__).resolve().parent.parent / "nexus_hud" / "dist"
+        return send_from_directory(str(nexus_dir), "index.html")
+
+    @app.route("/nexus/<path:path>")
+    def nexus_assets(path):
+        nexus_dir = Path(__file__).resolve().parent.parent / "nexus_hud" / "dist"
+        return send_from_directory(str(nexus_dir), path)
 
     @app.route("/api/state")
     def api_state():
         global _audio_ready, _audio_file
         state = read_state()
         resp = {**state}
+        resp["debug"] = os.environ.get("VISUALIZER_DEBUG", "false").lower() == "true"
         if _audio_ready and _audio_file:
             resp["audio_ready"] = True
             resp["audio_file"] = _audio_file
@@ -190,6 +204,14 @@ def main():
                 f.write(text + "\n")
         return "", 200
 
+    @app.route("/api/nexus_event", methods=["POST"])
+    def api_nexus_event():
+        """Recebe eventos do Nexus (XP, compras, etc) e repassa para o HUD via WS."""
+        data = request.get_json(silent=True) or {}
+        # Repassa para todos os clientes WS
+        broadcast_state({"type": "nexus_update", "payload": data})
+        return "", 200
+
     @sock.route("/ws")
     def ws_handler(ws):
         with _ws_lock:
@@ -222,8 +244,8 @@ def main():
     print(f"[Visualizer] Servidor Web iniciado em http://localhost:{port}")
     
     # Abre o navegador automaticamente
-    import webbrowser
-    threading.Timer(1.5, lambda: webbrowser.open(f"http://localhost:{port}")).start()
+    # import webbrowser
+    # threading.Timer(1.5, lambda: webbrowser.open(f"http://localhost:{port}")).start()
     
     app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
 

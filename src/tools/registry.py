@@ -35,8 +35,9 @@ class ToolRegistry:
             "mem": "memory_manager",
             "note": "notes",
             "vol": "media_control",
-            "prod": "productivity",
-            "fin": "finance",
+            "prod": "nexus",
+            "fin": "nexus",
+            "nexus": "nexus",
             "spot": "spotify",
             "file": "file_manager",
             "fs": "file_manager",
@@ -45,18 +46,24 @@ class ToolRegistry:
         if kind_l in compact_map:
             kind_l = compact_map[kind_l]
 
-        # ── Desktop ──
+        # ── App Manager ──
+        am = self._find_tool("app_manager")
         if kind_l in ("open_app", "app"):
-            if not desktop: return ToolResult(False, "Desktop indisponivel.")
-            return desktop.run_open_app(arg or "")
+            if not am: return ToolResult(False, "App Manager indisponivel.")
+            return am.open_app(arg or "")
 
         if kind_l in ("open_browser", "browser"):
-            if not desktop: return ToolResult(False, "Desktop indisponivel.")
-            return desktop.run("abra o navegador")
+            if arg:
+                import webbrowser
+                url = arg if "://" in arg else f"https://{arg}"
+                webbrowser.open(url)
+                return ToolResult(True, f"Aberto navegador na url: {url}")
+            if not am: return ToolResult(False, "App Manager indisponivel.")
+            return am.open_app("chrome")
 
         if kind_l == "notepad":
-            if not desktop: return ToolResult(False, "Desktop indisponivel.")
-            return desktop.run("abra o bloco de notas")
+            if not am: return ToolResult(False, "App Manager indisponivel.")
+            return am.open_app("notepad")
 
         # ── Pesquisa Web ──
         if kind_l in ("web_search", "search_web"):

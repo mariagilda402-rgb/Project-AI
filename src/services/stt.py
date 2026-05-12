@@ -22,9 +22,9 @@ class STTService:
         self.recognizer = sr.Recognizer()
         
         # Ajustes de sensibilidade para evitar inputs fantasma
-        self.recognizer.energy_threshold = 800  # Aumentado de 300 para 800 (menos sensível)
-        self.recognizer.dynamic_energy_threshold = True
-        self.recognizer.dynamic_energy_adjustment_damping = 0.15 # Mais lento para se ajustar
+        self.recognizer.energy_threshold = 2500  # Aumentado para 2500 para ignorar respiração
+        self.recognizer.dynamic_energy_threshold = False # Desativado para manter fixo
+        self.recognizer.dynamic_energy_adjustment_damping = 0.15
         self.recognizer.pause_threshold = 1.0
         self.recognizer.non_speaking_duration = 0.5
         
@@ -48,10 +48,9 @@ class STTService:
                 # Reduzimos um pouco a sensibilidade do ajuste automático
                 self.recognizer.adjust_for_ambient_noise(source, duration=duration)
                 
-                # PISO DE SEGURANÇA: Nunca deixa o threshold ser menor que 1000. 
-                # Valores abaixo disso pegam até o barulho do processador/respiração.
-                if self.recognizer.energy_threshold < 1000:
-                    self.recognizer.energy_threshold = 1000
+                # PISO DE SEGURANÇA MÁXIMO
+                if self.recognizer.energy_threshold < 2500:
+                    self.recognizer.energy_threshold = 2500
                 
                 self.calibrated = True
                 print(f"[STT] Calibração concluída. Threshold final: {self.recognizer.energy_threshold}")
@@ -104,15 +103,23 @@ class STTService:
         lowered = text.strip().lower().replace(".", "").replace("!", "").replace("?", "").replace(",", "")
         
         # Lista de "lixo" que o Whisper costuma inventar no silêncio (PT-BR)
-        hallucinations = [
-            "legenda por", "legendas por", "sônia ruberti", "sonia ruberti", 
-            "transmissão por", "obrigado", "obrigada", "valeu", "tchau",
-            "e aí", "e ai", "oi", "hmmm", "hum", "geraldump", "geral dump", 
-            "ok", "ah", "eh", "cachou", "teste 1 2 3", "testando 1 2 3"
+        hard_hallucinations = [
+            "legenda por", "legendas por", "sônia ruberti", "sonia ruberti",
+            "transmissão por", "geraldump", "geral dump", "cachou",
+            "inscreva-se", "deixe seu like"
         ]
         
-        # Se contiver QUALQUER dessas frases soltas como a única coisa dita, descarta
-        if lowered in hallucinations or any(lowered.startswith(h) and len(lowered) < len(h) + 10 for h in hallucinations):
+        soft_hallucinations = [
+            "obrigado", "obrigada", "valeu", "tchau", "e aí", "e ai", "oi",
+            "hmmm", "hum", "ok", "ah", "eh", "teste 1 2 3", "testando 1 2 3"
+        ]
+        
+        # Se contiver QUALQUER termo "hard", é 100% lixo de STT
+        if any(h in lowered for h in hard_hallucinations):
+            return ""
+            
+        # Se for exatamente um termo "soft" ou quase do mesmo tamanho
+        if lowered in soft_hallucinations or any(lowered.startswith(h) and len(lowered) < len(h) + 6 for h in soft_hallucinations):
             return ""
             
         # Filtro para frases extremamente curtas (ruído)

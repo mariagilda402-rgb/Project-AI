@@ -22,6 +22,8 @@ def _normalize_llm_provider(raw: str | None) -> str:
     v = raw.strip().lower()
     if v in ("gemini", "google"):
         return "gemini"
+    if v in ("ollama", "local"):
+        return "ollama"
     if v in ("openrouter", "open_router"):
         return "openrouter"
     if v in ("nvidia", "nvidia_nim", "nim"):
@@ -98,6 +100,8 @@ class Settings:
     groq_api_key: str
     groq_model: str
     groq_vision_model: str
+    ollama_model: str
+    ollama_base_url: str
     openai_api_key: str
     tts_model: str
     tts_voice: str
@@ -123,6 +127,8 @@ class Settings:
     kokoro_speed: float
     require_critical_confirmation: bool = True
     enable_command_logs: bool = True
+    use_face_auth: bool = False
+    elevenlabs_api_keys: str = ""
 
 
 def load_settings() -> Settings:
@@ -153,6 +159,8 @@ def load_settings() -> Settings:
             (os.getenv("GROQ_VISION_MODEL", "") or "").strip()
             or "meta-llama/llama-4-scout-17b-16e-instruct"
         ),
+        ollama_model=(os.getenv("OLLAMA_MODEL", "qwen3:1.7b") or "").strip() or "qwen3:1.7b",
+        ollama_base_url=(os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1") or "").strip() or "http://localhost:11434/v1",
         openai_api_key=(os.getenv("OPENAI_API_KEY", "") or "").strip(),
         tts_model=os.getenv("OPENAI_TTS_MODEL", "gpt-4o-mini-tts"),
         tts_voice=os.getenv("OPENAI_TTS_VOICE", "alloy"),
@@ -188,4 +196,6 @@ def load_settings() -> Settings:
         enable_visualizer=_as_bool(os.getenv("ENABLE_VISUALIZER"), default=False),
         kokoro_voice=(os.getenv("KOKORO_VOICE", "pf_dora") or "").strip() or "pf_dora",
         kokoro_speed=max(0.5, min(2.0, float(os.getenv("KOKORO_SPEED", "1.0") or "1.0"))),
+        use_face_auth=_as_bool(os.getenv("USE_FACE_AUTH"), default=False),
+        elevenlabs_api_keys=os.getenv("ELEVENLABS_API_KEYS", ""),
     )

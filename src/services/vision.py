@@ -36,8 +36,18 @@ class VisionService:
         http_timeout: float = 180.0,
     ) -> None:
         self.vision_provider = (vision_provider or "gemini").lower()
-        self.gemini_client = genai.Client(api_key=gemini_api_key) if gemini_api_key else None
-        self.gemini_model = gemini_model
+        
+        # Rotação de chaves Gemini com Cooldown
+        self.gemini_keys = []
+        for k in gemini_api_key.split(","):
+            val = k.strip()
+            if val:
+                self.gemini_keys.append({
+                    'key': val,
+                    'client': genai.Client(api_key=val),
+                    'blocked_until': 0.0
+                })
+        
         to = max(30.0, min(600.0, http_timeout))
         self.nvidia_client = (
             OpenAI(
@@ -59,8 +69,32 @@ class VisionService:
             else None
         )
         self.groq_vision_model = (groq_vision_model or "").strip()
-        self._limiter = SlidingWindowRateLimiter(max_requests_per_minute=max_rpm)
+        
+        self.current_key_idx = 0
+        self.gemini_model = gemini_model
+        
+        # Ajusta RPM total baseado no número de chaves
+        total_rpm = max(10, len(self.gemini_keys) * 12)
+        self._limiter = SlidingWindowRateLimiter(max_requests_per_minute=total_rpm)
         self._retry_attempts = max(1, retry_attempts)
+
+    def _get_active_gemini_client(self):
+        """Busca a próxima chave de visão que não está em cooldown."""
+        now = time.time()
+        for _ in range(len(self.gemini_keys)):
+            candidate = self.gemini_keys[self.current_key_idx]
+            self.current_key_idx = (self.current_key_idx + 1) % len(self.gemini_keys)
+            if now > candidate['blocked_until']:
+                return candidate['client']
+        
+        time.sleep(1) # Respiro curto para visão
+        return self.gemini_keys[0]['client']
+
+    def _mark_key_as_blocked(self):
+        """Marca a chave de visão atual como bloqueada por 30s."""
+        idx = (self.current_key_idx - 1) % len(self.gemini_keys)
+        self.gemini_keys[idx]['blocked_until'] = time.time() + 30.0
+        logger.error(f"Visão: Chave {idx} bloqueada por 30s (429).")
 
     def capture_screen_bytes(self) -> bytes:
         with mss() as sct:
@@ -83,22 +117,27 @@ class VisionService:
         img.save(out, format="PNG", optimize=True)
         return out.getvalue()
 
-    def describe_screen(self, user_request: str) -> str:
+    def describe_screen(self, user_request: str, image_bytes: bytes | None = None) -> str:
         if self.vision_provider == "nvidia":
-            return self._describe_with_nvidia(user_request)
+            return self._describe_with_nvidia(user_request, image_bytes)
         if self.vision_provider == "groq":
-            return self._describe_with_groq(user_request)
-        return self._describe_with_gemini(user_request)
+            return self._describe_with_groq(user_request, image_bytes)
+        return self._describe_with_gemini(user_request, image_bytes)
 
-    def _describe_with_gemini(self, user_request: str) -> str:
-        if not self.gemini_client:
-            return "GEMINI_API_KEY nao configurada para visao de tela (VISION_PROVIDER=gemini)."
+    def _describe_with_gemini(self, user_request: str, image_bytes: bytes | None = None) -> str:
+        if not image_bytes:
+            image_bytes = self.capture_screen_bytes()
+            
+        total_attempts = self._retry_attempts * len(self.gemini_keys)
+            
+        for attempt in range(1, total_attempts + 1):
+            client = self._get_active_gemini_client()
+            if not client:
+                return "Erro: Nenhuma chave Gemini disponível."
 
-        image_bytes = self.capture_screen_bytes()
-        for attempt in range(1, self._retry_attempts + 1):
             try:
                 self._limiter.wait_for_slot()
-                response = self.gemini_client.models.generate_content(
+                response = client.models.generate_content(
                     model=self.gemini_model,
                     contents=[
                         user_request,
@@ -107,18 +146,26 @@ class VisionService:
                 )
                 return (response.text or "").strip()
             except Exception as exc:
-                if attempt == self._retry_attempts:
+                if "429" in str(exc) or "RESOURCE_EXHAUSTED" in str(exc):
+                    self._mark_key_as_blocked()
+                    continue
+
+                if attempt == total_attempts:
                     return "Falha ao interpretar a tela com Gemini. Tente novamente."
                 sleep_before_gemini_retry(exc, attempt)
         return "Falha ao interpretar a tela com Gemini. Tente novamente."
 
-    def _describe_with_nvidia(self, user_request: str) -> str:
+    def _describe_with_nvidia(self, user_request: str, image_bytes: bytes | None = None) -> str:
         if not self.nvidia_client or not self.nvidia_model:
             return (
                 "NVIDIA_API_KEY / modelo nao configurados para visao "
                 "(VISION_PROVIDER=nvidia)."
             )
-        image_bytes = self._downscale_png_if_large(self.capture_screen_bytes())
+        
+        if not image_bytes:
+            image_bytes = self.capture_screen_bytes()
+            
+        image_bytes = self._downscale_png_if_large(image_bytes)
         b64 = base64.standard_b64encode(image_bytes).decode("ascii")
         data_url = f"data:image/png;base64,{b64}"
         for attempt in range(1, self._retry_attempts + 1):
@@ -177,14 +224,17 @@ class VisionService:
         b64 = base64.standard_b64encode(raw).decode("ascii")
         return f"data:image/jpeg;base64,{b64}"
 
-    def _describe_with_groq(self, user_request: str) -> str:
+    def _describe_with_groq(self, user_request: str, image_bytes: bytes | None = None) -> str:
         if not self.groq_client or not self.groq_vision_model:
             return (
                 "GROQ_API_KEY / GROQ_VISION_MODEL nao configurados para visao "
                 "(VISION_PROVIDER=groq)."
             )
-        png_bytes = self.capture_screen_bytes()
-        data_url = self._png_to_groq_jpeg_data_url(png_bytes)
+            
+        if not image_bytes:
+            image_bytes = self.capture_screen_bytes()
+            
+        data_url = self._png_to_groq_jpeg_data_url(image_bytes)
         for attempt in range(1, self._retry_attempts + 1):
             try:
                 self._limiter.wait_for_slot()

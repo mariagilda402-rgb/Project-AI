@@ -111,8 +111,11 @@ def _focus_spotify() -> bool:
     ctypes.windll.user32.EnumWindows(enum_callback, 0)
 
     if target_hwnd:
-        # Restaura se minimizado
-        ctypes.windll.user32.ShowWindow(target_hwnd, 9)  # SW_RESTORE
+        # Verifica se esta minimizado
+        if ctypes.windll.user32.IsIconic(target_hwnd):
+            ctypes.windll.user32.ShowWindow(target_hwnd, 9)  # SW_RESTORE
+        
+        # Traz para frente sem quebrar o estado Maximizado
         ctypes.windll.user32.SetForegroundWindow(target_hwnd)
         return True
     return False
@@ -168,12 +171,23 @@ class SpotifyTool:
         wait_time = 5.0 if not was_running else 2.5
         time.sleep(wait_time)
 
-        # Tenta focar a janela do Spotify e pressionar Enter para tocar o primeiro resultado
+        # Tenta focar a janela do Spotify e pressionar Play no primeiro resultado
         if _focus_spotify():
-            time.sleep(1.0)
-            # Pressiona Enter para reproduzir o primeiro resultado
+            time.sleep(1.5) # Aguarda UI terminar de renderizar a lista
+            
+            # Pressiona Tab duas vezes para sair do modo texto da busca e focar os resultados
+            _press(_VK_TAB)
+            time.sleep(0.2)
+            _press(_VK_TAB)
+            time.sleep(0.2)
+            # Enter no primeiro "Top Result"
             _press(_VK_RETURN, extended=False)
-            return ToolResult(True, f"Busquei '{query}' no Spotify e tentei reproduzir.")
+            
+            # Se a música não começar imediatamente, usamos a mídia do teclado como backup
+            time.sleep(1.0)
+            _press(_VK_MEDIA_PLAY_PAUSE)
+            
+            return ToolResult(True, f"Busquei '{query}' no Spotify e tentei reproduzir o principal resultado.")
         
         return ToolResult(True, f"Abri a busca por '{query}' no Spotify, mas não consegui focar a janela para dar o play automático.")
 

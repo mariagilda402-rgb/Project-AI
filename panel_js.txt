@@ -1,0 +1,451 @@
+﻿
+>   <script>
+      /* â”€â”€ State labels â”€â”€ */
+      const STATE_LABELS = {
+        idle:'INATIVO', thinking:'PENSANDO', speaking:'FALANDO',
+        listening:'ESCUTANDO', error:'ERRO', loading:'CARREGANDO',
+        success:'SUCESSO', sleeping:'DORMINDO', warning:'AVISO'
+      };
+  
+      /* â”€â”€ Tabs â”€â”€ */
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+          document.querySelectorAll('.tab-page').forEach(p => p.classList.remove('active'));
+          btn.classList.add('active');
+          document.getElementById('page-' + btn.dataset.tab).classList.add('active');
+          if (btn.dataset.tab === 'agents') loadAgents();
+          if (btn.dataset.tab === 'memory') { loadMemAgentSelect(); }
+        });
+      });
+  
+      /* â”€â”€ Chat â”€â”€ */
+      const chatInput = document.getElementById('chatInput');
+      const feedback = document.getElementById('chatFeedback');
+  
+      function sendChat() {
+        const text = chatInput.value.trim();
+        if (!text) return;
+        chatInput.value = '';
+        if (window.pywebview && window.pywebview.api) {
+          window.pywebview.api.send_chat_message(text).then(() => {
+            feedback.textContent = 'âœ“ Enviado para processamento';
+            feedback.classList.add('show');
+            setTimeout(() => feedback.classList.remove('show'), 2500);
+          });
+        }
+      }
+      document.getElementById('sendBtn').addEventListener('click', sendChat);
+      chatInput.addEventListener('keydown', e => { if (e.key === 'Enter') sendChat(); });
+  
+      /* â”€â”€ WebSocket for status â”€â”€ */
+      let ws = null;
+      function connectWS() {
+        try {
+          ws = new WebSocket('ws://127.0.0.1:5123/ws');
+          ws.onmessage = (e) => {
+            try {
+              const d = JSON.parse(e.data);
+              if (d.type === 'state' && d.status) {
+                const lbl = document.getElementById('statusLabel');
+                lbl.textContent = STATE_LABELS[d.status] || d.status.toUpperCase();
+                lbl.setAttribute('data-state', d.status);
+              }
+            } catch(ex) {}
+          };
+          ws.onclose = () => setTimeout(connectWS, 3000);
+          ws.onerror = () => {};
+        } catch(e) { setTimeout(connectWS, 3000); }
+      }
+      connectWS();
+  
+      /* â”€â”€ Agents CRUD â”€â”€ */
+      async function apiCall(method, ...args) {
+        if (!window.pywebview || !window.pywebview.api) return null;
+        try { return await window.pywebview.api[method](...args); }
+        catch(e) { console.error('API error:', method, e); return null; }
+      }
+  
+      async function loadAgents() {
+        const agents = await apiCall('list_agents');
+        const activeId = await apiCall('get_active_agent_id');
+        const list = document.getElementById('agentList');
+        if (!agents) { list.innerHTML = '<p style="color:var(--text-dim)">Carregando...</p>'; return; }
+        list.innerHTML = '';
+        agents.forEach(a => {
+          const isActive = a.id === activeId;
+          const card = document.createElement('div');
+          card.className = 'agent-card' + (isActive ? ' active-agent' : '');
+          card.innerHTML = `
+            <div class="agent-avatar">${a.name.charAt(0).toUpperCase()}</div>
+            <div class="agent-info" data-id="${a.id}">
+              <div class="agent-name">${a.name} ${isActive ? '<span style="color:var(--green);font-size:11px">â— 
+ativo</span>' : ''}</div>
+              <div class="agent-meta">${a.tts_provider} Â· ${a.tts_voice}</div>
+            </div>
+            <div class="agent-actions">
+              ${!isActive ? `<button onclick="activateAgent('${a.id}')">Ativar</button>` : ''}
+              <button onclick="editAgent('${a.id}')">âœï¸</button>
+              <button class="btn-delete" onclick="deleteAgent('${a.id}','${a.name}')">ðŸ—‘</button>
+            </div>
+          `;
+          list.appendChild(card);
+        });
+        // Trash
+        const trash = await apiCall('list_trash');
+        document.getElementById('trashCount').textContent = trash ? trash.length : 0;
+        const tl = document.getElementById('trashList');
+        tl.innerHTML = '';
+        if (trash && trash.length > 0) {
+          trash.forEach(a => {
+            const card = document.createElement('div');
+            card.className = 'agent-card';
+            card.style.opacity = '0.6';
+            card.innerHTML = `
+              <div class="agent-avatar" style="background:linear-gradient(135deg,#555,#333)">${a.name.charAt(0)}</div>
+              <div class="agent-info">
+                <div class="agent-name">${a.name}</div>
+                <div class="agent-meta">Na lixeira</div>
+              </div>
+              <div class="agent-actions">
+                <button onclick="restoreAgent('${a.id}')">â†©ï¸ Restaurar</button>
+                <button class="btn-delete" onclick="permDeleteAgent('${a.id}','${a.name}')">âŒ Apagar</button>
+              </div>
+            `;
+            tl.appendChild(card);
+          });
+        }
+      }
+  
+      document.getElementById('trashToggle').addEventListener('click', () => {
+        document.getElementById('trashList').classList.toggle('open');
+      });
+  
+      async function activateAgent(id) { await apiCall('set_active_agent', id); loadAgents(); }
+      async function deleteAgent(id, name) {
+        if (!confirm(`Mover "${name}" para a lixeira?`)) return;
+        await apiCall('delete_agent', id); loadAgents();
+      }
+      async function restoreAgent(id) { await apiCall('restore_agent', id); loadAgents(); }
+      async function permDeleteAgent(id, name) {
+        if (!confirm(`Apagar "${name}" PERMANENTEMENTE? Isso nÃ£o pode ser desfeito.`)) return;
+        await apiCall('permanent_delete_agent', id); loadAgents();
+      }
+  
+      /* â”€â”€ Agent Modal â”€â”€ */
+      const modal = document.getElementById('agentModal');
+      document.getElementById('btnNewAgent').addEventListener('click', () => {
+        document.getElementById('modalTitle').textContent = 'Novo Agente';
+        document.getElementById('modalAgentId').value = '';
+        document.getElementById('fName').value = '';
+        document.getElementById('fPersona').value = '';
+        document.getElementById('fTtsProvider').value = 'edge';
+        document.getElementById('fTtsVoice').value = 'pt-BR-FranciscaNeural';
+        document.getElementById('fSpeed').value = '1.0';
+        document.getElementById('fKokoroVoice').value = 'pf_dora';
+        modal.classList.add('open');
+      });
+      document.getElementById('btnModalCancel').addEventListener('click', () => modal.classList.remove('open'));
+  
+      async function editAgent(id) {
+        const agents = await apiCall('list_agents');
+        const a = agents.find(x => x.id === id);
+        if (!a) return;
+        document.getElementById('modalTitle').textContent = 'Editar Agente';
+        document.getElementById('modalAgentId').value = a.id;
+        document.getElementById('fName').value = a.name;
+        document.getElementById('fPersona').value = a.persona;
+        document.getElementById('fTtsProvider').value = a.tts_provider || 'edge';
+        document.getElementById('fTtsVoice').value = a.tts_voice || 'pt-BR-FranciscaNeural';
+        document.getElementById('fSpeed').value = a.tts_speed || 1.0;
+        document.getElementById('fKokoroVoice').value = a.kokoro_voice || 'pf_dora';
+        modal.classList.add('open');
+      }
+  
+      document.getElementById('btnModalSave').addEventListener('click', async () => {
+        const id = document.getElementById('modalAgentId').value;
+        const data = {
+          name: document.getElementById('fName').value.trim(),
+          persona: document.getElementById('fPersona').value.trim(),
+          tts_provider: document.getElementById('fTtsProvider').value,
+          tts_voice: document.getElementById('fTtsVoice').value,
+          tts_speed: parseFloat(document.getElementById('fSpeed').value) || 1.0,
+          kokoro_voice: document.getElementById('fKokoroVoice').value.trim() || 'pf_dora'
+        };
+        if (!data.name) { alert('Nome Ã© obrigatÃ³rio'); return; }
+        if (id) {
+          await apiCall('update_agent', id, data);
+        } else {
+          await apiCall('create_agent', data);
+        }
+        modal.classList.remove('open');
+        loadAgents();
+      });
+  
+      /* â”€â”€ Config tab â”€â”€ */
+      async function loadConfig() {
+        const cfg = await apiCall('get_config');
+        const grid = document.getElementById('configGrid');
+        if (!cfg) return;
+        grid.innerHTML = '';
+        const items = [
+          ['Provedor LLM', cfg.llm_provider],
+          ['Modelo Gemini', cfg.gemini_model],
+          ['Modelo Groq', cfg.groq_model],
+          ['Provedor TTS', cfg.tts_provider],
+          ['Voz Edge TTS', cfg.tts_voice],
+          ['Idioma STT', cfg.stt_language],
+          ['Microfone', cfg.use_mic ? 'Ativo' : 'Desativado'],
+          ['Visualizador', cfg.enable_visualizer ? 'Ativo' : 'Desativado'],
+        ];
+        items.forEach(([k, v]) => {
+          const div = document.createElement('div');
+          div.className = 'config-item';
+          div.innerHTML = `<div class="config-key">${k}</div><div class="config-val">${v || 'â€”'}</div>`;
+          grid.appendChild(div);
+        });
+      }
+  
+      /* â”€â”€ Agent selector (home tab â€” Fase 3.1) â”€â”€ */
+      async function loadAgentSelector() {
+        const agents = await apiCall('list_agents');
+        const activeId = await apiCall('get_active_agent_id');
+        const sel = document.getElementById('agentSelect');
+        if (!agents || !sel) return;
+        sel.innerHTML = '';
+        agents.forEach(a => {
+          const opt = document.createElement('option');
+          opt.value = a.id;
+          opt.textContent = a.name;
+          if (a.id === activeId) opt.selected = true;
+          sel.appendChild(opt);
+        });
+      }
+      document.getElementById('agentSelect').addEventListener('change', async (e) => {
+        await apiCall('set_active_agent', e.target.value);
+        feedback.textContent = 'âœ“ Agente alterado';
+        feedback.classList.add('show');
+        setTimeout(() => feedback.classList.remove('show'), 2000);
+      });
+  
+      /* â”€â”€ Memory tab (Fase 4.1) â”€â”€ */
+      async function loadMemAgentSelect() {
+        const agents = await apiCall('list_agents');
+        const sel = document.getElementById('memAgentSelect');
+        if (!agents || !sel) return;
+        sel.innerHTML = '';
+        agents.forEach(a => {
+          const opt = document.createElement('option');
+          opt.value = a.memory_collection;
+          opt.textContent = a.name;
+          opt.dataset.agentId = a.id;
+          sel.appendChild(opt);
+        });
+        loadMemories();
+      }
+      document.getElementById('memAgentSelect').addEventListener('change', () => loadMemories());
+      document.getElementById('memSearchBtn').addEventListener('click', () => loadMemories());
+      document.getElementById('memSearch').addEventListener('keydown', e => { if (e.key === 'Enter') loadMemories(); 
+});
+  
+      async function loadMemories() {
+        const collection = document.getElementById('memAgentSelect').value;
+        const query = document.getElementById('memSearch').value.trim();
+        if (!collection) return;
+        const result = await apiCall('list_memories', collection, query);
+        const list = document.getElementById('memList');
+        const count = document.getElementById('memCount');
+        if (!result) { list.innerHTML = '<div class="memory-empty">Erro ao carregar memÃ³rias.</div>'; return; }
+        count.textContent = `${result.total} memÃ³ria(s) encontrada(s)`;
+        if (result.memories.length === 0) {
+          list.innerHTML = '<div class="memory-empty">Nenhuma memÃ³ria encontrada.</div>';
+          return;
+        }
+        list.innerHTML = '';
+        result.memories.forEach(m => {
+          const div = document.createElement('div');
+          div.className = 'memory-item';
+          div.innerHTML = `
+            <div class="memory-text">${m.text}</div>
+            <button class="btn-del-mem" onclick="deleteMemory('${collection}','${m.id}')">Apagar</button>
+          `;
+          list.appendChild(div);
+        });
+      }
+  
+      async function deleteMemory(collection, memId) {
+        if (!confirm('Mover esta memÃ³ria para a lixeira?')) return;
+        await apiCall('delete_memory', collection, memId);
+        loadMemories();
+        loadMemTrash();
+      }
+  
+      /* â”€â”€ Lixeira de MemÃ³rias (Fase 4.2) â”€â”€ */
+      const memTrashToggle = document.getElementById('memTrashToggle');
+      const memTrashList = document.getElementById('memTrashList');
+      
+      memTrashToggle.addEventListener('click', () => {
+        memTrashList.classList.toggle('open');
+        if (memTrashList.classList.contains('open')) {
+          loadMemTrash();
+        }
+      });
+  
+      async function loadMemTrash() {
+        const trash = await apiCall('list_trash_memories');
+        document.getElementById('memTrashCount').textContent = trash ? trash.length : 0;
+        if (!trash || trash.length === 0) {
+          memTrashList.innerHTML = '<div style="color:var(--text-dim); text-align:center; padding:10px;">Lixeira 
+vazia</div>';
+          return;
+        }
+        memTrashList.innerHTML = '';
+        trash.forEach(m => {
+          const div = document.createElement('div');
+          div.className = 'agent-card';
+          div.style.flexDirection = 'column';
+          div.style.alignItems = 'flex-start';
+          div.style.gap = '8px';
+          div.innerHTML = `
+            <div style="font-size:13px; line-height:1.4;">${m.text}</div>
+            <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
+              <span style="font-size:11px; color:var(--text-dim);">Origem: ${m.original_collection}</span>
+              <div style="display:flex; gap:6px;">
+                <button class="btn-restore" onclick="restoreMem('${m.id}')">Restaurar</button>
+                <button class="btn-del-mem" onclick="permDeleteMem('${m.id}')" 
+style="color:var(--red);">Excluir</button>
+              </div>
+            </div>
+          `;
+          memTrashList.appendChild(div);
+        });
+      }
+  
+      async function restoreMem(id) {
+        await apiCall('restore_memory', id);
+        loadMemTrash();
+        loadMemories();
+      }
+  
+      async function permDeleteMem(id) {
+        if (!confirm('Excluir permanentemente esta memÃ³ria? NÃ£o hÃ¡ volta!')) return;
+        await apiCall('permanent_delete_memory', id);
+        loadMemTrash();
+      }
+  
+      document.getElementById('memExportBtn').addEventListener('click', async () => {
+        const collection = document.getElementById('memAgentSelect').value;
+        if (!collection) return;
+        const ok = await apiCall('export_memories', collection);
+        if (ok) {
+          feedback.textContent = 'âœ“ MemÃ³rias exportadas com sucesso';
+          feedback.classList.add('show');
+          setTimeout(() => feedback.classList.remove('show'), 2500);
+        }
+      });
+  
+      document.getElementById('memImportBtn').addEventListener('click', async () => {
+        const collection = document.getElementById('memAgentSelect').value;
+        if (!collection) return;
+        const ok = await apiCall('trigger_import_memories', collection);
+        if (ok) {
+          feedback.textContent = 'â³ Importando memÃ³rias em background...';
+          feedback.classList.add('show');
+          setTimeout(() => feedback.classList.remove('show'), 4000);
+        }
+      });
+  
+      /* â”€â”€ Multi-Agent Modes (Fase 3.2.1 e 3.2.2) â”€â”€ */
+      const modesModal = document.getElementById('modesModal');
+      
+      document.getElementById('btnOpenModes').addEventListener('click', async () => {
+        const agents = await apiCall('list_agents');
+        const list = document.getElementById('modeAgentsList');
+        list.innerHTML = '';
+        if (agents) {
+          agents.forEach(a => {
+            const lbl = document.createElement('label');
+            lbl.style.display = 'flex';
+            lbl.style.alignItems = 'center';
+            lbl.style.gap = '8px';
+            lbl.style.fontSize = '13px';
+            lbl.style.cursor = 'pointer';
+            lbl.innerHTML = `<input type="checkbox" class="mode-agent-cb" value="${a.id}" checked> ${a.name}`;
+            list.appendChild(lbl);
+          });
+        }
+        modesModal.classList.add('open');
+      });
+  
+      document.getElementById('btnModesCancel').addEventListener('click', () => {
+        modesModal.classList.remove('open');
+      });
+  
+      document.getElementById('modeSelect').addEventListener('change', e => {
+        const isDebate = e.target.value === 'debate';
+        document.getElementById('roundRobinOpts').style.display = isDebate ? 'none' : 'block';
+        document.getElementById('debateOpts').style.display = isDebate ? 'block' : 'none';
+        document.getElementById('modeInputLabel').textContent = isDebate ? 'Tema do Debate' : 'Pergunta';
+      });
+  
+      document.getElementById('modePresetSelect').addEventListener('change', e => {
+        const v = e.target.value;
+        const modeSel = document.getElementById('modeSelect');
+        const input = document.getElementById('modeInput');
+        const rounds = document.getElementById('modeRounds');
+        const chained = document.getElementById('modeChained');
+        
+        if (v === 'interview') {
+          modeSel.value = 'roundrobin';
+          chained.checked = true;
+          input.value = "Aja como um candidato em uma entrevista de emprego para uma vaga de Engenheiro de Software 
+SÃªnior. Fale sobre suas qualidades.";
+        } else if (v === 'debate') {
+          modeSel.value = 'debate';
+          rounds.value = 4;
+          input.value = "Discutam sobre o impacto da InteligÃªncia Artificial no mercado de trabalho e na economia 
+global.";
+        } else if (v === 'brainstorm') {
+          modeSel.value = 'roundrobin';
+          chained.checked = true;
+          input.value = "Vamos fazer um brainstorm criativo: deem ideias inovadoras para um novo aplicativo de 
+produtividade pessoal.";
+        }
+        
+        modeSel.dispatchEvent(new Event('change'));
+      });
+  
+      document.getElementById('btnModesStart').addEventListener('click', async () => {
+        const mode = document.getElementById('modeSelect').value;
+        const text = document.getElementById('modeInput').value.trim();
+        if (!text) { alert('Digite o tema ou pergunta!'); return; }
+        
+        const cbs = document.querySelectorAll('.mode-agent-cb:checked');
+        const selectedIds = Array.from(cbs).map(cb => cb.value);
+        if (selectedIds.length < 2) { alert('Selecione pelo menos 2 agentes.'); return; }
+  
+        if (mode === 'roundrobin') {
+          const chained = document.getElementById('modeChained').checked;
+          await apiCall('start_round_robin', text, selectedIds, chained);
+          feedback.textContent = 'âœ“ Round-Robin Iniciado';
+        } else {
+          const rounds = parseInt(document.getElementById('modeRounds').value) || 3;
+          await apiCall('start_debate', text, selectedIds, rounds);
+          feedback.textContent = 'âœ“ Debate Iniciado';
+        }
+        
+        feedback.classList.add('show');
+        setTimeout(() => feedback.classList.remove('show'), 2500);
+        modesModal.classList.remove('open');
+      });
+  
+      /* â”€â”€ Initial load on pywebview ready â”€â”€ */
+      window.addEventListener('pywebviewready', () => {
+        loadConfig();
+        loadAgentSelector();
+      });
+    </script>
+  </body>
+  </html>
+
+

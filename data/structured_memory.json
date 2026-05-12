@@ -1,0 +1,22 @@
+{
+  "identity": {
+    "name": {
+      "value": "Astrid",
+      "updated": "2026-05-10"
+    }
+  },
+  "preferences": {
+    "musica": {
+      "value": "não especificada",
+      "updated": "2026-05-09"
+    },
+    "Música": {
+      "value": "não especificada, mas solicitou abrir o Spotify várias vezes",
+      "updated": "2026-05-10"
+    }
+  },
+  "projects": {},
+  "relationships": {},
+  "wishes": {},
+  "notes": {}
+}

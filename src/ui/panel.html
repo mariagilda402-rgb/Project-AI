@@ -1,0 +1,1176 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <title>AI Assistant — Painel Pro</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+    :root {
+      --bg: #0a0a0a;
+      --bg-panel: #111111;
+      --surface: rgba(255,255,255,0.04);
+      --surface-hover: rgba(255,255,255,0.08);
+      --border: rgba(255,255,255,0.08);
+      --border-accent: rgba(139,92,246,0.35);
+      --text: #e4e4e7;
+      --text-dim: #71717a;
+      --text-muted: #52525b;
+      --accent: #8b5cf6;
+      --accent-hover: #7c3aed;
+      --accent-glow: rgba(139,92,246,0.3);
+      --accent-subtle: rgba(139,92,246,0.08);
+      --danger: #ef4444;
+      --success: #22c55e;
+      --warning: #f59e0b;
+      --sidebar: #080808;
+      --radius: 10px;
+      --font-family: 'Inter', system-ui, sans-serif;
+      --bg-element: var(--bg-panel);
+    }
+
+    html {
+      background-color: transparent !important;
+      color-scheme: dark;
+    }
+    body {
+      background-color: transparent !important;
+      margin: 0;
+      padding: 20px; /* Space for shadow/glow */
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      font-family: var(--font-family);
+      color: var(--text);
+      display: flex;
+      user-select: none;
+    }
+
+    #app-wrapper {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      background: var(--bg);
+      border-radius: 14px;
+      overflow: hidden;
+      display: flex;
+      box-shadow: 0 0 25px rgba(0,0,0,0.8);
+      border: 1px solid var(--border-accent);
+    }
+
+    /* Animated Neon Border Option */
+    #app-wrapper.neon-enabled {
+      border: none;
+      box-shadow: 0 0 40px var(--accent-glow);
+    }
+    #app-wrapper.neon-enabled::before {
+      content: "";
+      position: absolute;
+      top: -50%; left: -50%;
+      width: 200%; height: 200%;
+      background: conic-gradient(var(--accent) 0%, #06b6d4 50%, var(--accent) 100%);
+      animation: spin-border 4s linear infinite;
+      z-index: -1;
+    }
+    #app-wrapper.neon-enabled::after {
+      content: "";
+      position: absolute;
+      inset: 3px; /* Espessura da borda = 3px */
+      background: var(--bg);
+      border-radius: 12px;
+      z-index: -1;
+    }
+
+    @keyframes spin-border {
+      100% { transform: rotate(360deg); }
+    }
+
+    /* ── SIDEBAR ── */
+    .sidebar {
+      width: 220px;
+      min-width: 220px;
+      flex-shrink: 0;
+      background: var(--sidebar);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      padding: 20px 12px;
+      gap: 4px;
+    }
+
+    .logo {
+      font-size: 14px; font-weight: 700; letter-spacing: 1.5px;
+      text-transform: uppercase; color: var(--text);
+      margin-bottom: 28px; padding-left: 12px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .logo::before {
+      content:''; display:block; width:8px; height:8px;
+      background: var(--accent); border-radius:50%;
+      box-shadow: 0 0 8px var(--accent-glow);
+    }
+
+    .nav-btn {
+      padding: 10px 14px; background: transparent;
+      border: 1px solid transparent; border-radius: 8px;
+      color: var(--text-dim); font-family: inherit;
+      font-size: 13px; font-weight: 500; cursor: pointer;
+      text-align: left; transition: all .2s;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .nav-btn:hover { color: var(--text); background: var(--surface); border-color: var(--border); }
+    .nav-btn.active { color: var(--accent); background: var(--accent-subtle); border-color: var(--border-accent); }
+
+    /* ── CONTENT ── */
+    .content-area { flex:1; position:relative; overflow:hidden; background: var(--bg); }
+
+    .page {
+      position:absolute; inset:0; padding: 28px 32px;
+      display:none; flex-direction:column; overflow-y:auto;
+      animation: pageIn .3s ease forwards; opacity:0;
+    }
+    .page.active { display:flex; }
+    @keyframes pageIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+
+    .page::-webkit-scrollbar { width:4px; }
+    .page::-webkit-scrollbar-track { background:transparent; }
+    .page::-webkit-scrollbar-thumb { background: var(--border-accent); border-radius:4px; }
+
+    h1 { font-size:20px; font-weight:600; margin-bottom:20px; }
+    h2 { font-size:11px; font-weight:600; margin-bottom:14px; margin-top:20px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.8px; }
+
+    .btn-primary {
+      background:var(--accent); color:#fff; border:none;
+      padding:9px 18px; border-radius:8px; font-size:13px; font-weight:500;
+      cursor:pointer; transition:all .2s;
+    }
+    .btn-primary:hover { background:var(--accent-hover); box-shadow:0 4px 12px var(--accent-glow); }
+
+    .btn-secondary {
+      background:transparent; color:var(--text);
+      border:1px solid var(--border); padding:9px 18px;
+      border-radius:8px; font-size:13px; cursor:pointer; transition:all .2s;
+    }
+    .btn-secondary:hover { background:var(--surface-hover); border-color:var(--border-accent); }
+
+    .btn-danger {
+      background:transparent; color:var(--danger);
+      border:1px solid rgba(239,68,68,.25); padding:8px 14px;
+      border-radius:8px; font-size:12px; cursor:pointer; transition:all .2s;
+    }
+    .btn-danger:hover { background:var(--danger); color:#fff; }
+
+    .btn-icon {
+      width:34px; height:34px; border-radius:8px;
+      background:var(--accent-subtle); color:var(--accent);
+      border:1px solid var(--border-accent); font-size:16px;
+      cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all .2s;
+    }
+    .btn-icon:hover { background:var(--accent); color:#fff; }
+
+    input, select, textarea {
+      width:100%; padding:10px 14px; background:var(--bg);
+      border:1px solid var(--border); border-radius:8px;
+      color:var(--text); font-family:inherit; font-size:13px; outline:none; transition:border-color .2s;
+    }
+    input:focus, select:focus, textarea:focus { border-color:var(--accent); box-shadow:0 0 0 2px var(--accent-subtle); }
+
+    label { display:block; font-size:11px; color:var(--text-dim); margin-bottom:6px; font-weight:600; text-transform:uppercase; letter-spacing:.5px; }
+    .form-group { margin-bottom:14px; }
+
+    /* HOME */
+    .home-layout { display:flex; gap:20px; height:100%; }
+    .home-main { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; }
+    .home-side { width:280px; display:flex; flex-direction:column; gap:14px; }
+    .orb-frame { width:200px; height:200px; border-radius:50%; position:relative; }
+    .orb-frame iframe { width:100%; height:100%; border:none; border-radius:50%; pointer-events:none; background: transparent; }
+    .status-badge { padding:5px 14px; border-radius:20px; font-size:10px; font-weight:700; letter-spacing:1.5px; background:transparent; border:1px solid var(--border-accent); color:var(--accent); }
+    .chat-box { width:100%; max-width:480px; display:flex; gap:8px; }
+
+    .stats-panel { background:var(--bg-panel); border:1px solid var(--border); border-radius:var(--radius); padding:16px; flex:1; display:flex; flex-direction:column; gap:14px; }
+    .stat-item { display:flex; justify-content:space-between; align-items:center; }
+    .stat-label { font-size:11px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.3px; }
+    .stat-value { font-size:14px; font-weight:600; font-family:'Share Tech Mono',monospace; color:var(--text); }
+    .stat-progress { height:4px; background:var(--surface); border-radius:2px; overflow:hidden; margin-top:6px; }
+    .stat-bar { height:100%; background:var(--accent); border-radius:2px; transition:width .5s; }
+
+    /* AGENTS */
+    .agents-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; padding-right: 45px; }
+    .agent-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:14px; }
+    .agent-card-grid { background:var(--bg-panel); border:1px solid var(--border); border-radius:var(--radius); padding:18px; cursor:pointer; transition:all .2s; position:relative; display:flex; flex-direction:column; gap:10px; }
+    .agent-card-grid:hover { border-color:var(--border-accent); box-shadow:0 0 20px rgba(139,92,246,.08); }
+    .agent-card-grid.active-agent { border-color:var(--accent); background:var(--accent-subtle); }
+    .ac-header { display:flex; align-items:center; gap:12px; }
+    .ac-avatar { width:40px; height:40px; border-radius:8px; background:linear-gradient(135deg,var(--accent),#06b6d4); display:flex; align-items:center; justify-content:center; font-size:18px; font-weight:700; }
+    .ac-name { font-size:15px; font-weight:600; }
+    .ac-badge { position:absolute; top:14px; right:14px; width:8px; height:8px; border-radius:50%; background:var(--success); box-shadow:0 0 6px var(--success); }
+    .ac-body { font-size:12px; color:var(--text-dim); line-height:1.5; flex:1; }
+    .ac-footer { display:flex; justify-content:space-between; font-size:11px; color:var(--text-dim); border-top:1px solid var(--border); padding-top:10px; }
+
+    .detail-header { display:flex; align-items:center; gap:16px; margin-bottom:20px; }
+    .detail-grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+    .detail-col { background:var(--bg-panel); border:1px solid var(--border); border-radius:var(--radius); padding:20px; }
+
+    input[type=range] { -webkit-appearance:none; width:100%; background:transparent; padding:0; border:none; height:24px; }
+    input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; height:14px; width:14px; border-radius:50%; background:var(--accent); cursor:pointer; margin-top:-5px; }
+    input[type=range]::-webkit-slider-runnable-track { width:100%; height:4px; cursor:pointer; background:var(--surface); border-radius:2px; }
+    .slider-val { font-size:12px; font-weight:600; color:var(--accent); float:right; }
+
+    /* MODES */
+    .modes-layout { display:flex; flex-direction:column; gap:20px; max-width:800px; }
+    .mode-card { background:var(--bg-panel); border:1px solid var(--border); border-radius:var(--radius); padding:20px; }
+    .checkbox-list { display:flex; flex-direction:column; gap:8px; max-height:200px; overflow-y:auto; background:var(--bg); padding:10px; border-radius:8px; border:1px solid var(--border); }
+    .checkbox-list label { display:flex; align-items:center; gap:8px; margin:0; color:var(--text); font-size:13px; cursor:pointer; text-transform:none; letter-spacing:0; font-weight:400; }
+
+    /* TRASH */
+    .trash-grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+    .trash-col { background:var(--bg-panel); border:1px solid var(--border); border-radius:var(--radius); padding:20px; display:flex; flex-direction:column; gap:14px; }
+    .trash-list { flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:10px; }
+    .trash-item { background:var(--bg); padding:14px; border-radius:8px; border:1px solid var(--border); display:flex; flex-direction:column; gap:10px; }
+    .trash-item-text { font-size:12px; color:var(--text); line-height:1.4; word-break:break-word; }
+
+    .mem-list { display:flex; flex-direction:column; gap:8px; max-height:400px; overflow-y:auto; }
+    .mem-item { background:var(--bg); padding:10px; border-radius:8px; border:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; gap:10px; }
+
+    /* TOASTS */
+    .toast-container { position:fixed; top:16px; right:16px; z-index:9999; display:flex; flex-direction:column; gap:8px; pointer-events:none; }
+    .toast { background:var(--bg-panel); border:1px solid var(--border); border-left:3px solid var(--accent); border-radius:8px; padding:12px 18px; color:var(--text); font-size:13px; box-shadow:0 8px 24px rgba(0,0,0,.5); pointer-events:auto; animation:toastIn .3s ease,toastOut .3s ease 2.7s forwards; max-width:340px; }
+    .toast.success { border-left-color:var(--success); }
+    .toast.error { border-left-color:var(--danger); }
+    .toast.warning { border-left-color:var(--warning); }
+    @keyframes toastIn { from{opacity:0;transform:translateX(30px)} to{opacity:1;transform:translateX(0)} }
+    @keyframes toastOut { from{opacity:1} to{opacity:0;transform:translateX(30px)} }
+
+    /* PERSONA GEN */
+    .persona-gen-row { display:flex; gap:8px; align-items:center; }
+    .btn-generate { background:linear-gradient(135deg,#8b5cf6,#06b6d4); color:#fff; border:none; padding:9px 14px; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap; transition:all .2s; }
+    .btn-generate:hover { transform:scale(1.02); box-shadow:0 4px 12px rgba(139,92,246,.3); }
+    .btn-generate:disabled { opacity:.5; cursor:wait; }
+
+    /* CHAT & LOGS */
+    .chat-container { display:flex; flex-direction:column; gap:14px; height:100%; overflow-y:auto; padding-right:8px; }
+    .chat-msg { display:flex; flex-direction:column; max-width:85%; }
+    .chat-msg.user { align-self:flex-end; align-items:flex-end; }
+    .chat-msg.assistant { align-self:flex-start; align-items:flex-start; }
+    .chat-msg.system { align-self:center; align-items:center; max-width:100%; }
+    .chat-header { font-size:10px; color:var(--text-dim); margin-bottom:4px; }
+    .chat-bubble { padding:10px 14px; border-radius:10px; font-size:13px; line-height:1.5; word-wrap:break-word; }
+    .chat-msg.user .chat-bubble { background:var(--accent); color:#fff; border-bottom-right-radius:2px; }
+    .chat-msg.assistant .chat-bubble { background:var(--bg-panel); border:1px solid var(--border); border-bottom-left-radius:2px; }
+    .chat-msg.system .chat-bubble { background:transparent; color:var(--text-dim); font-size:11px; padding:4px 8px; }
+
+    .logs-container { background:#050505; border:1px solid var(--border); border-radius:8px; padding:14px; height:100%; overflow-y:auto; font-family:'Share Tech Mono','Consolas',monospace; font-size:11px; color:var(--accent); display:flex; flex-direction:column; gap:3px; }
+    .log-line { display:flex; gap:10px; }
+    .log-time { color:#3f3f46; white-space:nowrap; }
+    .log-text { word-wrap:break-word; flex:1; }
+    .log-line.error { color:#f87171; }
+    .log-line.warn { color:#fbbf24; }
+
+    .subtitle-text.error-subtitle { border-color:rgba(220,38,38,.4); background:rgba(220,38,38,.1); color:#fca5a5; }
+  </style>
+</head>
+
+<body>
+  <!-- Toast Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Main App Wrapper for Rounded Corners & Glow -->
+  <div id="app-wrapper">
+
+    <div class="sidebar">
+      <div class="logo">AI Manager</div>
+      <button class="nav-btn active" data-tab="home">🏠 Início</button>
+      <button class="nav-btn" data-tab="agents">🤖 Meus Agentes</button>
+      <button class="nav-btn" data-tab="chat">💬 Histórico de Chat</button>
+      <button class="nav-btn" data-tab="logs">📋 Logs do Sistema</button>
+      <button class="nav-btn" data-tab="modes">⚔️ Modos de Conversa</button>
+      <button class="nav-btn" data-tab="config">⚙️ Configurações</button>
+      <div style="flex:1"></div>
+      <button class="nav-btn" data-tab="trash" style="color: var(--danger)">🗑️ Lixeira</button>
+    </div>
+
+    <div class="content-area">
+      
+      <!-- Close Button -->
+      <button onclick="if(window.pywebview) pywebview.api.close_panel();" style="position:absolute; top:20px; right:25px; z-index:999; background:var(--bg-panel); border:1px solid var(--border-accent); color:var(--text); width:32px; height:32px; border-radius:8px; cursor:pointer; font-weight:bold; transition:all 0.2s; box-shadow:0 4px 12px rgba(0,0,0,0.5);" onmouseover="this.style.background='var(--danger)'; this.style.color='#fff'; this.style.borderColor='var(--danger)';" onmouseout="this.style.background='var(--bg-panel)'; this.style.color='var(--text)'; this.style.borderColor='var(--border-accent)';">✕</button>
+
+      <!-- INICIO -->
+    <div id="page-home" class="page active">
+      <h1>Início</h1>
+      <div class="home-layout">
+        <div class="home-main">
+          <div class="orb-frame">
+            <iframe src="http://127.0.0.1:5123"></iframe>
+          </div>
+          <div class="status-badge" id="statusLabel">INATIVO</div>
+          <div class="chat-box">
+            <input type="text" id="chatInput" placeholder="Digite um comando para a IA...">
+            <button class="btn-secondary" id="btnUploadFile" title="Processar Arquivo"
+              style="padding: 10px;">📎</button>
+            <button class="btn-primary" id="sendBtn">Enviar</button>
+          </div>
+          <div id="chatFeedback" style="color: var(--success); font-size:13px; opacity:0; transition: opacity 0.3s;">✓
+            Enviado</div>
+          <div id="fileFeedback" style="color: var(--accent); font-size:13px; opacity:0; transition: opacity 0.3s;">
+            Arquivo Selecionado</div>
+          <div style="margin-top:10px; display:flex; align-items:center; gap:10px;">
+            <label style="margin:0; white-space:nowrap;">Agente Ativo:</label>
+            <select id="agentSelect" style="flex:1;"></select>
+          </div>
+        </div>
+        <div class="home-side">
+          <div class="stats-panel">
+            <h3 style="font-size:14px; border-bottom: 1px solid var(--border); padding-bottom:10px;">Dashboard em Tempo
+              Real</h3>
+
+            <div class="stat-item">
+              <span class="stat-label">Agentes Ativos</span>
+              <span class="stat-value" id="statAgents">1</span>
+            </div>
+
+            <div class="stat-item">
+              <div style="width:100%">
+                <div style="display:flex; justify-content:space-between">
+                  <span class="stat-label">Uso de CPU</span>
+                  <span class="stat-value" id="statCpuText">0%</span>
+                </div>
+                <div class="stat-progress">
+                  <div class="stat-bar" id="statCpuBar" style="width:0%"></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="stat-item">
+              <div style="width:100%">
+                <div style="display:flex; justify-content:space-between">
+                  <span class="stat-label">Memória RAM</span>
+                  <span class="stat-value" id="statRamText">0 GB</span>
+                </div>
+                <div class="stat-progress">
+                  <div class="stat-bar" id="statRamBar" style="width:0%; background:#10b981;"></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="stat-item">
+              <span class="stat-label">Tokens P/ Min (Estimado)</span>
+              <span class="stat-value" id="statTokens" style="color:var(--accent)">0</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="stats-panel" style="margin-top: 16px;">
+          <h3 style="font-size:14px; border-bottom: 1px solid var(--border); padding-bottom:10px;">Ações Rápidas (IoT &
+            Utils)</h3>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px;">
+            <button class="btn-secondary" onclick="sendQuickCommand('Ligue a luz do quarto')"
+              style="padding: 10px 8px; font-size: 12px; background: rgba(59, 130, 246, 0.1); border-color: rgba(59, 130, 246, 0.3); color: #fff;">💡
+              Luz Quarto</button>
+            <button class="btn-secondary" onclick="sendQuickCommand('Ligue a luz da sala')"
+              style="padding: 10px 8px; font-size: 12px; background: rgba(59, 130, 246, 0.1); border-color: rgba(59, 130, 246, 0.3); color: #fff;">💡
+              Luz Sala</button>
+            <button class="btn-secondary" onclick="sendQuickCommand('Desligue todas as luzes')"
+              style="padding: 10px 8px; font-size: 12px; background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.3); color: #fff;">🌙
+              Apagar Tudo</button>
+            <button class="btn-secondary" onclick="sendQuickCommand('Qual o clima de hoje?')"
+              style="padding: 10px 8px; font-size: 12px;">🌤️ Previsão Tempo</button>
+            <button class="btn-secondary" onclick="sendQuickCommand('Resuma as manchetes e notícias mais recentes')"
+              style="padding: 10px 8px; font-size: 12px; grid-column: span 2; border-color: var(--accent); color: var(--accent); font-weight: 600;">📰
+              Manchetes do Dia</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  <!-- AGENTES -->
+  <div id="page-agents" class="page">
+    <div id="agents-list-view">
+      <div class="agents-header">
+        <h1>Meus Agentes</h1>
+        <button class="btn-icon" id="btnCreateAgent" title="Novo Agente">+</button>
+      </div>
+      <div class="agent-grid" id="agentGrid">
+        <!-- populated via js -->
+      </div>
+    </div>
+
+    <div id="agent-detail-view" style="display:none;">
+      <div class="detail-header">
+        <button class="btn-secondary" id="btnBackAgents">← Voltar</button>
+        <h1 style="margin:0;" id="detailTitle">Detalhes do Agente</h1>
+        <div style="flex:1"></div>
+        <button class="btn-danger" id="btnDeleteAgent">Mover para Lixeira</button>
+        <button class="btn-primary" id="btnActivateAgent" style="background:var(--success);">Ativar</button>
+        <button class="btn-primary" id="btnSaveAgent">Salvar Alterações</button>
+      </div>
+
+      <div class="detail-grid">
+        <div class="detail-col">
+          <h2>Configurações</h2>
+          <input type="hidden" id="fId">
+          <div class="form-group">
+            <label>Nome do Agente</label>
+            <div class="persona-gen-row">
+              <input type="text" id="fName" style="flex:1;">
+              <button class="btn-generate" id="btnGenPersona" title="Gerar personalidade com IA">✨ Gerar
+                Persona</button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Personalidade (Prompt)</label>
+            <textarea id="fPersona" rows="4"></textarea>
+          </div>
+          <div class="form-group">
+            <label>Provedor TTS</label>
+            <select id="fTtsProvider">
+              <option value="edge">Edge TTS (Nuvem)</option>
+              <option value="kokoro">Kokoro (Local)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Voz Edge</label>
+            <input type="text" id="fTtsVoice">
+          </div>
+          <div class="form-group">
+            <label>Voz Kokoro</label>
+            <input type="text" id="fKokoroVoice">
+          </div>
+          <div class="form-group">
+            <label>Velocidade de Fala: <span class="slider-val" id="fSpeedVal">1.0x</span></label>
+            <input type="range" id="fSpeed" min="0.5" max="2.0" step="0.1" value="1.0">
+          </div>
+        </div>
+
+        <div class="detail-col">
+          <h2>Memórias deste Agente</h2>
+          <div style="display:flex; gap:10px; margin-bottom:16px;">
+            <input type="text" id="memSearch" placeholder="Buscar memória...">
+            <button class="btn-secondary" id="btnMemSearch">Buscar</button>
+          </div>
+          <div class="mem-list" id="agentMemList">
+            <!-- memories -->
+          </div>
+          <div style="display:flex; gap:10px; margin-top:16px; border-top:1px solid var(--border); padding-top:16px;">
+            <button class="btn-secondary" id="btnMemExport" style="flex:1">Exportar JSON</button>
+            <button class="btn-secondary" id="btnMemImport" style="flex:1">Importar JSON</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODOS -->
+  <div id="page-modes" class="page">
+    <h1>Orquestração Multi-Agente</h1>
+    <div class="modes-layout">
+      <div class="mode-card">
+        <h2>Preset Rápido</h2>
+        <select id="modePresetSelect">
+          <option value="">Personalizado...</option>
+          <option value="interview">Entrevista de Emprego (Round-Robin)</option>
+          <option value="debate">Debate Tecnológico (Debate 4 turnos)</option>
+          <option value="brainstorm">Brainstorm Criativo (Round-Robin)</option>
+        </select>
+      </div>
+
+      <div class="mode-card">
+        <h2>Configuração da Sessão</h2>
+        <div class="form-group">
+          <label>Selecione os Agentes Participantes:</label>
+          <div class="checkbox-list" id="modeAgentsList"></div>
+        </div>
+
+        <div class="form-group">
+          <label>Modo de Interação</label>
+          <select id="modeSelect">
+            <option value="roundrobin">Round-Robin (Todos falam uma vez)</option>
+            <option value="debate">Debate Livre (Discussão contínua)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label id="modeInputLabel">Tema / Pergunta Inicial</label>
+          <textarea id="modeInput" rows="3"></textarea>
+        </div>
+
+        <div id="debateOpts" style="display:none;" class="form-group">
+          <label>Número de Rodadas</label>
+          <input type="number" id="modeRounds" value="3" min="1" max="10">
+        </div>
+
+        <div id="roundRobinOpts" class="form-group">
+          <label style="display:flex; align-items:center; gap:8px;">
+            <input type="checkbox" id="modeChained" style="width:auto;">
+            Passar contexto entre eles (Chained)
+          </label>
+        </div>
+
+        <button class="btn-primary" id="btnModesStart" style="width:100%; margin-top:10px;">▶️ Iniciar Sessão</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONFIGURACOES -->
+  <div id="page-config" class="page">
+    <h1>Configurações do Sistema</h1>
+    <div class="mode-card" style="max-width:600px;">
+      <h2>Aparência</h2>
+      <div class="form-group">
+        <label>Tema da Interface</label>
+        <select id="themeSelect">
+          <option value="dark">Dark Modern (Padrão)</option>
+          <option value="neon">Cyber Neon</option>
+          <option value="light">Light Mode</option>
+          <option value="jarvis">Terminal Hacker (ADA v2)</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin-top: 15px;">
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+          <input type="checkbox" id="neonBorderToggle" style="width:auto; height:16px;">
+          Habilitar Borda Neon Dinâmica (Glow Rotativo)
+        </label>
+      </div>
+      <div class="form-group" style="margin-top: 15px; display:flex; align-items:center; gap:10px;">
+        <label style="margin:0;">Cor do Neon / Acento:</label>
+        <input type="color" id="neonColorPicker" value="#8b5cf6" style="width:50px; height:30px; padding:0; border:none; border-radius:4px; cursor:pointer; background:transparent;">
+      </div>
+
+      <h2 style="margin-top:30px;">Chaves e Provedores</h2>
+      <div class="form-group">
+        <label>Provedor LLM Principal</label>
+        <input type="text" id="cfgProvider" value="Carregando..." disabled>
+      </div>
+      <div class="form-group">
+        <label>Modelo Gemini</label>
+        <input type="text" id="cfgGemini" value="Carregando..." disabled>
+      </div>
+      <div class="form-group">
+        <label>Modelo Groq (Whisper)</label>
+        <input type="text" id="cfgGroq" value="Carregando..." disabled>
+      </div>
+      <div class="form-group">
+        <label>Provedor TTS</label>
+        <input type="text" id="cfgTts" value="Carregando..." disabled>
+      </div>
+      <div style="font-size:12px; color:var(--text-dim); margin-top:10px;">
+        Nota: Para alterar provedores nativos, edite o arquivo .env e reinicie o servidor.
+      </div>
+    </div>
+  </div>
+
+  <!-- LIXEIRA -->
+  <div id="page-trash" class="page">
+    <h2>Lixeira</h2>
+    <div class="trash-grid">
+      <div class="trash-col">
+        <h2>🤖 Agentes Deletados (<span id="trashAgentCount">0</span>)</h2>
+        <div class="trash-list" id="trashAgentList"></div>
+      </div>
+      <div class="trash-col">
+        <h2>🧠 Memórias Deletadas (<span id="trashMemCount">0</span>)</h2>
+        <div class="trash-list" id="trashMemList"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CHAT HISTORY -->
+  <div id="page-chat" class="page">
+    <h2>Histórico de Chat</h2>
+    <div class="chat-container" id="chatContainer">
+      <!-- Chat messages injected here -->
+    </div>
+  </div>
+
+  <!-- SYSTEM LOGS -->
+  <div id="page-logs" class="page">
+    <h2>Logs do Sistema (Terminal)</h2>
+    <div class="logs-container" id="logsContainer">
+      <!-- Log lines injected here -->
+    </div>
+  </div>
+
+  </div>
+
+  <script>
+    // TOAST NOTIFICATIONS
+    function showToast(msg, type = 'info') {
+      const c = document.getElementById('toastContainer');
+      const t = document.createElement('div');
+      t.className = 'toast ' + type;
+      t.textContent = msg;
+      c.appendChild(t);
+      setTimeout(() => { if (t.parentNode) t.remove(); }, 3100);
+    }
+
+    // THEME LOGIC
+    const savedTheme = localStorage.getItem('panelTheme') || 'dark';
+    document.documentElement.setAttribute('data-theme', savedTheme);
+    const themeSelect = document.getElementById('themeSelect');
+    if (themeSelect) themeSelect.value = savedTheme;
+
+    if (themeSelect) {
+      themeSelect.addEventListener('change', (e) => {
+        document.documentElement.setAttribute('data-theme', e.target.value);
+        localStorage.setItem('panelTheme', e.target.value);
+      });
+    }
+
+    const neonToggle = document.getElementById('neonBorderToggle');
+    const appWrapper = document.getElementById('app-wrapper');
+    const savedNeon = localStorage.getItem('panelNeonBorder') === 'true';
+    if (neonToggle && appWrapper) {
+      neonToggle.checked = savedNeon;
+      if (savedNeon) appWrapper.classList.add('neon-enabled');
+      else appWrapper.classList.remove('neon-enabled');
+
+      neonToggle.addEventListener('change', (e) => {
+        const isEnabled = e.target.checked;
+        localStorage.setItem('panelNeonBorder', isEnabled);
+        if (isEnabled) appWrapper.classList.add('neon-enabled');
+        else appWrapper.classList.remove('neon-enabled');
+      });
+    }
+
+    const neonColorPicker = document.getElementById('neonColorPicker');
+    const savedNeonColor = localStorage.getItem('panelNeonColor') || '#8b5cf6';
+    if (neonColorPicker) {
+      neonColorPicker.value = savedNeonColor;
+      // Define a cor salva na raiz
+      document.documentElement.style.setProperty('--accent', savedNeonColor);
+      
+      // Converte Hex para RGBA para o Glow
+      function hexToRgba(hex, alpha) {
+        let r = parseInt(hex.slice(1, 3), 16),
+            g = parseInt(hex.slice(3, 5), 16),
+            b = parseInt(hex.slice(5, 7), 16);
+        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+      }
+      document.documentElement.style.setProperty('--accent-glow', hexToRgba(savedNeonColor, 0.3));
+
+      neonColorPicker.addEventListener('input', (e) => {
+        const val = e.target.value;
+        localStorage.setItem('panelNeonColor', val);
+        document.documentElement.style.setProperty('--accent', val);
+        document.documentElement.style.setProperty('--accent-glow', hexToRgba(val, 0.3));
+      });
+    }
+
+    // SIDEBAR NAV
+    document.querySelectorAll('.nav-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('page-' + btn.dataset.tab).classList.add('active');
+
+        if (btn.dataset.tab === 'agents') loadAgentsGrid();
+        if (btn.dataset.tab === 'modes') loadModesTab();
+        if (btn.dataset.tab === 'trash') { loadTrashAgents(); loadTrashMemories(); }
+      });
+    });
+
+    // SIMULATED DASHBOARD STATS
+    setInterval(() => {
+      if (!document.getElementById('page-home').classList.contains('active')) return;
+      const cpu = Math.floor(Math.random() * 20) + 5;
+      document.getElementById('statCpuText').textContent = cpu + '%';
+      document.getElementById('statCpuBar').style.width = cpu + '%';
+
+      const ram = (Math.random() * 2 + 4).toFixed(1);
+      document.getElementById('statRamText').textContent = ram + ' GB';
+      document.getElementById('statRamBar').style.width = (ram / 16 * 100) + '%';
+
+      const tk = Math.floor(Math.random() * 50) + 120;
+      document.getElementById('statTokens').textContent = tk + ' t/m';
+    }, 2000);
+
+    // API WRAPPER
+    async function apiCall(method, ...args) {
+      if (!window.pywebview || !window.pywebview.api) return null;
+      try { return await window.pywebview.api[method](...args); }
+      catch (e) { console.error('API error:', method, e); return null; }
+    }
+
+    // CHAT
+    const chatInput = document.getElementById('chatInput');
+    function sendChat() {
+      const text = chatInput.value.trim();
+      if (!text) return;
+      chatInput.value = '';
+      if (window.pywebview && window.pywebview.api) {
+        window.pywebview.api.send_chat_message(text).then(() => {
+          showToast('Comando enviado!', 'success');
+        });
+      }
+    }
+    // CHAT - Os ouvintes estão no final do arquivo
+
+    // UPLOAD DE ARQUIVO
+    document.getElementById('btnUploadFile').addEventListener('click', async () => {
+      const filePath = await apiCall('select_file');
+      if (filePath) {
+        await apiCall('process_file', filePath, "");
+        showToast('Arquivo enviado para processamento!', 'success');
+      }
+    });
+
+    // WS STATUS
+    function connectWS() {
+      try {
+        const ws = new WebSocket('ws://127.0.0.1:5123/ws');
+        ws.onmessage = (e) => {
+          try {
+            const d = JSON.parse(e.data);
+            if (d.type === 'state' && d.status) {
+              const lbl = document.getElementById('statusLabel');
+              const statusMap = { idle: 'INATIVO', thinking: 'PENSANDO', speaking: 'FALANDO', listening: 'ESCUTANDO' };
+              lbl.textContent = statusMap[d.status] || d.status.toUpperCase();
+            }
+          } catch (ex) { }
+        };
+        ws.onclose = () => setTimeout(connectWS, 3000);
+        ws.onerror = () => { };
+      } catch (e) { setTimeout(connectWS, 3000); }
+    }
+    connectWS();
+
+    // AGENTS GRID
+    async function loadAgentsGrid() {
+      document.getElementById('agents-list-view').style.display = 'block';
+      document.getElementById('agent-detail-view').style.display = 'none';
+
+      const agents = await apiCall('list_agents');
+      const activeId = await apiCall('get_active_agent_id');
+      const grid = document.getElementById('agentGrid');
+
+      if (!agents) { grid.innerHTML = '<p>Carregando...</p>'; return; }
+      grid.innerHTML = '';
+      document.getElementById('statAgents').textContent = agents.length;
+
+      agents.forEach(a => {
+        const isActive = a.id === activeId;
+        const card = document.createElement('div');
+        card.className = 'agent-card-grid' + (isActive ? ' active-agent' : '');
+        card.onclick = () => openAgentDetail(a.id);
+
+        card.innerHTML = `
+          ${isActive ? '<div class="ac-badge" title="Agente Ativo"></div>' : ''}
+          <div class="ac-header">
+            <div class="ac-avatar">${a.name.charAt(0).toUpperCase()}</div>
+            <div class="ac-name">${a.name}</div>
+          </div>
+          <div class="ac-body">${a.persona.length > 80 ? a.persona.substring(0, 80) + '...' : a.persona}</div>
+          <div class="ac-footer">
+            <span>${a.tts_provider.toUpperCase()}</span>
+            <span>Velocidade: ${a.tts_speed}x</span>
+          </div>
+        `;
+        grid.appendChild(card);
+      });
+    }
+
+    // AGENT DETAIL & MEMORY
+    const fSpeed = document.getElementById('fSpeed');
+    const fSpeedVal = document.getElementById('fSpeedVal');
+    fSpeed.addEventListener('input', () => fSpeedVal.textContent = parseFloat(fSpeed.value).toFixed(1) + 'x');
+
+    let currentAgentCollection = '';
+
+    async function openAgentDetail(id) {
+      document.getElementById('agents-list-view').style.display = 'none';
+      document.getElementById('agent-detail-view').style.display = 'block';
+
+      if (!id) {
+        document.getElementById('detailTitle').textContent = 'Novo Agente';
+        document.getElementById('fId').value = '';
+        document.getElementById('fName').value = '';
+        document.getElementById('fPersona').value = '';
+        document.getElementById('fTtsProvider').value = 'edge';
+        document.getElementById('fTtsVoice').value = 'pt-BR-FranciscaNeural';
+        document.getElementById('fKokoroVoice').value = 'pf_dora';
+        fSpeed.value = 1.0; fSpeedVal.textContent = '1.0x';
+        document.getElementById('agentMemList').innerHTML = '<p style="color:var(--text-dim);font-size:13px">Salve o agente para gerenciar memórias.</p>';
+        document.getElementById('btnDeleteAgent').style.display = 'none';
+      } else {
+        const agents = await apiCall('list_agents');
+        const a = agents.find(x => x.id === id);
+        if (!a) return;
+
+        document.getElementById('detailTitle').textContent = 'Editar Agente: ' + a.name;
+        document.getElementById('fId').value = a.id;
+        document.getElementById('fName').value = a.name;
+        document.getElementById('fPersona').value = a.persona;
+        document.getElementById('fTtsProvider').value = a.tts_provider || 'edge';
+        document.getElementById('fTtsVoice').value = a.tts_voice || 'pt-BR-FranciscaNeural';
+        document.getElementById('fKokoroVoice').value = a.kokoro_voice || 'pf_dora';
+        fSpeed.value = a.tts_speed || 1.0;
+        fSpeedVal.textContent = parseFloat(fSpeed.value).toFixed(1) + 'x';
+        document.getElementById('btnDeleteAgent').style.display = 'block';
+
+        currentAgentCollection = a.memory_collection;
+        loadMemories();
+      }
+    }
+
+    document.getElementById('btnCreateAgent').addEventListener('click', () => openAgentDetail(null));
+    document.getElementById('btnBackAgents').addEventListener('click', () => loadAgentsGrid());
+
+    document.getElementById('btnSaveAgent').addEventListener('click', async () => {
+      const id = document.getElementById('fId').value;
+      const data = {
+        name: document.getElementById('fName').value.trim(),
+        persona: document.getElementById('fPersona').value.trim(),
+        tts_provider: document.getElementById('fTtsProvider').value,
+        tts_voice: document.getElementById('fTtsVoice').value,
+        tts_speed: parseFloat(document.getElementById('fSpeed').value) || 1.0,
+        kokoro_voice: document.getElementById('fKokoroVoice').value.trim()
+      };
+      if (!data.name) return showToast('Nome é obrigatório', 'error');
+
+      if (id) await apiCall('update_agent', id, data);
+      else await apiCall('create_agent', data);
+
+      showToast('Agente salvo com sucesso!', 'success');
+      loadAgentsGrid();
+    });
+
+    document.getElementById('btnDeleteAgent').addEventListener('click', async () => {
+      const id = document.getElementById('fId').value;
+      if (!id || !confirm('Mover para lixeira?')) return;
+      await apiCall('delete_agent', id);
+      showToast('Agente movido para lixeira', 'warning');
+      loadAgentsGrid();
+    });
+
+    // MEMORY
+    async function loadMemories() {
+      if (!currentAgentCollection) return;
+      const query = document.getElementById('memSearch').value.trim();
+      const result = await apiCall('list_memories', currentAgentCollection, query);
+      const list = document.getElementById('agentMemList');
+
+      if (!result || !result.memories || result.memories.length === 0) {
+        list.innerHTML = '<p style="color:var(--text-dim);font-size:13px">Nenhuma memória encontrada.</p>';
+        return;
+      }
+
+      list.innerHTML = '';
+      result.memories.forEach(m => {
+        const d = document.createElement('div');
+        d.className = 'mem-item';
+        d.innerHTML = `
+          <div style="font-size:13px; line-height:1.4; flex:1;">${m.text}</div>
+          <button class="btn-danger" style="padding:6px 12px;" onclick="deleteMem('${m.id}')">Excluir</button>
+        `;
+        list.appendChild(d);
+      });
+    }
+
+    document.getElementById('btnMemSearch').addEventListener('click', loadMemories);
+
+    async function deleteMem(id) {
+      if (!confirm('Mover memória para lixeira?')) return;
+      await apiCall('delete_memory', currentAgentCollection, id);
+      loadMemories();
+    }
+
+    document.getElementById('btnMemExport').addEventListener('click', async () => {
+      if (!currentAgentCollection) return;
+      await apiCall('export_memories', currentAgentCollection);
+    });
+    document.getElementById('btnMemImport').addEventListener('click', async () => {
+      if (!currentAgentCollection) return;
+      await apiCall('trigger_import_memories', currentAgentCollection);
+    });
+
+    // MODES
+    async function loadModesTab() {
+      const agents = await apiCall('list_agents');
+      const list = document.getElementById('modeAgentsList');
+      list.innerHTML = '';
+      if (agents) {
+        agents.forEach(a => {
+          const l = document.createElement('label');
+          l.innerHTML = `<input type="checkbox" class="mode-agent-cb" value="${a.id}" checked> ${a.name}`;
+          list.appendChild(l);
+        });
+      }
+    }
+
+    document.getElementById('modeSelect').addEventListener('change', e => {
+      const isDebate = e.target.value === 'debate';
+      document.getElementById('roundRobinOpts').style.display = isDebate ? 'none' : 'block';
+      document.getElementById('debateOpts').style.display = isDebate ? 'block' : 'none';
+      document.getElementById('modeInputLabel').textContent = isDebate ? 'Tema do Debate' : 'Pergunta';
+    });
+
+    document.getElementById('modePresetSelect').addEventListener('change', e => {
+      const v = e.target.value;
+      const m = document.getElementById('modeSelect');
+      const i = document.getElementById('modeInput');
+      const r = document.getElementById('modeRounds');
+      if (v === 'interview') { m.value = 'roundrobin'; i.value = 'Aja como candidato em uma entrevista. Fale suas qualidades.'; }
+      else if (v === 'debate') { m.value = 'debate'; r.value = 4; i.value = 'Discutam o impacto da IA no trabalho.'; }
+      else if (v === 'brainstorm') { m.value = 'roundrobin'; i.value = 'Deem ideias para um app de produtividade.'; }
+      m.dispatchEvent(new Event('change'));
+    });
+
+    document.getElementById('btnModesStart').addEventListener('click', async () => {
+      const mode = document.getElementById('modeSelect').value;
+      const text = document.getElementById('modeInput').value.trim();
+      if (!text) return showToast('Digite o tema!', 'error');
+
+      const cbs = document.querySelectorAll('.mode-agent-cb:checked');
+      const ids = Array.from(cbs).map(c => c.value);
+      if (ids.length < 2) return showToast('Selecione pelo menos 2 agentes.', 'error');
+
+      if (mode === 'roundrobin') {
+        const chained = document.getElementById('modeChained').checked;
+        await apiCall('start_round_robin', text, ids, chained);
+      } else {
+        const r = parseInt(document.getElementById('modeRounds').value) || 3;
+        await apiCall('start_debate', text, ids, r);
+      }
+      showToast('Sessão iniciada! Acompanhe no terminal.', 'success');
+    });
+
+    // TRASH
+    async function loadTrashAgents() {
+      const trash = await apiCall('list_trash');
+      document.getElementById('trashAgentCount').textContent = trash ? trash.length : 0;
+      const list = document.getElementById('trashAgentList');
+      list.innerHTML = '';
+      if (trash) {
+        trash.forEach(a => {
+          const d = document.createElement('div');
+          d.className = 'trash-item';
+          d.innerHTML = `
+            <div class="trash-item-text"><strong>${a.name}</strong><br>Na Lixeira</div>
+            <div style="display:flex; gap:8px;">
+              <button class="btn-secondary" onclick="restoreAg('${a.id}')">Restaurar</button>
+              <button class="btn-danger" onclick="permDelAg('${a.id}')">Apagar</button>
+            </div>
+          `;
+          list.appendChild(d);
+        });
+      }
+    }
+    async function restoreAg(id) { await apiCall('restore_agent', id); loadTrashAgents(); }
+    async function permDelAg(id) { if (confirm('Apagar permanentemente?')) { await apiCall('permanent_delete_agent', id); loadTrashAgents(); } }
+
+    async function loadTrashMemories() {
+      const trash = await apiCall('list_trash_memories');
+      document.getElementById('trashMemCount').textContent = trash ? trash.length : 0;
+      const list = document.getElementById('trashMemList');
+      list.innerHTML = '';
+      if (trash) {
+        trash.forEach(m => {
+          const d = document.createElement('div');
+          d.className = 'trash-item';
+          d.innerHTML = `
+            <div class="trash-item-text">${m.text}<br><span style="color:var(--text-dim);font-size:11px">De: ${m.original_collection}</span></div>
+            <div style="display:flex; gap:8px;">
+              <button class="btn-secondary" onclick="restoreMe('${m.id}')">Restaurar</button>
+              <button class="btn-danger" onclick="permDelMe('${m.id}')">Apagar</button>
+            </div>
+          `;
+          list.appendChild(d);
+        });
+      }
+    }
+    async function restoreMe(id) { await apiCall('restore_memory', id); loadTrashMemories(); }
+    async function permDelMe(id) { if (confirm('Apagar permanentemente?')) { await apiCall('permanent_delete_memory', id); loadTrashMemories(); } }
+
+    // AGENT SELECTOR (HOME)
+    async function loadAgentSelector() {
+      const agents = await apiCall('list_agents');
+      const activeId = await apiCall('get_active_agent_id');
+      const sel = document.getElementById('agentSelect');
+      if (!agents || !sel) return;
+      sel.innerHTML = '';
+      agents.forEach(a => {
+        const opt = document.createElement('option');
+        opt.value = a.id;
+        opt.textContent = a.name;
+        if (a.id === activeId) opt.selected = true;
+        sel.appendChild(opt);
+      });
+    }
+    document.getElementById('agentSelect').addEventListener('change', async (e) => {
+      await apiCall('set_active_agent', e.target.value);
+    });
+
+    // ACTIVATE AGENT FROM DETAIL
+    document.getElementById('btnActivateAgent').addEventListener('click', async () => {
+      const id = document.getElementById('fId').value;
+      if (!id) return showToast('Salve o agente antes de ativar.', 'error');
+      await apiCall('set_active_agent', id);
+      showToast('Agente ativado!', 'success');
+      loadAgentSelector();
+    });
+
+    // PERSONA GENERATOR
+    document.getElementById('btnGenPersona').addEventListener('click', async () => {
+      const nameField = document.getElementById('fName');
+      const name = nameField.value.trim();
+      if (!name) return showToast('Digite o nome do personagem primeiro!', 'error');
+
+      const btn = document.getElementById('btnGenPersona');
+      btn.disabled = true;
+      btn.textContent = '⏳ Gerando...';
+      showToast('Gerando personalidade para "' + name + '"...', 'info');
+
+      const result = await apiCall('generate_persona', name);
+
+      btn.disabled = false;
+      btn.textContent = '✨ Gerar Persona';
+
+      if (result) {
+        document.getElementById('fPersona').value = result;
+        showToast('Persona gerada com sucesso!', 'success');
+      } else {
+        showToast('Falha ao gerar persona. Verifique a LLM.', 'error');
+      }
+    });
+
+    // CHAT INPUT
+    async function sendChat() {
+      const input = document.getElementById('chatInput');
+      const text = input.value.trim();
+      if (!text) return;
+
+      const success = await apiCall('send_chat_message', text);
+      if (success) {
+        input.value = '';
+        const fb = document.getElementById('chatFeedback');
+        fb.style.opacity = 1;
+        setTimeout(() => fb.style.opacity = 0, 2000);
+      } else {
+        showToast('Erro ao enviar mensagem', 'error');
+      }
+    }
+
+    async function sendQuickCommand(text) {
+      if (!text) return;
+      const success = await apiCall('send_chat_message', text);
+      if (success) {
+        showToast('Comando enviado!', 'success');
+      } else {
+        showToast('Erro ao enviar comando', 'error');
+      }
+    }
+
+    document.getElementById('sendBtn').addEventListener('click', sendChat);
+    document.getElementById('chatInput').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') sendChat();
+    });
+
+    window.addEventListener('pywebviewready', async () => {
+      loadAgentsGrid();
+      loadAgentSelector();
+
+      // Carregar configs reais
+      try {
+        const cfg = await apiCall('get_config');
+        if (cfg) {
+          document.getElementById('cfgProvider').value = (cfg.llm_provider || '').toUpperCase();
+          document.getElementById('cfgGemini').value = cfg.gemini_model || '';
+          document.getElementById('cfgGroq').value = cfg.groq_model || '';
+          document.getElementById('cfgTts').value = cfg.tts_provider || '';
+        }
+      } catch (e) {
+        console.error("Erro ao carregar config:", e);
+      }
+
+      // Setup polling para Chat e Logs
+      setInterval(pollChatAndLogs, 1000);
+    });
+
+    // Polling System
+    let lastChatCount = 0;
+    let lastLogCount = 0;
+    let autoScrollChat = true;
+    let autoScrollLogs = true;
+
+    document.getElementById('chatContainer').addEventListener('scroll', (e) => {
+      const c = e.target;
+      autoScrollChat = (c.scrollHeight - c.scrollTop - c.clientHeight) < 10;
+    });
+    document.getElementById('logsContainer').addEventListener('scroll', (e) => {
+      const c = e.target;
+      autoScrollLogs = (c.scrollHeight - c.scrollTop - c.clientHeight) < 10;
+    });
+
+    async function pollChatAndLogs() {
+      if (!window.pywebview || !window.pywebview.api) return;
+
+      // Só faz polling se as abas estiverem abertas, pra economizar CPU do painel
+      const isChatOpen = document.getElementById('page-chat').classList.contains('active');
+      const isLogsOpen = document.getElementById('page-logs').classList.contains('active');
+
+      if (isChatOpen) {
+        try {
+          const res = await apiCall('get_chat_history', lastChatCount);
+          if (res && res.messages && res.messages.length > 0) {
+            lastChatCount = res.total;
+            const container = document.getElementById('chatContainer');
+
+            res.messages.forEach(msg => {
+              const div = document.createElement('div');
+              div.className = 'chat-msg ' + (msg.role || 'system');
+
+              let header = '';
+              if (msg.role !== 'system') {
+                header = `<div class="chat-header">${msg.name} • ${msg.time}</div>`;
+              }
+
+              div.innerHTML = `
+                ${header}
+                <div class="chat-bubble">${msg.text.replace(/\\n/g, '<br>')}</div>
+              `;
+              container.appendChild(div);
+            });
+
+            if (autoScrollChat) {
+              container.scrollTop = container.scrollHeight;
+            }
+          }
+        } catch (e) { }
+      }
+
+      if (isLogsOpen) {
+        try {
+          const res = await apiCall('get_system_logs', lastLogCount);
+          if (res && res.logs && res.logs.length > 0) {
+            lastLogCount = res.total;
+            const container = document.getElementById('logsContainer');
+
+            res.logs.forEach(log => {
+              const div = document.createElement('div');
+              let typeClass = '';
+              const textLower = log.text.toLowerCase();
+              if (textLower.includes('erro') || textLower.includes('falha') || textLower.includes('exception')) typeClass = 'error';
+              else if (textLower.includes('warn') || textLower.includes('aviso')) typeClass = 'warn';
+
+              div.className = 'log-line ' + typeClass;
+              div.innerHTML = `<span class="log-time">[${log.time}]</span><span class="log-text">${log.text}</span>`;
+              container.appendChild(div);
+            });
+
+            if (autoScrollLogs) {
+              container.scrollTop = container.scrollHeight;
+            }
+          }
+        } catch (e) { }
+      }
+    }
+
+  </script>
+  </div> <!-- Fim app-wrapper -->
+</body>
+
+</html>

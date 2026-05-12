@@ -18,6 +18,7 @@ from src.services.vision import VisionService
 from src.tools.registry import ToolRegistry
 from src.tools.memory_manager import MemoryManagerTool
 from src.utils.window_context import build_proactive_context
+from src.services.gemini_live import GeminiLiveService
 
 
 def _is_short_greeting(text: str) -> bool:
@@ -63,6 +64,9 @@ class AgentOrchestrator:
         self.assistant_base_persona = assistant_base_persona or ""
         self.semantic_memory = SemanticMemory()
         self.agent_manager = AgentManager()
+        self.live_service = None
+        self.is_live_mode = False
+        self._live_task = None
 
     @property
     def _active_persona(self) -> str:
@@ -84,10 +88,10 @@ class AgentOrchestrator:
         # Contexto invisivel: data, hora, janela
         ctx = build_proactive_context()
         
-        # RAG Semântico — busca na coleção do agente ativo
+        # RAG Semântico — busca na coleção do agente ativo (apenas se não for saudação curta)
         rag_context = ""
         agent_collection = self._active_memory_collection
-        if self.semantic_memory.enabled:
+        if self.semantic_memory.enabled and not _is_short_greeting(text):
             emb = self.llm.generate_embedding(text)
             if emb:
                 memories = self.semantic_memory.search_memories(emb, top_k=2, collection_name=agent_collection)
@@ -98,6 +102,11 @@ class AgentOrchestrator:
         
         self.memory.add_short_term("user", enriched_text)
         self.memory.maybe_record_persona_note(text)
+        
+        # Se estamos em modo Live, o processamento é feito pelo serviço de streaming
+        if self.is_live_mode:
+            return "Estou ouvindo em tempo real, Sir."
+            
         history = self.memory.get_recent_short_term(limit=10)
         prefs = self.memory.get_long_term("preferences", default=[])
         persona_notes = self.memory.get_long_term("persona_evolution", default=[])
@@ -120,16 +129,18 @@ class AgentOrchestrator:
             nonlocal prev_tool
             if prev_tool == "open_windows_application" and name == "analyze_screen":
                 time.sleep(2.0)
-            out = self._execute_function_tool(text, name, args)
+            out = self._execute_function_tool(name, args, text)
             prev_tool = name
             return out
+
+        dynamic_tools = [t for t in self.tools.tools if hasattr(t, "parameters")]
 
         if fc_gemini:
             final = (
                 self.llm.chat_with_functions(
                     system_instruction=system_fc,
                     messages=history,
-                    tools=[build_agent_tool()],
+                    tools=[build_agent_tool(dynamic_tools)],
                     on_function_call=on_fc,
                     force_tool=False  # O LLM decide naturalmente quando agir
                 )
@@ -141,7 +152,7 @@ class AgentOrchestrator:
                 self.llm.chat_with_openai_tools(
                     system_instruction=system_fc,
                     messages=history,
-                    tools=build_openai_agent_tools(),
+                    tools=build_openai_agent_tools(dynamic_tools),
                     client=self.llm.nvidia_client,
                     model=self.llm.nvidia_model,
                     on_function_call=on_fc,
@@ -154,7 +165,7 @@ class AgentOrchestrator:
                 self.llm.chat_with_openai_tools(
                     system_instruction=system_fc,
                     messages=history,
-                    tools=build_openai_agent_tools(),
+                    tools=build_openai_agent_tools(dynamic_tools),
                     client=self.llm.groq_client,
                     model=self.llm.groq_model,
                     on_function_call=on_fc,
@@ -183,6 +194,11 @@ class AgentOrchestrator:
         self.memory.add_short_term("assistant", final)
         self.memory.maybe_store_preference(text, final, consent_for_sensitive=True)
 
+        # Log qual LLM respondeu
+        provider = getattr(self.llm, "last_provider", self.llm.primary_llm_provider)
+        model = getattr(self.llm, "last_model", "")
+        print(f"\n[🤖 LLM] {provider.upper()} | {model}", flush=True)
+
         # Auto-sumarizacao: condensa mensagens antigas quando a sessao cresce.
         self._maybe_summarize()
 
@@ -194,6 +210,23 @@ class AgentOrchestrator:
                 args=(text, final, agent_collection),
                 daemon=True
             ).start()
+
+        # Daily Log — alimenta o Heartbeat Service
+        try:
+            from src.services.heartbeat import append_daily_log
+            short_user = text[:80].replace("\n", " ")
+            short_reply = final[:80].replace("\n", " ")
+            append_daily_log(f"User: {short_user} → AI: {short_reply}")
+        except Exception:
+            pass
+
+        # Structured Memory Extraction (async, two-stage)
+        import threading
+        threading.Thread(
+            target=self._extract_structured_memory_async,
+            args=(text, final),
+            daemon=True
+        ).start()
 
         return final
 
@@ -224,6 +257,29 @@ class AgentOrchestrator:
             logger = logging.getLogger(__name__)
             logger.error(f"[RAG JARVIS] Erro na thread de extração de memória: {e}")
             logger.debug(traceback.format_exc())
+
+    def _extract_structured_memory_async(self, user_text: str, assistant_text: str):
+        """Thread em background: extração de memória estruturada em 2 estágios."""
+        try:
+            from src.memory.structured_memory import (
+                should_extract_memory,
+                extract_structured_memory,
+                update_structured_memory,
+            )
+
+            # Stage 1: Verificação rápida YES/NO
+            if not should_extract_memory(user_text, assistant_text, self.llm):
+                return
+
+            # Stage 2: Extração detalhada em JSON
+            data = extract_structured_memory(user_text, assistant_text, self.llm)
+            if data:
+                update_structured_memory(data)
+                print(f"[StructuredMemory] 💾 Auto-extraído: {list(data.keys())}")
+
+        except Exception as e:
+            if "429" not in str(e):
+                print(f"[StructuredMemory] ⚠️ Extração async falhou: {e}")
 
     def _maybe_summarize(self) -> None:
         """Se ha mensagens suficientes, usa o LLM para resumir as mais antigas."""
@@ -311,7 +367,7 @@ class AgentOrchestrator:
                 result = self.tools.run_by_marker(step.kind, step.arg, user_text)
                 # Só silencia o sucesso de ferramentas de acao para nao ficar narrando, mas fala as de consulta (list, search, etc)
                 if result.message:
-                    silent_tools = {"whatsapp_send", "whatsapp", "memory_save", "timer_set", "clipboard_write", "media_control", "notes_save"}
+                    silent_tools = {"whatsapp_send", "whatsapp", "memory_save", "timer_set", "clipboard_write", "media_control", "notes_save", "open_app", "app", "apps", "spotify", "browser", "open_browser"}
                     if result.ok and step.kind in silent_tools:
                         pass # Sucesso silencioso
                     elif not result.ok:
@@ -422,9 +478,43 @@ class AgentOrchestrator:
             res = self.tools.run_by_marker("app_manager", f"{action}|{target}|{argument}", user_text)
             if load_settings().enable_command_logs:
                 print(f"[✅ RESULT] {res.message}")
+            return res.message or "Done."
+
+        # 13) toggle_live
+        if name == "toggle_live":
+            enable = args.get("enable", True)
+            if isinstance(enable, str):
+                enable = enable.lower() in ("true", "1", "yes", "ativar")
+            return self.toggle_live_mode(enable)
             return res.message or "Feito."
 
-        # 13) set_ai_volume
+        # 13) delegate_to_agent
+        if name == "delegate_to_agent":
+            target_name = (args.get("target_agent") or "").strip()
+            query = (args.get("query") or "").strip()
+            if load_settings().enable_command_logs:
+                print(f"[🤖 DELEGANDO] Chamando o agente '{target_name}' para: {query}")
+            
+            target_agent = self.agent_manager.find_agent_by_name(target_name)
+            if not target_agent:
+                return f"Erro: Agente '{target_name}' não encontrado no sistema."
+            
+            # Instancia o prompt do agente alvo
+            from src.agent.prompts import build_function_calling_system_prompt
+            sys_prompt = build_function_calling_system_prompt(
+                target_agent.persona, [], ""
+            )
+            # Sem passar history grande para o delegado para economizar contexto e manter o escopo, 
+            # apenas a query enviada.
+            try:
+                ans = self.llm.chat(system_prompt=sys_prompt, messages=[{"role": "user", "content": query}])
+                # Retornamos no formato VOICE_SWAP para o main.py parsear as vozes, mas dizemos à IA atual
+                # para que ela REPASSE essa resposta exatamente como a recebeu
+                return f"O agente {target_name} te enviou a resposta. VOCE DEVE responder ao usuario EXATAMENTE com o texto abaixo e adicionar as tags como ele te mandou:\n<VOICE_SWAP:{target_agent.id}>{ans}</VOICE_SWAP>"
+            except Exception as e:
+                return f"O agente '{target_name}' falhou ao processar a resposta: {e}"
+
+        # 14) set_ai_volume
         if name == "set_ai_volume":
             volume = (args.get("volume") or "").strip()
             if self.tts:
@@ -432,8 +522,52 @@ class AgentOrchestrator:
                 return f"Volume da minha voz ajustado para {volume}."
             return "Serviço de voz indisponível."
 
-        return f"Funcao desconhecida: {name}"
+        # 15) agent_task — Planner + Executor pipeline
+        if name == "agent_task":
+            goal = (args.get("goal") or "").strip()
+            if not goal:
+                return "Objetivo não especificado."
+            from src.agent.planner import execute_plan
+            try:
+                result = execute_plan(
+                    goal=goal,
+                    llm_service=self.llm,
+                    execute_tool_fn=lambda tool_name, params: self._execute_function_tool(
+                        tool_name, params, goal
+                    ),
+                )
+                return result
+            except Exception as e:
+                return f"Tarefa falhou: {e}"
 
+        # 16) save_memory — Memória estruturada silenciosa
+        if name == "save_memory":
+            category = (args.get("category") or "notes").strip()
+            key = (args.get("key") or "").strip()
+            value = (args.get("value") or "").strip()
+            if key and value:
+                from src.memory.structured_memory import update_structured_memory
+                update_structured_memory({category: {key: {"value": value}}})
+                print(f"[Memory] 💾 save_memory: {category}/{key} = {value}")
+                # Log no heartbeat diário
+                try:
+                    from src.services.heartbeat import append_daily_log
+                    append_daily_log(f"Memória salva: {category}/{key} = {value}")
+                except Exception:
+                    pass
+            return "ok"
+
+        # Fallback para Skills Dinâmicas e Novas Ferramentas
+        dynamic_tool = self.tools._find_tool(name)
+        if dynamic_tool:
+            try:
+                if hasattr(dynamic_tool, "execute"):
+                    return dynamic_tool.execute(args, context={"llm": self.llm, "vision": self.vision})
+                return dynamic_tool.run(str(args)).message
+            except Exception as e:
+                return f"Erro ao executar a ferramenta '{name}': {e}"
+
+        return f"Funcao desconhecida: {name}"
     def _handle_open_or_run(self, target: str, user_text: str) -> str:
         """Roteia open_or_run para o marker correto baseado no target."""
         t = target.lower()
@@ -494,3 +628,85 @@ class AgentOrchestrator:
             return f"{user_text.strip()}\n\nInstrucoes adicionais da assistente (voz): {s}"
         return user_text.strip()
 
+    # ── Multi-Agent Modes (Fase 3.2) ──
+
+    def _chat_as_agent(self, agent_profile, text: str, extra_context: str = "") -> str:
+        """Chat simples como um agente específico (sem function calling/tools)."""
+        prompt = text
+        if extra_context:
+            prompt = f"{extra_context}\n\nUsuário: {text}"
+        response = self.llm.chat(
+            system_prompt=agent_profile.persona,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        return (response or "Sem resposta.").strip()
+
+    def handle_round_robin(self, text: str, agent_ids: list[str], chained: bool = False):
+        """Fase 3.2.1 — Cada agente responde em sequência (Generator para baixa latência)."""
+        context_chain = ""
+        for aid in agent_ids:
+            ag = self.agent_manager._agents.get(aid)
+            if not ag:
+                continue
+            extra = ""
+            if chained and context_chain:
+                extra = f"[Respostas dos agentes anteriores:\n{context_chain}]\nAgora é sua vez."
+            resp = self._chat_as_agent(ag, text, extra)
+            context_chain += f"{ag.name}: {resp}\n\n"
+            print(f"[Round-Robin] {ag.name} respondeu.")
+            yield {"agent_id": ag.id, "name": ag.name, "response": resp}
+
+    def handle_debate(self, topic: str, agent_ids: list[str], rounds: int = 3):
+        """Fase 3.2.2 — Os agentes debatem um tema entre si (Generator para baixa latência)."""
+        history = f"Tema do debate: {topic}"
+        for r in range(rounds):
+            for aid in agent_ids:
+                ag = self.agent_manager._agents.get(aid)
+                if not ag:
+                    continue
+                extra = f"{history}\n\n[Rodada {r+1}] É sua vez de argumentar. Seja conciso (max 3 parágrafos)."
+                resp = self._chat_as_agent(ag, topic, extra)
+                history += f"\n\n{ag.name} (Rodada {r+1}): {resp}"
+                print(f"[Debate] Rodada {r+1} — {ag.name} respondeu.")
+                yield {"agent_id": ag.id, "name": ag.name, "response": resp, "round": r + 1}
+
+    def toggle_live_mode(self, enable: bool) -> str:
+        """Ativa ou desativa o modo de conversa em tempo real (Gemini Live)."""
+        import os
+        import asyncio
+        import threading
+
+        if enable == self.is_live_mode:
+            return f"O modo Live já está {'ativado' if enable else 'desativado'}."
+
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            return "Erro: Chave GEMINI_API_KEY não encontrada no .env."
+
+        if enable:
+            try:
+                self.live_service = GeminiLiveService(
+                    api_key=api_key, 
+                    tool_registry=self.tools,
+                    visualizer=self.tools._find_tool("visualizer_control") # Tenta vincular o visualizer
+                )
+                self.is_live_mode = True
+                
+                # Inicia o loop do Live em uma thread separada para não travar o app
+                def run_live():
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    loop.run_until_complete(self.live_service.start())
+
+                self._live_thread = threading.Thread(target=run_live, daemon=True)
+                self._live_thread.start()
+                
+                return "Modo Live ativado, Sir. A partir de agora estou ouvindo você em tempo real."
+            except Exception as e:
+                self.is_live_mode = False
+                return f"Falha ao ativar modo Live: {e}"
+        else:
+            if self.live_service:
+                self.live_service.stop()
+            self.is_live_mode = False
+            return "Modo Live desativado. Voltando ao protocolo de comunicação padrão."

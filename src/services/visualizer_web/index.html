@@ -35,7 +35,7 @@
     }
 
     body {
-      background: var(--bg);
+      background: transparent;
       font-family: 'Inter', system-ui, sans-serif;
       color: var(--text);
       min-height: 100vh;
@@ -47,93 +47,19 @@
       position: relative;
     }
 
-    /* ─── Ambient background gradient ─── */
+    /* ─── Ambient background gradient (disabled for transparent orb) ─── */
     body::before {
-      content: '';
-      position: fixed;
-      inset: 0;
-      background:
-        radial-gradient(ellipse 60% 50% at 20% 80%, rgba(109, 40, 217, .12) 0%, transparent 60%),
-        radial-gradient(ellipse 50% 60% at 80% 20%, rgba(8, 145, 178, .10) 0%, transparent 60%);
-      pointer-events: none;
-      transition: background 1s ease;
+      display: none;
     }
 
     /* ─── Header ─── */
     header {
-      position: fixed;
-      top: 28px;
-      left: 50%;
-      transform: translateX(-50%);
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      padding: 8px 20px;
-      border-radius: 100px;
-      backdrop-filter: blur(12px);
-      z-index: 10;
-    }
-
-    header .dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: var(--accent, #6d28d9);
-      box-shadow: 0 0 8px var(--accent, #6d28d9);
-      transition: background .5s, box-shadow .5s;
-      animation: pulse-dot 2s ease-in-out infinite;
-    }
-
-    @keyframes pulse-dot {
-      0%, 100% { opacity: 1; }
-      50% { opacity: .4; }
-    }
-
-    header span {
-      font-size: .82rem;
-      font-weight: 500;
-      letter-spacing: .06em;
-      text-transform: uppercase;
-      color: var(--text-dim);
-    }
-
-    header #state-label {
-      color: var(--accent, #a78bfa);
-      transition: color .5s;
+      display: none;
     }
 
     /* ─── Connection indicator ─── */
     .connection-status {
-      position: fixed;
-      top: 28px;
-      right: 28px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      padding: 6px 14px;
-      border-radius: 100px;
-      backdrop-filter: blur(12px);
-      z-index: 10;
-      font-size: .72rem;
-      color: var(--text-dim);
-      transition: all .5s;
-    }
-
-    .connection-status .conn-dot {
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: #ef4444;
-      transition: background .5s;
-    }
-
-    .connection-status.connected .conn-dot {
-      background: #22c55e;
-      box-shadow: 0 0 6px rgba(34, 197, 94, .6);
+      display: none;
     }
 
     /* ─── Main layout ─── */
@@ -147,8 +73,8 @@
     /* ─── Orb ring wrapper ─── */
     .orb-wrapper {
       position: relative;
-      width: 340px;
-      height: 340px;
+      width: 150px;
+      height: 150px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -162,19 +88,21 @@
       border: 2px solid transparent;
       background:
         linear-gradient(var(--bg), var(--bg)) padding-box,
-        conic-gradient(var(--ring-color, #6d28d9) var(--ring-fill, 0%), transparent 0%) border-box;
+        conic-gradient(var(--ring-color, #6d28d9) var(--ring-fill, 25%), transparent 0%) border-box;
       transition: --ring-color .6s;
       animation: ring-spin 4s linear infinite;
     }
 
     @keyframes ring-spin {
-      to { transform: rotate(360deg); }
+      to {
+        transform: rotate(360deg);
+      }
     }
 
     /* Outer glow halo */
     .orb-halo {
       position: absolute;
-      inset: -30px;
+      inset: -20px;
       border-radius: 50%;
       background: radial-gradient(circle, var(--halo-color, rgba(109, 40, 217, .15)) 0%, transparent 70%);
       transition: background .6s;
@@ -183,14 +111,23 @@
     }
 
     @keyframes halo-breathe {
-      0%, 100% { transform: scale(1); opacity: .7; }
-      50% { transform: scale(1.08); opacity: 1; }
+
+      0%,
+      100% {
+        transform: scale(1);
+        opacity: .7;
+      }
+
+      50% {
+        transform: scale(1.08);
+        opacity: 1;
+      }
     }
 
     /* Actual orb container */
     #orb-container {
-      width: 320px;
-      height: 320px;
+      width: 140px;
+      height: 140px;
       border-radius: 50%;
       overflow: hidden;
       position: relative;
@@ -220,50 +157,33 @@
     }
 
     @keyframes error-shake {
-      0%, 100% { transform: translateX(0); }
-      25% { transform: translateX(-1.5px); }
-      75% { transform: translateX(1.5px); }
+
+      0%,
+      100% {
+        transform: translateX(0);
+      }
+
+      25% {
+        transform: translateX(-1.5px);
+      }
+
+      75% {
+        transform: translateX(1.5px);
+      }
     }
 
     /* ─── Subtitle bar ─── */
     .subtitle-bar {
-      position: fixed;
-      bottom: 40px;
-      left: 50%;
-      transform: translateX(-50%);
-      max-width: 700px;
-      width: 90vw;
-      text-align: center;
-      z-index: 10;
+      display: none;
     }
 
     .subtitle-text {
-      font-size: 1rem;
-      font-weight: 400;
-      color: var(--text);
-      opacity: 0;
-      transition: opacity .3s ease;
-      text-shadow: 0 0 20px rgba(0, 0, 0, .8);
-      line-height: 1.5;
-      padding: 12px 24px;
-      background: rgba(6, 8, 18, .6);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      backdrop-filter: blur(12px);
-    }
-
-    .subtitle-text.visible {
-      opacity: 1;
+      display: none;
     }
 
     /* ─── State info (small, bottom-left) ─── */
     .state-info {
-      position: fixed;
-      bottom: 20px;
-      left: 20px;
-      font-size: .7rem;
-      color: var(--text-dim);
-      opacity: .5;
+      display: none;
     }
 
     /* ─── Audio activation overlay ─── */
@@ -293,8 +213,17 @@
     }
 
     @keyframes audio-pulse {
-      0%, 100% { transform: scale(1); opacity: 1; }
-      50% { transform: scale(1.1); opacity: .7; }
+
+      0%,
+      100% {
+        transform: scale(1);
+        opacity: 1;
+      }
+
+      50% {
+        transform: scale(1.1);
+        opacity: .7;
+      }
     }
 
     .audio-overlay .audio-text {
@@ -315,57 +244,38 @@
       background: rgba(220, 38, 38, .1);
       color: #fca5a5;
     }
-
-    /* Caixa de Texto Flutuante */
-    #chatBox {
-      position: absolute;
-      bottom: 120px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 400px;
-      background: rgba(20, 20, 30, 0.7);
-      backdrop-filter: blur(10px);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 20px;
-      padding: 15px;
-      z-index: 500;
-      display: none; /* Controlado pelo state.show_input_box */
-      flex-direction: row;
-      align-items: center;
-      gap: 10px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-      cursor: grab;
-    }
-    #chatBox:active { cursor: grabbing; }
-    #chatBox input {
-      flex: 1;
-      background: rgba(0,0,0,0.3);
-      border: 1px solid rgba(255,255,255,0.1);
-      border-radius: 15px;
-      padding: 10px 15px;
-      color: white;
-      font-size: 1rem;
-      font-family: inherit;
-      outline: none;
-    }
-    #chatBox button {
-      background: rgba(255, 255, 255, 0.1);
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      border-radius: 15px;
-      padding: 10px 20px;
-      color: white;
-      cursor: pointer;
-      font-weight: bold;
-      transition: all 0.2s ease;
-    }
-    #chatBox button:hover { background: rgba(255, 255, 255, 0.2); }
   </style>
 </head>
 
 <body>
 
-  <!-- Audio activation overlay -->
-  <div class="audio-overlay" id="audio-overlay">
+  <!-- Debug console (oculto por padrão — habilite com VISUALIZER_DEBUG=true no .env) -->
+  <div id="debug-console" style="display:none; position: absolute; top: 10px; left: 10px; font-family: monospace; font-size: 10px; color: #0f0; background: rgba(0,0,0,0.5); padding: 5px; z-index: 9999; pointer-events: none;">
+    [Orb Debug Mode]<br>
+    <div id="debug-logs"></div>
+  </div>
+
+  <script>
+    var _debugEnabled = false;
+    function logDebug(msg) {
+        if (!_debugEnabled) return;
+        var logs = document.getElementById('debug-logs');
+        if(logs) logs.innerHTML += "> " + msg + "<br>";
+        console.log("[OrbDebug]", msg);
+    }
+    window.onerror = function(m, u, l) { logDebug("ERR: " + m + " (L" + l + ")"); };
+
+    /* Verifica se debug está habilitado via .env */
+    fetch('/api/state').then(function(r){ return r.json(); }).then(function(data){
+      if (data && data.debug === true) {
+        _debugEnabled = true;
+        document.getElementById('debug-console').style.display = 'block';
+        logDebug("Debug ativado via .env");
+      }
+    }).catch(function(){});
+  </script>
+
+  <div class="audio-overlay hidden" id="audio-overlay" style="display: none;">
     <div class="audio-icon">🔊</div>
     <div class="audio-text">Clique para ativar o áudio</div>
     <div class="audio-sub">Necessário para animação reativa à voz da IA</div>
@@ -389,26 +299,406 @@
     </div>
   </main>
 
-  <div class="subtitle-bar">
-    <div class="subtitle-text" id="subtitle"></div>
-  </div>
-
-  <div id="chatBox">
-    <input type="text" id="chatInput" placeholder="Digite uma mensagem..." />
-    <button id="sendBtn">Enviar</button>
-  </div>
-
   <div class="state-info" id="state-info">WebSocket: aguardando...</div>
 
-  <script src="./orb.js"></script>
   <script>
-    /* ── Orb init ── */
-    const container = document.getElementById('orb-container');
-    const orb = new OrbRenderer(container, {
-      hue: 0,
-      backgroundColor: [0.024, 0.031, 0.071]
-    });
+    /* ================================================================
+       AI Orb Renderer v2.1 — Stark Edition (Inline)
+       ================================================================ */
+    logDebug("Definindo OrbRenderer inline...");
 
+    var OrbRenderer = (function(){
+
+      var STATES = {
+        idle: {
+          speed: 0.20, pulseAmt: 0.10, pulseFreq: 0.55, waveAmt: 0.0,
+          brightness: 1.05, saturation: 0.9, hueShift: 0.0, noiseScale: 0.60,
+          innerR: 0.55, glowSize: 1.30, rotation: 0.06, chromaAber: 0.0,
+          flicker: 0.0, sparks: 0.05
+        },
+        thinking: {
+          speed: 0.58, pulseAmt: 0.18, pulseFreq: 1.5, waveAmt: 0.14,
+          brightness: 1.15, saturation: 1.1, hueShift: -25.0, noiseScale: 0.82,
+          innerR: 0.50, glowSize: 1.40, rotation: 0.48, chromaAber: 0.007,
+          flicker: 0.06, sparks: 0.40
+        },
+        speaking: {
+          speed: 0.45, pulseAmt: 0.06, pulseFreq: 1.8, waveAmt: 0.12,
+          brightness: 1.1, saturation: 1.15, hueShift: 30.0, noiseScale: 0.65,
+          innerR: 0.60, glowSize: 1.45, rotation: 0.18, chromaAber: 0.002,
+          flicker: 0.0, sparks: 0.35
+        },
+        listening: {
+          speed: 0.30, pulseAmt: 0.12, pulseFreq: 1.1, waveAmt: 0.06,
+          brightness: 1.05, saturation: 1.0, hueShift: 62.0, noiseScale: 0.52,
+          innerR: 0.58, glowSize: 1.30, rotation: -0.14, chromaAber: 0.001,
+          flicker: 0.0, sparks: 0.18
+        },
+        error: {
+          speed: 1.2, pulseAmt: 0.30, pulseFreq: 5.0, waveAmt: 0.30,
+          brightness: 1.2, saturation: 1.3, hueShift: -130.0, noiseScale: 1.1,
+          innerR: 0.5, glowSize: 1.4, rotation: 0.8, chromaAber: 0.018,
+          flicker: 0.4, sparks: 0.9
+        },
+        loading: {
+          speed: 0.35, pulseAmt: 0.08, pulseFreq: 0.8, waveAmt: 0.03,
+          brightness: 0.9, saturation: 0.85, hueShift: 45.0, noiseScale: 0.55,
+          innerR: 0.54, glowSize: 1.25, rotation: 0.65, chromaAber: 0.002,
+          flicker: 0.0, sparks: 0.22
+        },
+        success: {
+          speed: 0.40, pulseAmt: 0.22, pulseFreq: 1.0, waveAmt: 0.05,
+          brightness: 1.35, saturation: 1.25, hueShift: 85.0, noiseScale: 0.58,
+          innerR: 0.62, glowSize: 1.55, rotation: 0.10, chromaAber: 0.0,
+          flicker: 0.0, sparks: 0.55
+        },
+        sleeping: {
+          speed: 0.08, pulseAmt: 0.04, pulseFreq: 0.2, waveAmt: 0.0,
+          brightness: 0.35, saturation: 0.5, hueShift: 10.0, noiseScale: 0.45,
+          innerR: 0.52, glowSize: 1.10, rotation: 0.01, chromaAber: 0.0,
+          flicker: 0.0, sparks: 0.0
+        },
+        warning: {
+          speed: 0.55, pulseAmt: 0.20, pulseFreq: 2.2, waveAmt: 0.15,
+          brightness: 1.1, saturation: 1.2, hueShift: -100.0, noiseScale: 0.75,
+          innerR: 0.52, glowSize: 1.35, rotation: 0.30, chromaAber: 0.008,
+          flicker: 0.15, sparks: 0.50
+        }
+      };
+
+      var VERT = 'precision highp float;'
+        + 'attribute vec2 position;'
+        + 'attribute vec2 uv;'
+        + 'varying vec2 vUv;'
+        + 'void main(){ vUv=uv; gl_Position=vec4(position,0.0,1.0); }';
+
+      var FRAG = 'precision highp float;'
+        + 'uniform float iTime;'
+        + 'uniform vec3  iResolution;'
+        + 'uniform float hue;'
+        + 'uniform float uSpeed;'
+        + 'uniform float uPulseAmt;'
+        + 'uniform float uPulsePhase;'
+        + 'uniform float uWaveAmt;'
+        + 'uniform float uBrightness;'
+        + 'uniform float uSaturation;'
+        + 'uniform float uHueShift;'
+        + 'uniform float uNoiseScale;'
+        + 'uniform float uInnerR;'
+        + 'uniform float uGlowSize;'
+        + 'uniform float uRotation;'
+        + 'uniform float uChromaAber;'
+        + 'uniform float uFlicker;'
+        + 'uniform float uSparks;'
+        + 'uniform float uVolume;'
+        + 'uniform vec3  backgroundColor;'
+        + 'varying vec2  vUv;'
+        // Color helpers
+        + 'vec3 rgb2yiq(vec3 c){ return vec3(dot(c,vec3(.299,.587,.114)),dot(c,vec3(.596,-.274,-.322)),dot(c,vec3(.211,-.523,.312))); }'
+        + 'vec3 yiq2rgb(vec3 c){ return vec3(c.x+.956*c.y+.621*c.z,c.x-.272*c.y-.647*c.z,c.x-1.106*c.y+1.703*c.z); }'
+        + 'vec3 adjustHue(vec3 color, float hDeg){'
+        + '  float h=hDeg*3.14159265/180.0;'
+        + '  vec3 yiq=rgb2yiq(color);'
+        + '  float c2=cos(h); float s2=sin(h);'
+        + '  float i2=yiq.y*c2-yiq.z*s2;'
+        + '  float q2=yiq.y*s2+yiq.z*c2;'
+        + '  yiq.y=i2; yiq.z=q2;'
+        + '  return clamp(yiq2rgb(yiq),0.0,1.0);'
+        + '}'
+        // Hash & Noise
+        + 'vec3 hash33(vec3 p){'
+        + '  p=fract(p*vec3(.1031,.11369,.13787));'
+        + '  p+=dot(p,p.yxz+19.19);'
+        + '  return -1.0+2.0*fract(vec3(p.x+p.y,p.x+p.z,p.y+p.z)*p.zyx);'
+        + '}'
+        + 'float snoise3(vec3 p){'
+        + '  const float K1=.333333333; const float K2=.166666667;'
+        + '  vec3 i=floor(p+(p.x+p.y+p.z)*K1);'
+        + '  vec3 d0=p-(i-(i.x+i.y+i.z)*K2);'
+        + '  vec3 e=step(vec3(0.0),d0-d0.yzx);'
+        + '  vec3 i1=e*(1.0-e.zxy); vec3 i2=1.0-e.zxy*(1.0-e);'
+        + '  vec3 d1=d0-(i1-K2); vec3 d2=d0-(i2-K1); vec3 d3=d0-0.5;'
+        + '  vec4 h=max(0.6-vec4(dot(d0,d0),dot(d1,d1),dot(d2,d2),dot(d3,d3)),0.0);'
+        + '  vec4 n=h*h*h*h*vec4(dot(d0,hash33(i)),dot(d1,hash33(i+i1)),dot(d2,hash33(i+i2)),dot(d3,hash33(i+1.0)));'
+        + '  return dot(vec4(31.316),n);'
+        + '}'
+        + 'float hash21(vec2 p){ p=fract(p*vec2(127.1,311.7)); p+=dot(p,p+19.19); return fract(p.x*p.y); }'
+        // Light helpers
+        + 'float light1(float i,float a,float d){return i/(1.0+d*a);}'
+        + 'float light2(float i,float a,float d){return i/(1.0+d*d*a);}'
+        + 'vec4 extractAlpha(vec3 c){ float a=max(max(c.r,c.g),c.b); return vec4(c/(a+1e-5),a); }'
+        // Original palette
+        + 'const vec3 baseColor1=vec3(.611765,.262745,.996078);'   // vivid purple
+        + 'const vec3 baseColor2=vec3(.298039,.760784,.913725);'   // cyan/teal
+        + 'const vec3 baseColor3=vec3(.062745,.078431,.600000);'   // deep indigo
+        // Spark helper
+        + 'float spark(vec2 uv, vec2 pos, float size){'
+        + '  float d=length(uv-pos);'
+        + '  return smoothstep(size,0.0,d)*light2(1.0,800.0,d);'
+        + '}'
+        // Main draw
+        + 'vec4 draw(vec2 uv){'
+        + '  float totalHue = hue + uHueShift;'
+        + '  vec3 c1=adjustHue(baseColor1,totalHue);'
+        + '  vec3 c2=adjustHue(baseColor2,totalHue);'
+        + '  vec3 c3=adjustHue(baseColor3,totalHue);'
+        + '  float ang = atan(uv.y, uv.x);'
+        + '  float len = length(uv);'
+        + '  float invLen = len > 0.0 ? 1.0/len : 0.0;'
+        + '  float bgLum = dot(backgroundColor, vec3(.299,.587,.114));'
+        + '  float pulse = sin(uPulsePhase * 6.2832) * uPulseAmt;'
+        + '  pulse += uVolume * uPulseAmt * 2.0;'
+        + '  float n0 = snoise3(vec3(uv*uNoiseScale, iTime*uSpeed))*0.5+0.5;'
+        + '  float innerR = uInnerR + pulse;'
+        + '  float r0 = mix(mix(innerR,1.0,0.4), mix(innerR,1.0,0.6), n0);'
+        // Core glow
+        + '  float d0 = distance(uv, (r0*invLen)*uv);'
+        + '  float v0 = light1(1.0, 10.0, d0);'
+        + '  v0 *= smoothstep(r0*1.05, r0, len);'
+        + '  float innerFade = smoothstep(r0*0.75, r0*0.92, len);'
+        + '  v0 *= mix(innerFade, 1.0, bgLum*0.7);'
+        // Orbiting highlight 1
+        + '  float a2 = iTime * uSpeed * -1.5;'
+        + '  vec2 hPos = vec2(cos(a2), sin(a2)) * r0;'
+        + '  float d1 = distance(uv, hPos);'
+        + '  float v1 = light2(1.5, 5.0, d1) * light1(1.0, 50.0, d0);'
+        // Orbiting highlight 2
+        + '  float a3 = iTime * uSpeed * 0.8 + 1.5;'
+        + '  vec2 hPos2 = vec2(cos(a3)*0.8, sin(a3)*0.8) * r0;'
+        + '  float d2b = distance(uv, hPos2);'
+        + '  float v1b = light2(0.8, 8.0, d2b) * light1(1.0, 60.0, d0);'
+        // Fade masks
+        + '  float v2 = smoothstep(uGlowSize*0.92, mix(innerR, 1.0, n0*0.5), len);'
+        + '  float v3 = smoothstep(innerR*0.9, mix(innerR, 1.0, 0.5), len);'
+        // Sparks
+        + '  float sparkVal = 0.0;'
+        + '  if(uSparks > 0.05){'
+        + '    for(int i=0;i<6;i++){'
+        + '      float fi=float(i);'
+        + '      float angle = iTime*uSpeed*1.3 + fi*1.047 + sin(iTime*0.7+fi)*0.5;'
+        + '      float radius = r0*(0.85+0.15*sin(iTime*1.2+fi*2.3));'
+        + '      vec2 sPos = vec2(cos(angle), sin(angle)) * radius;'
+        + '      float sz = 0.04 * (0.5+0.5*sin(iTime*2.0+fi));'
+        + '      sparkVal += spark(uv, sPos, sz) * uSparks;'
+        + '    }'
+        + '  }'
+        // Flicker
+        + '  float flickerMult = 1.0;'
+        + '  if(uFlicker > 0.01){'
+        + '    float ft = floor(iTime*18.0);'
+        + '    flickerMult = 1.0 - uFlicker * hash21(vec2(ft, 3.7));'
+        + '  }'
+        // Angular color blend
+        + '  float cl = cos(ang + iTime*uSpeed*1.5)*0.5+0.5;'
+        // Compose
+        + '  vec3 colBase = mix(c1, c2, cl) * uSaturation;'
+        + '  colBase = mix(colBase, colBase * 1.3, uBrightness - 1.0);'
+        + '  float fadeAmt = mix(1.0, 0.1, bgLum);'
+        + '  vec3 darkCol = mix(c3, colBase, v0);'
+        + '  darkCol = (darkCol + v1 + v1b) * v2 * v3;'
+        + '  darkCol += vec3(sparkVal) * colBase;'
+        + '  darkCol = clamp(darkCol * uBrightness * flickerMult, 0.0, 1.0);'
+        + '  vec3 lightCol = (colBase + v1 + v1b) * mix(1.0, v2*v3, fadeAmt);'
+        + '  lightCol = mix(backgroundColor, lightCol, v0);'
+        + '  lightCol += vec3(sparkVal) * colBase;'
+        + '  lightCol = clamp(lightCol * uBrightness * flickerMult, 0.0, 1.0);'
+        + '  vec3 fc = mix(darkCol, lightCol, bgLum);'
+        + '  return extractAlpha(fc);'
+        + '}'
+        // Entry point
+        + 'vec4 mainImage(vec2 fragCoord){'
+        + '  vec2 center = iResolution.xy * 0.5;'
+        + '  float sz = min(iResolution.x, iResolution.y);'
+        + '  vec2 uv = (fragCoord - center) / sz * 2.0;'
+        + '  float s2=sin(uRotation); float c2=cos(uRotation);'
+        + '  uv = vec2(c2*uv.x-s2*uv.y, s2*uv.x+c2*uv.y);'
+        + '  float ph = uPulsePhase * 6.2832;'
+        + '  float volWave = uVolume * 0.7;'
+        + '  float baseWave = uWaveAmt * 0.06;'
+        + '  float wave = baseWave + volWave * uWaveAmt;'
+        + '  float t1 = iTime * uSpeed * 2.5;'
+        + '  uv.x += wave * 0.55 * sin(uv.y * 4.5 + t1 + ph * 0.3);'
+        + '  uv.y += wave * 0.55 * sin(uv.x * 4.5 + t1 * 1.1 + ph * 0.4);'
+        + '  uv.x += wave * 0.30 * sin(uv.y * 11.0 + t1 * 1.7 + 2.0);'
+        + '  uv.y += wave * 0.30 * sin(uv.x * 9.5  + t1 * 1.5 + 3.1);'
+        + '  float fineWave = wave * volWave * 0.6;'
+        + '  uv.x += fineWave * sin(uv.y * 22.0 + t1 * 3.0 + 5.0);'
+        + '  uv.y += fineWave * sin(uv.x * 18.0 + t1 * 2.8 + 7.0);'
+        + '  return draw(uv);'
+        + '}'
+        + 'void main(){'
+        + '  vec2 fc = vUv * iResolution.xy;'
+        + '  vec4 col = mainImage(fc);'
+        + '  gl_FragColor = vec4(col.rgb * col.a, col.a);'
+        + '}';
+
+      var UNIFORM_NAMES = ['iTime','iResolution','hue','uSpeed','uPulseAmt','uPulsePhase','uWaveAmt','uBrightness','uSaturation','uHueShift','uNoiseScale','uInnerR','uGlowSize','uRotation','uChromaAber','uFlicker','uSparks','uVolume','backgroundColor'];
+
+      function Renderer(container, opts) {
+        opts = opts || {};
+        this.container = container;
+        this.hue = opts.hue || 0;
+        this.bgColor = opts.backgroundColor || [0.024, 0.031, 0.071];
+        this._current = {};
+        this._target = {};
+        var idle = STATES.idle;
+        for (var k in idle) { this._current[k] = idle[k]; this._target[k] = idle[k]; }
+        this._rot = 0;
+        this._lastTs = 0;
+        this._pulsePhase = 0;
+        this._volume = 0;
+        this.canvas = document.createElement('canvas');
+        this.canvas.style.cssText = 'width:100%;height:100%;display:block;';
+        container.appendChild(this.canvas);
+        this.gl = this.canvas.getContext('webgl', { alpha: true });
+        if (!this.gl) { logDebug("ERRO: WebGL indisponível!"); return; }
+        this._build();
+        this._resize();
+        var self = this;
+        window.addEventListener('resize', function(){ self._resize(); });
+        this._loop(0);
+        logDebug("WebGL render loop iniciado.");
+      }
+
+      Renderer.prototype.setState = function(name) {
+        var def = STATES[name];
+        if (def) {
+          for (var k in def) this._target[k] = def[k];
+          this.container.dataset.orbState = name;
+        }
+      };
+
+      Renderer.prototype.setVolume = function(v) { this._volume = v; };
+
+      Renderer.prototype._compile = function(type, src) {
+        var gl = this.gl;
+        var s = gl.createShader(type);
+        gl.shaderSource(s, src);
+        gl.compileShader(s);
+        if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+          logDebug("Shader erro: " + gl.getShaderInfoLog(s));
+          return null;
+        }
+        return s;
+      };
+
+      Renderer.prototype._build = function() {
+        var gl = this.gl;
+        var vs = this._compile(gl.VERTEX_SHADER, VERT);
+        var fs = this._compile(gl.FRAGMENT_SHADER, FRAG);
+        if (!vs || !fs) { logDebug("ERRO: Shaders falharam!"); return; }
+        this.pgm = gl.createProgram();
+        gl.attachShader(this.pgm, vs);
+        gl.attachShader(this.pgm, fs);
+        gl.linkProgram(this.pgm);
+        if (!gl.getProgramParameter(this.pgm, gl.LINK_STATUS)) {
+          logDebug("ERRO Link: " + gl.getProgramInfoLog(this.pgm));
+          return;
+        }
+        gl.useProgram(this.pgm);
+        var posBuf = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, posBuf);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
+        var posLoc = gl.getAttribLocation(this.pgm, 'position');
+        gl.enableVertexAttribArray(posLoc);
+        gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
+        var uvBuf = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, uvBuf);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0,0, 2,0, 0,2]), gl.STATIC_DRAW);
+        var uvLoc = gl.getAttribLocation(this.pgm, 'uv');
+        gl.enableVertexAttribArray(uvLoc);
+        gl.vertexAttribPointer(uvLoc, 2, gl.FLOAT, false, 0, 0);
+        this.u = {};
+        for (var i = 0; i < UNIFORM_NAMES.length; i++) {
+          this.u[UNIFORM_NAMES[i]] = gl.getUniformLocation(this.pgm, UNIFORM_NAMES[i]);
+        }
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+        logDebug("Shaders compilados OK.");
+      };
+
+      Renderer.prototype._resize = function() {
+        var dpr = window.devicePixelRatio || 1;
+        this.canvas.width = this.container.clientWidth * dpr;
+        this.canvas.height = this.container.clientHeight * dpr;
+        this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+      };
+
+      Renderer.prototype._loop = function(ts) {
+        var self = this;
+        requestAnimationFrame(function(t){ self._loop(t); });
+        if (!this.pgm) return;
+        var t = ts * 0.001;
+        var dt = this._lastTs ? t - this._lastTs : 0.016;
+        this._lastTs = t;
+        var k = Math.min(dt * 4.0, 1.0);
+        for (var key in this._target) {
+          this._current[key] += (this._target[key] - this._current[key]) * k;
+        }
+        this._rot += this._current.rotation * dt;
+        this._pulsePhase += this._current.pulseFreq * dt;
+        var gl = this.gl;
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.uniform1f(this.u.iTime, t);
+        gl.uniform3f(this.u.iResolution, this.canvas.width, this.canvas.height, 1.0);
+        gl.uniform1f(this.u.hue, this.hue);
+        gl.uniform1f(this.u.uSpeed, this._current.speed);
+        gl.uniform1f(this.u.uPulseAmt, this._current.pulseAmt);
+        gl.uniform1f(this.u.uPulsePhase, this._pulsePhase);
+        gl.uniform1f(this.u.uWaveAmt, this._current.waveAmt);
+        gl.uniform1f(this.u.uBrightness, this._current.brightness);
+        gl.uniform1f(this.u.uSaturation, this._current.saturation);
+        gl.uniform1f(this.u.uHueShift, this._current.hueShift);
+        gl.uniform1f(this.u.uNoiseScale, this._current.noiseScale);
+        gl.uniform1f(this.u.uInnerR, this._current.innerR);
+        gl.uniform1f(this.u.uGlowSize, this._current.glowSize);
+        gl.uniform1f(this.u.uRotation, this._rot);
+        gl.uniform1f(this.u.uChromaAber, this._current.chromaAber);
+        gl.uniform1f(this.u.uFlicker, this._current.flicker);
+        gl.uniform1f(this.u.uSparks, this._current.sparks);
+        gl.uniform1f(this.u.uVolume, this._volume);
+        gl.uniform3f(this.u.backgroundColor, this.bgColor[0], this.bgColor[1], this.bgColor[2]);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+      };
+
+      return Renderer;
+    })();
+
+    logDebug("OrbRenderer definido: " + (typeof OrbRenderer));
+
+    /* ── Orb init ── */
+    var orb;
+    try {
+        var container = document.getElementById('orb-container');
+        orb = new OrbRenderer(container, {
+          hue: 0
+        });
+        logDebug("Orb Stark inicializado!");
+    } catch(e) {
+        logDebug("ERRO init: " + e.message);
+    }
+
+    /* Ativa o estado idle imediatamente para mostrar o ring neon */
+    function setOrbStateEarly(name) {
+      if (!orb) return;
+      orb.setState(name);
+      var meta = {
+        idle:    { accent:'#6d28d9', halo:'rgba(109,40,217,.20)', ring:'#6d28d9', ringFill:'25%' },
+        thinking:{ accent:'#7c3aed', halo:'rgba(124,58,237,.25)', ring:'#a855f7', ringFill:'60%' },
+        speaking:{ accent:'#0891b2', halo:'rgba(8,145,178,.25)',  ring:'#38bdf8', ringFill:'80%' }
+      };
+      var m = meta[name] || meta.idle;
+      var ring = document.getElementById('status-ring');
+      if (ring) {
+        ring.style.setProperty('--ring-color', m.ring);
+        ring.style.setProperty('--ring-fill', m.ringFill);
+      }
+      var halo = document.getElementById('orb-halo');
+      if (halo) halo.style.background = 'radial-gradient(circle, ' + m.halo + ' 0%, transparent 70%)';
+    }
+    setOrbStateEarly('idle');
+  </script>
+  <script>
     /* ── State metadata ── */
     const STATE_META = {
       idle: {
@@ -608,13 +898,13 @@
         const res = await fetch(url);
         if (!res.ok) throw new Error('Fetch failed: ' + res.status);
         const arrayBuffer = await res.arrayBuffer();
-        
+
         if (!audioContext) {
           console.error('[Audio] AudioContext não disponível');
           fetch('/api/audio_finished', { method: 'POST' }).catch(() => { });
           return;
         }
-        
+
         const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
 
         // Stop previous if still playing
@@ -761,55 +1051,6 @@
 
     /* ── Start WS connection ── */
     connectWebSocket();
-    // --- Drag and drop da caixa de chat ---
-    const chatBoxElement = document.getElementById('chatBox');
-    let isDragging = false;
-    let dragStartX, dragStartY;
-    let initialLeft, initialTop;
-
-    chatBoxElement.addEventListener('mousedown', (e) => {
-      if(e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return;
-      isDragging = true;
-      dragStartX = e.clientX;
-      dragStartY = e.clientY;
-      const rect = chatBoxElement.getBoundingClientRect();
-      initialLeft = rect.left;
-      initialTop = rect.top;
-      // desabilita o tranform translateX para poder mover via absolute px
-      chatBoxElement.style.transform = 'none';
-    });
-
-    window.addEventListener('mousemove', (e) => {
-      if (!isDragging) return;
-      const dx = e.clientX - dragStartX;
-      const dy = e.clientY - dragStartY;
-      chatBoxElement.style.left = `${initialLeft + dx}px`;
-      chatBoxElement.style.top = `${initialTop + dy}px`;
-      chatBoxElement.style.bottom = 'auto'; // cancela o CSS base
-    });
-
-    window.addEventListener('mouseup', () => { isDragging = false; });
-
-    // --- Envio de chat ---
-    const chatInput = document.getElementById('chatInput');
-    const sendBtn = document.getElementById('sendBtn');
-    
-    function sendChat() {
-      const text = chatInput.value.trim();
-      if (!text) return;
-      fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text })
-      });
-      chatInput.value = '';
-    }
-    
-    sendBtn.addEventListener('click', sendChat);
-    chatInput.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') sendChat();
-    });
-
   </script>
 </body>
 

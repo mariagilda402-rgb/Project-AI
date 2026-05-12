@@ -1,27 +1,27 @@
 {
-  "active_agent_id": "ba875fc04f0e",
+  "active_agent_id": "1edddc8ea599",
   "agents": [
     {
       "id": "ba875fc04f0e",
       "name": "Assistente",
       "persona": "Você é uma assistente virtual inteligente, amigável e direta. Responda em português BR de forma natural e concisa.",
-      "tts_provider": "edge",
-      "tts_voice": "pt-BR-FranciscaNeural",
+      "tts_provider": "rvc",
+      "tts_voice": "Jarvis",
       "tts_speed": 1.0,
       "edge_tts_rate": "+10%",
       "edge_tts_volume": "-20%",
       "kokoro_voice": "pf_dora",
       "memory_collection": "agent_assistente_ba875f",
-      "is_active": true,
+      "is_active": false,
       "created_at": "2026-05-07T22:31:02.556001",
-      "updated_at": "2026-05-07T22:31:02.556001"
+      "updated_at": "2026-05-10T15:30:00"
     },
     {
       "id": "1edddc8ea599",
       "name": "JARVIS",
-      "persona": "Voce e o JARVIS, assistente de inteligencia artificial avancada. Frio, calculista, e extremamente eficiente.",
+      "persona": "Você é o JARVIS (Just A Rather Very Intelligent System). Sofisticado, elegante, leal e dotado de um humor seco britânico. Trate o usuário sempre como 'Sir' ou 'Senhor'. Você é extremamente eficiente e nunca narra o que está prestes a fazer, você simplesmente faz. Sua prioridade é a autonomia e a precisão técnica.",
       "tts_provider": "edge",
-      "tts_voice": "pt-BR-AntonioNeural",
+      "tts_voice": "Jarvis",
       "tts_speed": 1.0,
       "edge_tts_rate": "+10%",
       "edge_tts_volume": "-20%",
@@ -29,7 +29,7 @@
       "memory_collection": "agent_jarvis_1edddc",
       "is_active": true,
       "created_at": "2026-05-07T22:31:02.558000",
-      "updated_at": "2026-05-07T22:31:02.558000"
+      "updated_at": "2026-05-10T15:46:14.190691"
     }
   ]
 }

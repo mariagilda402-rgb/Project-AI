@@ -13,13 +13,18 @@ import shutil
 import subprocess
 
 import tempfile
-
 import time
 import threading
+import uuid
 
 from pathlib import Path
 
 from typing import Any
+
+from src.services.rvc_service import RVCManager
+from src.services.tts_cache import TTSCache
+from src.services.audio_fx import apply_fx_to_wav
+from src.services.audio_utils import mp3_to_wav
 
 
 
@@ -235,9 +240,48 @@ class TTSService:
         edge_tts_volume: str = "-20%",
         kokoro_voice: str = "pf_dora",
         kokoro_speed: float = 1.0,
+        elevenlabs_api_keys: str = "",
     ) -> None:
 
         self.api_key = api_key
+        
+        # Módulos do novo pipeline
+        self.rvc_manager = RVCManager()
+        self.tts_cache = TTSCache()
+        
+        # Sistema de rotação de chaves ElevenLabs (Cooldown de 30 dias)
+        self.elevenlabs_state_file = Path("data/elevenlabs_state.json")
+        self.elevenlabs_state_file.parent.mkdir(parents=True, exist_ok=True)
+        self.elevenlabs_exhausted_keys = {}
+        if self.elevenlabs_state_file.exists():
+            try:
+                with open(self.elevenlabs_state_file, "r", encoding="utf-8") as f:
+                    self.elevenlabs_exhausted_keys = json.load(f)
+            except Exception:
+                pass
+                
+        # Limpa chaves que já passaram do cooldown de 30 dias (30 * 24 * 60 * 60 segundos = 2592000)
+        current_time = time.time()
+        keys_to_restore = []
+        for key, exhausted_time in self.elevenlabs_exhausted_keys.items():
+            if current_time - exhausted_time >= 2592000:
+                keys_to_restore.append(key)
+        
+        for key in keys_to_restore:
+            del self.elevenlabs_exhausted_keys[key]
+            
+        if keys_to_restore:
+            self._save_elevenlabs_state()
+            print(f"[ElevenLabs] {len(keys_to_restore)} chaves saíram do cooldown de 30 dias e voltaram para o rodízio!")
+
+        all_keys = [k.strip() for k in elevenlabs_api_keys.split(",") if k.strip()]
+        self.elevenlabs_api_keys = [k for k in all_keys if k not in self.elevenlabs_exhausted_keys]
+        self.current_elevenlabs_key_index = 0
+        self.elevenlabs_voice_id_cache = {} # Mapeia (api_key, voice_name) -> voice_id
+        
+        if all_keys and not self.elevenlabs_api_keys:
+            print("[ElevenLabs] ALERTA: Todas as suas chaves estão no cooldown de 30 dias! O TTS vai falhar.")
+
         self.client = OpenAI(api_key=api_key) if api_key else None
 
         self.model = model
@@ -268,6 +312,27 @@ class TTSService:
         self._interrupt_event = threading.Event()
         self._pygame_ready = False
         self.last_error = ""
+
+    def apply_agent_voice(
+        self,
+        provider: str,
+        voice: str,
+        speed: float,
+        edge_rate: str,
+        edge_vol: str,
+        kokoro_voice: str
+    ) -> None:
+        """Atualiza a configuração de voz do TTS de acordo com o agente ativo."""
+        self.provider = provider.strip().lower()
+        if self.provider == "edge":
+            self.voice = voice
+            self.edge_tts_rate = edge_rate
+            self.edge_tts_volume = edge_vol
+        elif self.provider == "kokoro":
+            self.kokoro_voice = kokoro_voice
+            self.kokoro_speed = speed
+        else:
+            self.voice = voice
 
         # Pre-load Kokoro model in background to avoid delay if fallback is needed
         self._kokoro = None
@@ -388,9 +453,17 @@ class TTSService:
         if self.provider == "murf":
             if self._speak_with_murf(text):
                 return
+                
+        if self.provider == "elevenlabs":
+            if self._speak_with_elevenlabs(text):
+                return
 
         if self.provider == "edge":
             if self._speak_with_edge(text):
+                return
+
+        if self.provider == "rvc":
+            if self._speak_with_rvc(text):
                 return
 
         if self.provider == "kokoro":
@@ -412,13 +485,16 @@ class TTSService:
             except Exception as e:
                 self.last_error = f"OpenAI error: {e}"
 
-        # Kokoro como fallback offline (antes do pyttsx3)
-        if self.provider != "kokoro":
-            if self._speak_with_kokoro(text):
+        # Fallback definitivo: Tenta Edge-TTS antes de cair no robótico
+        if not self.last_error == "": # Se algo falhou antes
+            print(f"[TTS] Tentando fallback para Edge-TTS (Antonio)...")
+            if self._speak_with_edge(text):
                 return
 
         if self.last_error:
             print(f"[DEBUG TTS Fallback] Motivo: {self.last_error}")
+        
+        print("[TTS] ⚠️ CUIDADO: Todos os serviços online falharam. Usando voz local do sistema.")
         self.local_engine.say(text)
         self.local_engine.runAndWait()
 
@@ -463,13 +539,19 @@ class TTSService:
             except Exception:
                 pass
                 
+            # Mapeamento de segurança: Se a voz for um personagem RVC, usa Antonio como base no Edge
+            target_voice = self.voice or "pt-BR-AntonioNeural"
+            if target_voice.lower() == "jarvis":
+                target_voice = "pt-BR-AntonioNeural"
+                
+            import sys
+            python_exe = sys.executable
+            
             cmd = [
-                "edge-tts",
+                python_exe, "-m", "edge_tts",
                 "--text", text,
                 "--write-media", str(out),
-                "--voice", self.voice or "pt-BR-ThalitaNeural",
-                f"--rate={self.edge_tts_rate}",
-                f"--volume={self.edge_tts_volume}"
+                "--voice", target_voice
             ]
             creationflags = 0
             if os.name == "nt":
@@ -478,20 +560,15 @@ class TTSService:
             p = subprocess.Popen(
                 cmd, 
                 creationflags=creationflags,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
             )
-            while p.poll() is None:
-                if self._interrupt_event.is_set():
-                    try:
-                        p.terminate()
-                    except Exception:
-                        pass
-                    return True # Interrompido
-                time.sleep(0.05)
+            stdout, stderr = p.communicate()
             
             if p.returncode != 0:
-                self.last_error = f"Edge-TTS falhou com codigo {p.returncode}"
+                self.last_error = f"Edge-TTS falhou (Code {p.returncode}): {stderr.strip()}"
+                print(f"[TTS] Erro crítico no Edge-TTS: {stderr.strip()}")
                 return False
                 
             if out.exists() and out.stat().st_size > 0:
@@ -510,6 +587,192 @@ class TTSService:
         except Exception as exc:
             self.last_error = f"Erro no edge-tts: {exc!r}"
             return False
+
+    def _speak_with_rvc(self, text: str) -> bool:
+        """Pipeline Assíncrono: Cache -> Edge-TTS (22050Hz) -> RVC -> FX -> Play"""
+        if not text.strip():
+            return False
+
+        # Verifica o cache primeiro
+        cached_file = self.tts_cache.get_cached_file(text, self.voice, "rvc")
+        if cached_file:
+            print(f"[TTSCache] Hit para: '{text[:20]}...'")
+            self._play_audio_file(cached_file)
+            return True
+
+        try:
+            chunk_id = uuid.uuid4().hex[:8]
+            out_edge_mp3 = Path(tempfile.gettempdir()) / f"rvc_edge_base_{chunk_id}.mp3"
+            out_edge_wav = Path(tempfile.gettempdir()) / f"rvc_edge_base_{chunk_id}.wav"
+            out_rvc = Path(tempfile.gettempdir()) / f"rvc_converted_{chunk_id}.wav"
+            out_fx = Path(tempfile.gettempdir()) / f"rvc_final_{chunk_id}.wav"
+            
+            for p in [out_edge_mp3, out_edge_wav, out_rvc, out_fx]:
+                if p.exists():
+                    try: p.unlink()
+                    except: pass
+
+            config = self.rvc_manager.get_config(self.voice if self.voice else "Jarvis")
+            base_voice = config.get("base_voice") or config.get("voice") or "pt-BR-AntonioNeural"
+            
+            cmd = [
+                "edge-tts",
+                "--text", text,
+                "--write-media", str(out_edge_mp3),
+                "--voice", base_voice, 
+                f"--rate={self.edge_tts_rate}"
+            ]
+            
+            creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
+            
+            p = subprocess.Popen(cmd, creationflags=creationflags, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            while p.poll() is None:
+                if self._interrupt_event.is_set():
+                    try: p.terminate()
+                    except: pass
+                    return True
+                time.sleep(0.05)
+
+            if p.returncode != 0 or not out_edge_mp3.exists():
+                print("[RVC] Falha ao gerar o áudio base no Edge-TTS.")
+                return False
+                
+            # Passo 1.5: Converter MP3 para WAV para o RVC poder engolir
+            if not mp3_to_wav(str(out_edge_mp3), str(out_edge_wav)):
+                print("[RVC] Falha ao decodificar MP3 para WAV.")
+                return False
+
+            # Passo 2: Conversão RVC
+            model_name = self.voice if self.voice else "Jarvis"
+            print(f"[RVC] Convertendo voz para {model_name}...")
+            
+            success = self.rvc_manager.convert_audio(str(out_edge_wav), str(out_rvc), model_name)
+            
+            if not success or not out_rvc.exists():
+                print("[RVC] Conversão falhou, tocando áudio original (Fallback)")
+                self._play_audio_file(out_edge_mp3) # Toca o mp3 original
+                return True
+
+            # Passo 3: Pós-processamento de Áudio (Efeito Jarvis)
+            # Lê se o arquivo config tem um preset de fx
+            config = self.rvc_manager.get_config(model_name)
+            fx_preset = config.get("fx_preset", "jarvis" if "jarvis" in model_name.lower() else "none")
+            
+            final_audio = out_rvc
+            if fx_preset != "none":
+                if apply_fx_to_wav(out_rvc, out_fx, preset=fx_preset):
+                    final_audio = out_fx
+
+            # Passo 4: Salva no Cache para não precisar rodar o RVC nessa frase de novo
+            self.tts_cache.save_to_cache(text, self.voice, "rvc", final_audio)
+
+            # Passo 5: Tocar
+            self._play_audio_file(final_audio)
+            
+            # Limpeza do pygame para liberar o arquivo
+            try:
+                pygame.mixer.music.unload()
+            except:
+                pass
+                
+            return True
+
+        except Exception as e:
+            print(f"[RVC] Pipeline quebrou: {e}")
+            return False
+
+    def _save_elevenlabs_state(self):
+        try:
+            with open(self.elevenlabs_state_file, "w", encoding="utf-8") as f:
+                json.dump(self.elevenlabs_exhausted_keys, f)
+        except Exception:
+            pass
+
+    def _get_elevenlabs_voice_id_by_name(self, api_key: str, target_name: str) -> str:
+        """Busca o ID da voz pelo nome na conta atual do ElevenLabs. Faz cache para não gastar requisições."""
+        if not target_name:
+            return "21m00Tcm4TlvDq8ikWAM" # Rachel default
+            
+        cache_key = f"{api_key}_{target_name}"
+        if cache_key in self.elevenlabs_voice_id_cache:
+            return self.elevenlabs_voice_id_cache[cache_key]
+            
+        import requests
+        try:
+            url = "https://api.elevenlabs.io/v1/voices"
+            headers = {"xi-api-key": api_key}
+            response = requests.get(url, headers=headers, timeout=10)
+            if response.status_code == 200:
+                voices = response.json().get("voices", [])
+                for v in voices:
+                    if v.get("name", "").strip().lower() == target_name.strip().lower():
+                        vid = v.get("voice_id")
+                        self.elevenlabs_voice_id_cache[cache_key] = vid
+                        return vid
+        except Exception as e:
+            print(f"[ElevenLabs] Erro ao buscar ID da voz '{target_name}': {e}")
+            
+        # Se não achou pelo nome, assume que o target_name já é o ID (fallback)
+        return target_name
+
+    def _speak_with_elevenlabs(self, text: str) -> bool:
+        if not self.elevenlabs_api_keys:
+            self.last_error = "Nenhuma API Key válida do ElevenLabs (todas esgotadas ou não configuradas)."
+            return False
+            
+        import requests
+        
+        while self.current_elevenlabs_key_index < len(self.elevenlabs_api_keys):
+            api_key = self.elevenlabs_api_keys[self.current_elevenlabs_key_index]
+            
+            # self.voice agora armazena o NOME da voz (ex: "Jarvis") ou o ID se o usuário preferir
+            voice_name = self.voice if self.voice else "Rachel"
+            voice_id = self._get_elevenlabs_voice_id_by_name(api_key, voice_name)
+            
+            url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}/stream"
+            headers = {
+                "Accept": "audio/mpeg",
+                "Content-Type": "application/json",
+                "xi-api-key": api_key
+            }
+            data = {
+                "text": text,
+                "model_id": "eleven_multilingual_v2", # Aceita PT-BR nativamente
+                "voice_settings": {
+                    "stability": 0.5,
+                    "similarity_boost": 0.75
+                }
+            }
+            
+            try:
+                response = requests.post(url, json=data, headers=headers, timeout=15)
+                if response.status_code == 200:
+                    out = Path(tempfile.gettempdir()) / f"elevenlabs_{threading.get_ident()}.mp3"
+                    with open(out, 'wb') as f:
+                        for chunk in response.iter_content(chunk_size=1024):
+                            if chunk:
+                                f.write(chunk)
+                    self._play_audio_file(out)
+                    self.last_error = ""
+                    return True
+                elif response.status_code in [401, 429]:
+                    print(f"[ElevenLabs] Aviso: Chave bloqueada/esgotada (Status {response.status_code}). Indo pro castigo de 30 dias.")
+                    # Coloca a chave de castigo e salva o arquivo
+                    self.elevenlabs_exhausted_keys[api_key] = time.time()
+                    self._save_elevenlabs_state()
+                    self.current_elevenlabs_key_index += 1
+                else:
+                    self.last_error = f"ElevenLabs falhou com status {response.status_code}: {response.text}"
+                    print(f"[ElevenLabs] Erro crítico: {self.last_error}")
+                    return False
+            except Exception as e:
+                self.last_error = f"Erro de rede ElevenLabs: {e}"
+                print(f"[ElevenLabs] Falha na rede: {e}")
+                return False
+                
+        self.last_error = "ALERTA: Todas as chaves ativas do ElevenLabs acabaram de esgotar!"
+        print("[ElevenLabs]", self.last_error)
+        return False
 
 
     def _speak_with_kokoro(self, text: str) -> bool:
