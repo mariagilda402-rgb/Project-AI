@@ -1,0 +1,383 @@
+/* Painel Nexus desktop — mesmo “chrome” escuro/neon do painel principal (panel.html) */
+
+@keyframes nxPanelSlideIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes nxPulseActive {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(139, 92, 246, 0.1);
+  }
+}
+
+@keyframes nxSpinBorder {
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+:root {
+  --nx-motion-fast: 140ms;
+  --nx-motion-normal: 240ms;
+  --nx-motion-slow: 420ms;
+  --nx-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --nx-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes nxContentRise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+html {
+  background-color: transparent !important;
+  color-scheme: dark;
+}
+
+body {
+  background-color: transparent !important;
+  margin: 0;
+  padding: 20px;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  box-sizing: border-box;
+  display: flex;
+  user-select: none;
+  animation: nxPanelSlideIn var(--nx-motion-slow) var(--nx-ease-spring);
+  font-family: "Inter", system-ui, sans-serif;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+#nx-app-wrapper {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+
+  /* Variáveis alinhadas ao painel — sobrescrevem o tema claro de nexus.css na árvore */
+  --bg: #0a0a0a;
+  --bg-panel: #111111;
+  --surface: rgba(255, 255, 255, 0.04);
+  --surface-hover: rgba(255, 255, 255, 0.08);
+  --border: rgba(255, 255, 255, 0.08);
+  --border-accent: rgba(139, 92, 246, 0.35);
+  --text: #e4e4e7;
+  --text-dim: #71717a;
+  --text-muted: #52525b;
+  --muted: #71717a;
+  --accent: #8b5cf6;
+  --accent-hover: #7c3aed;
+  --accent-glow: rgba(139, 92, 246, 0.3);
+  --accent-subtle: rgba(139, 92, 246, 0.08);
+  --danger: #ef4444;
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --sidebar: #080808;
+  --radius: 10px;
+  --shadow: 0 0 25px rgba(0, 0, 0, 0.8);
+
+  color-scheme: dark;
+  background: var(--bg);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border-accent);
+  animation: nxPulseActive 2s ease-in-out 0.5s 1;
+  transition:
+    box-shadow var(--nx-motion-normal) var(--nx-ease-out),
+    border-color var(--nx-motion-normal) var(--nx-ease-out),
+    transform var(--nx-motion-normal) var(--nx-ease-out);
+}
+
+#nx-app-wrapper[data-theme="light"] {
+  --bg: #f6f8fc;
+  --bg-panel: #ffffff;
+  --surface: rgba(15, 23, 42, 0.045);
+  --surface-hover: rgba(15, 23, 42, 0.08);
+  --border: rgba(15, 23, 42, 0.12);
+  --border-accent: rgba(6, 182, 212, 0.34);
+  --text: #111827;
+  --text-dim: #5b6475;
+  --text-muted: #7a8496;
+  --muted: #6b7280;
+  --accent: #7c3aed;
+  --accent-hover: #6d28d9;
+  --accent-glow: rgba(6, 182, 212, 0.24);
+  --accent-subtle: rgba(124, 58, 237, 0.08);
+  --danger: #dc2626;
+  --success: #16a34a;
+  --warning: #d97706;
+  --sidebar: #eef2ff;
+  --shadow: 0 22px 55px rgba(15, 23, 42, 0.2);
+
+  color-scheme: light;
+}
+
+#nx-app-wrapper.neon-enabled {
+  border: 1px solid var(--border-accent);
+}
+
+#nx-app-wrapper[data-theme-preset] {
+  color: var(--text);
+}
+
+#nx-app-wrapper[data-theme-preset] .nx-chrome-title::after {
+  content: attr(data-theme-label);
+  display: none;
+}
+
+#nx-app-wrapper.neon-enabled::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 14px;
+  border: 2px solid rgba(139, 92, 246, 0.82);
+  z-index: 4;
+  pointer-events: none;
+}
+
+#nx-app-wrapper.neon-enabled::after {
+  display: none;
+}
+
+.nx-chrome-bar {
+  position: relative;
+  z-index: 3;
+  flex-shrink: 0;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 18px 0 22px;
+  background: linear-gradient(
+    180deg,
+    rgba(139, 92, 246, 0.12) 0%,
+    transparent 100%
+  );
+  border-bottom: 1px solid rgba(139, 92, 246, 0.22);
+  transition:
+    background var(--nx-motion-normal) var(--nx-ease-out),
+    border-color var(--nx-motion-normal) var(--nx-ease-out);
+}
+
+.nx-chrome-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+}
+
+.nx-chrome-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nx-dot {
+  width: 6px;
+  height: 6px;
+  background: var(--accent);
+  border-radius: 50%;
+  animation: nxPulseActive 1.5s infinite;
+}
+
+.nx-theme-toggle {
+  background: rgba(6, 182, 212, 0.12);
+  border: 1px solid rgba(6, 182, 212, 0.28);
+  color: #67e8f9;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 800;
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  transition:
+    background var(--nx-motion-normal) var(--nx-ease-out),
+    border-color var(--nx-motion-normal) var(--nx-ease-out),
+    color var(--nx-motion-normal) var(--nx-ease-out),
+    box-shadow var(--nx-motion-normal) var(--nx-ease-out),
+    transform var(--nx-motion-fast) var(--nx-ease-spring);
+}
+
+.nx-theme-toggle:hover {
+  background: rgba(6, 182, 212, 0.2);
+  border-color: rgba(6, 182, 212, 0.5);
+  color: #ecfeff;
+  box-shadow: 0 8px 24px rgba(6, 182, 212, 0.22);
+  transform: scale(1.05);
+}
+
+#nx-app-wrapper[data-theme="light"] .nx-theme-toggle {
+  background: rgba(124, 58, 237, 0.1);
+  border-color: rgba(124, 58, 237, 0.24);
+  color: #6d28d9;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.12);
+}
+
+.nx-chrome-close {
+  background: rgba(139, 92, 246, 0.15);
+  border: 1px solid var(--border-accent);
+  color: var(--accent);
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  transition:
+    background var(--nx-motion-normal) var(--nx-ease-out),
+    border-color var(--nx-motion-normal) var(--nx-ease-out),
+    color var(--nx-motion-normal) var(--nx-ease-out),
+    box-shadow var(--nx-motion-normal) var(--nx-ease-out),
+    transform var(--nx-motion-fast) var(--nx-ease-spring);
+}
+
+.nx-chrome-close:hover {
+  background: var(--danger);
+  color: #fff;
+  border-color: var(--danger);
+  box-shadow: 0 8px 24px rgba(239, 68, 68, 0.35);
+  transform: scale(1.05);
+}
+
+.nx-chrome-inner {
+  position: relative;
+  z-index: 2;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg);
+  border-radius: 0 0 11px 11px;
+}
+
+#nx-app-wrapper .nx-chrome-inner > header {
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+  box-shadow: none;
+}
+
+#nx-app-wrapper .nx-chrome-inner > main {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  background: var(--bg);
+}
+
+#nx-app-wrapper .nx-chrome-inner > main > * {
+  animation: nxContentRise var(--nx-motion-normal) var(--nx-ease-out) both;
+}
+
+#nx-app-wrapper[data-theme="light"] .nx-chrome-bar {
+  background: linear-gradient(
+    180deg,
+    rgba(124, 58, 237, 0.1) 0%,
+    rgba(6, 182, 212, 0.04) 100%
+  );
+  border-bottom-color: rgba(124, 58, 237, 0.14);
+}
+
+#nx-app-wrapper .nx-chrome-inner > main::-webkit-scrollbar {
+  width: 6px;
+}
+#nx-app-wrapper .nx-chrome-inner > main::-webkit-scrollbar-thumb {
+  background: var(--border-accent);
+  border-radius: 4px;
+}
+
+#nx-app-wrapper .card {
+  background: var(--bg-panel);
+  border-color: var(--border);
+  box-shadow: none;
+}
+
+#nx-app-wrapper input,
+#nx-app-wrapper textarea,
+#nx-app-wrapper select {
+  background: var(--bg);
+  border-color: var(--border);
+  color: var(--text);
+  transition:
+    border-color var(--nx-motion-fast) var(--nx-ease-out),
+    background var(--nx-motion-fast) var(--nx-ease-out),
+    box-shadow var(--nx-motion-fast) var(--nx-ease-out);
+}
+
+#nx-app-wrapper .btn-primary {
+  background: var(--accent);
+  color: #fff;
+  transition:
+    transform var(--nx-motion-fast) var(--nx-ease-spring),
+    box-shadow var(--nx-motion-fast) var(--nx-ease-out),
+    background var(--nx-motion-fast) var(--nx-ease-out);
+}
+
+#nx-app-wrapper .btn-ghost {
+  background: transparent;
+  color: var(--text-dim);
+  border-color: var(--border);
+  transition:
+    transform var(--nx-motion-fast) var(--nx-ease-spring),
+    background var(--nx-motion-fast) var(--nx-ease-out),
+    color var(--nx-motion-fast) var(--nx-ease-out);
+}
+
+#nx-app-wrapper .btn-primary:hover,
+#nx-app-wrapper .btn-ghost:hover {
+  transform: translateY(-1px);
+}
+
+#nx-app-wrapper .toast-banner {
+  background: rgba(139, 92, 246, 0.12);
+  border-color: var(--border-accent);
+  color: var(--text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 1ms !important;
+  }
+}

@@ -3,13 +3,18 @@ from __future__ import annotations
 import re
 import time
 
+from src.agent.action_executor import ActionExecutor
 from src.agent.gemini_tools import build_agent_tool, build_openai_agent_tools
+from src.agent.mode_resolver import ModeResolver
 from src.agent.prompts import (
     build_function_calling_system_prompt,
     build_marker_agent_system_prompt,
     build_vision_instruction,
+    vision_user_wants_detail,
 )
+from src.agent.tool_guardrails import ToolCallGuardrailController
 from src.agent.tool_markers import parse_tool_markers
+from src.agent.toolsets import ToolsetSelector
 from src.agents.agent_model import AgentManager
 from src.memory.store import MemoryStore
 from src.memory.vector_db import SemanticMemory
@@ -55,6 +60,7 @@ class AgentOrchestrator:
         memory: MemoryStore,
         use_function_calling: bool = True,
         assistant_base_persona: str = "",
+        confirm_bus: object | None = None,
     ) -> None:
         self.llm = llm
         self.vision = vision
@@ -67,6 +73,10 @@ class AgentOrchestrator:
         self.live_service = None
         self.is_live_mode = False
         self._live_task = None
+        self._confirm_bus = confirm_bus
+        self._mode_resolver = ModeResolver()
+        self._toolset_selector = ToolsetSelector()
+        self._tool_guardrails = ToolCallGuardrailController()
 
     @property
     def _active_persona(self) -> str:
@@ -87,7 +97,7 @@ class AgentOrchestrator:
     def handle_user_message(self, text: str) -> str:
         # Contexto invisivel: data, hora, janela
         ctx = build_proactive_context()
-        
+
         # RAG Semântico — busca na coleção do agente ativo (apenas se não for saudação curta)
         rag_context = ""
         agent_collection = self._active_memory_collection
@@ -97,16 +107,16 @@ class AgentOrchestrator:
                 memories = self.semantic_memory.search_memories(emb, top_k=2, collection_name=agent_collection)
                 if memories:
                     rag_context = " [Fatos que você sabe sobre o usuário: " + " | ".join(memories) + "]"
-                
+
         enriched_text = f"{ctx}{rag_context} {text}"
-        
+
         self.memory.add_short_term("user", enriched_text)
         self.memory.maybe_record_persona_note(text)
-        
+
         # Se estamos em modo Live, o processamento é feito pelo serviço de streaming
         if self.is_live_mode:
             return "Estou ouvindo em tempo real, Sir."
-            
+
         history = self.memory.get_recent_short_term(limit=10)
         prefs = self.memory.get_long_term("preferences", default=[])
         persona_notes = self.memory.get_long_term("persona_evolution", default=[])
@@ -116,43 +126,113 @@ class AgentOrchestrator:
         fc_gemini = fc_allowed and self.llm.wants_gemini_native_tools()
         fc_nvidia = fc_allowed and self.llm.wants_nvidia_native_tools()
         fc_groq = fc_allowed and self.llm.wants_groq_native_tools()
+        runtime_resolution = self._mode_resolver.resolve(text)
+        allowed_tool_names = self._toolset_selector.allowed_tools(runtime_resolution)
+        self._tool_guardrails.reset_turn()
 
         pref_text = str(prefs[-5:])
+        crit_on = bool(self._confirm_bus and getattr(self._confirm_bus, "enabled", False))
+        from src.config import load_settings as _ls_fc
+
         system_fc = build_function_calling_system_prompt(
             self._active_persona,
             persona_notes if isinstance(persona_notes, list) else [],
             pref_text,
+            critical_confirm_enabled=crit_on,
+            study_professor_mode=_ls_fc().study_professor_mode,
+            active_mode=runtime_resolution.mode.value,
+            allowed_tool_names=allowed_tool_names,
         )
         prev_tool: str | None = None
 
         def on_fc(name: str, args: dict) -> str:
             nonlocal prev_tool
-            if prev_tool == "open_windows_application" and name == "analyze_screen":
+            if prev_tool == "open_windows_app" and name == "analyze_screen":
                 time.sleep(2.0)
-            out = self._execute_function_tool(name, args, text)
+            executor = ActionExecutor(
+                allowed_tool_names=allowed_tool_names,
+                guardrails=self._tool_guardrails,
+                legacy_execute=self._execute_function_tool,
+            )
+            out = executor.execute(name, args, text)
             prev_tool = name
             return out
 
-        dynamic_tools = [t for t in self.tools.tools if hasattr(t, "parameters")]
+        dynamic_tools = [
+            t for t in self.tools.tools
+            if hasattr(t, "parameters") and getattr(t, "name", None) in allowed_tool_names
+        ]
+
+        # Helper function para processar a stream e filtrar <thought>
+        def stream_parser(generator):
+            is_thinking = False
+            buffer = ""
+            final_accumulated = ""
+            for chunk in generator:
+                if not chunk: continue
+                buffer += chunk
+
+                # Parse simples e agressivo para <thought> ... </thought>
+                while "<thought>" in buffer:
+                    idx = buffer.find("<thought>")
+                    # Yield anything before thought
+                    before = buffer[:idx]
+                    if before and not is_thinking:
+                        final_accumulated += before
+                        yield before
+                    is_thinking = True
+                    buffer = buffer[idx + len("<thought>"):]
+
+                while "</thought>" in buffer and is_thinking:
+                    idx = buffer.find("</thought>")
+                    is_thinking = False
+                    buffer = buffer[idx + len("</thought>"):]
+
+                if not is_thinking and buffer:
+                    # Se tiver "<thought>", o while acima já teria pego,
+                    # então se sobrou "<" mas não é "<thought>", apenas envia para não prender o buffer
+                    if "<thought" not in buffer:
+                        final_accumulated += buffer
+                        yield buffer
+                        buffer = ""
+                    else:
+                        # Pode ser um thought parcial, vamos segurar
+                        pass
+
+            if not is_thinking and buffer:
+                final_accumulated += buffer
+                yield buffer
+
+            # Dispara as acoes assincronas apos terminar o gerador (como o modo legado)
+            self._post_process_async(text, final_accumulated)
 
         if fc_gemini:
-            final = (
-                self.llm.chat_with_functions(
-                    system_instruction=system_fc,
-                    messages=history,
-                    tools=[build_agent_tool(dynamic_tools)],
-                    on_function_call=on_fc,
-                    force_tool=False  # O LLM decide naturalmente quando agir
-                )
-                or ""
-            ).strip()
+            # Substitui chamada por stream
+            gen = self.llm.chat_with_functions_stream(
+                system_instruction=system_fc,
+                messages=history,
+                tools=[
+                    build_agent_tool(
+                        dynamic_tools,
+                        allowed_tool_names=allowed_tool_names,
+                        active_mode=runtime_resolution.mode.value,
+                    )
+                ],
+                on_function_call=on_fc,
+                force_tool=False
+            )
+            return stream_parser(gen) if gen else iter([])
         elif fc_nvidia:
             prev_tool = None
             final = (
                 self.llm.chat_with_openai_tools(
                     system_instruction=system_fc,
                     messages=history,
-                    tools=build_openai_agent_tools(dynamic_tools),
+                    tools=build_openai_agent_tools(
+                        dynamic_tools,
+                        allowed_tool_names=allowed_tool_names,
+                        active_mode=runtime_resolution.mode.value,
+                    ),
                     client=self.llm.nvidia_client,
                     model=self.llm.nvidia_model,
                     on_function_call=on_fc,
@@ -165,7 +245,11 @@ class AgentOrchestrator:
                 self.llm.chat_with_openai_tools(
                     system_instruction=system_fc,
                     messages=history,
-                    tools=build_openai_agent_tools(dynamic_tools),
+                    tools=build_openai_agent_tools(
+                        dynamic_tools,
+                        allowed_tool_names=allowed_tool_names,
+                        active_mode=runtime_resolution.mode.value,
+                    ),
                     client=self.llm.groq_client,
                     model=self.llm.groq_model,
                     on_function_call=on_fc,
@@ -190,28 +274,25 @@ class AgentOrchestrator:
                 "Tente reformular ou verifique a conexao com a LLM."
             )
 
+        # Trata o final síncrono convertendo num fake generator
+        def fake_gen():
+            yield final
+            self._post_process_async(text, final)
+
+        return stream_parser(fake_gen())
+
+    def _post_process_async(self, text: str, final: str):
+        """Metodos antigos que rodavam no final do handle_user_message"""
         final = self._clean_response(final)
         self.memory.add_short_term("assistant", final)
         self.memory.maybe_store_preference(text, final, consent_for_sensitive=True)
 
-        # Log qual LLM respondeu
         provider = getattr(self.llm, "last_provider", self.llm.primary_llm_provider)
         model = getattr(self.llm, "last_model", "")
         print(f"\n[🤖 LLM] {provider.upper()} | {model}", flush=True)
 
-        # Auto-sumarizacao: condensa mensagens antigas quando a sessao cresce.
         self._maybe_summarize()
 
-        # RAG - Extração de Memórias Assíncrona (na coleção do agente ativo)
-        if self.semantic_memory.enabled:
-            import threading
-            threading.Thread(
-                target=self._extract_semantic_memory,
-                args=(text, final, agent_collection),
-                daemon=True
-            ).start()
-
-        # Daily Log — alimenta o Heartbeat Service
         try:
             from src.services.heartbeat import append_daily_log
             short_user = text[:80].replace("\n", " ")
@@ -220,29 +301,30 @@ class AgentOrchestrator:
         except Exception:
             pass
 
-        # Structured Memory Extraction (async, two-stage)
         import threading
-        threading.Thread(
-            target=self._extract_structured_memory_async,
-            args=(text, final),
-            daemon=True
-        ).start()
+        # Executa a consolidação de memórias sequencialmente em uma única thread de background
+        # para evitar atingir o limite de concorrência da API Gemini (Rate Limit 429)
+        def background_memory_worker():
+            if self.semantic_memory.enabled:
+                agent_collection = self.agent_manager.get_active_agent().memory_collection
+                self._extract_semantic_memory(text, final, agent_collection)
+            self._extract_structured_memory_async(text, final)
 
-        return final
+        threading.Thread(target=background_memory_worker, daemon=True).start()
 
     def _extract_semantic_memory(self, user_text: str, assistant_text: str, collection_name: str):
         """Thread em background que extrai fatos definitivos da conversa para o ChromaDB."""
         from src.agent.prompts import EXTRACT_MEMORY_PROMPT
-        
+
         # Envia os dois lados da conversa e pede ao LLM para extrair
         prompt = f"Usuário disse: {user_text}\nVocê respondeu: {assistant_text}"
-        
+
         try:
             extracted = self.llm.chat(
                 system_prompt=EXTRACT_MEMORY_PROMPT,
                 messages=[{"role": "user", "content": prompt}]
             )
-            
+
             if extracted and "vazio" not in extracted.lower():
                 lines = [line.strip() for line in extracted.split("\n") if line.strip() and "vazio" not in line.lower()]
                 for fact in lines:
@@ -338,13 +420,16 @@ class AgentOrchestrator:
         persona_notes: list[str],
         skip_gemini: bool = False,
     ) -> str:
+        crit_on = bool(self._confirm_bus and getattr(self._confirm_bus, "enabled", False))
         system_prompt = build_marker_agent_system_prompt(
-            self._active_persona, persona_notes
+            self._active_persona,
+            persona_notes,
+            critical_confirm_enabled=crit_on,
         )
         context_messages = history + [
             {
                 "role": "system",
-                "content": f"Preferencias salvas (resumo): {prefs[-5:]}",
+                "content": f"Preferências salvas (resumo): {prefs[-5:]}",
             }
         ]
         raw_reply = self.llm.chat(
@@ -359,8 +444,14 @@ class AgentOrchestrator:
         for i, step in enumerate(steps):
             if step.kind == "vision":
                 vision_prompt = self._vision_context(user_text, speakable)
+                from src.config import load_settings
+
+                vd = vision_user_wants_detail(
+                    user_text,
+                    vision_detail_default=load_settings().vision_detail_default,
+                )
                 vision_text = self.vision.describe_screen(
-                    build_vision_instruction(vision_prompt)
+                    build_vision_instruction(vision_prompt, detail=vd)
                 )
                 chunks.append(vision_text)
             else:
@@ -385,7 +476,7 @@ class AgentOrchestrator:
 
     def _execute_function_tool(self, name: str, args: dict, user_text: str) -> str:
         args = args or {}
-        
+
         # Log de comando (se habilitado nas configurações)
         from src.config import load_settings
         if load_settings().enable_command_logs:
@@ -395,8 +486,14 @@ class AgentOrchestrator:
         if name == "analyze_screen":
             instr = (args.get("instruction") or "").strip()
             vision_prompt = self._vision_context(user_text, instr)
+            from src.config import load_settings
+
+            vd = vision_user_wants_detail(
+                user_text,
+                vision_detail_default=load_settings().vision_detail_default,
+            )
             res = self.vision.describe_screen(
-                build_vision_instruction(vision_prompt)
+                build_vision_instruction(vision_prompt, detail=vd)
             )
             if load_settings().enable_command_logs:
                 print(f"[✅ RESULT] analyze_screen concluído.")
@@ -433,10 +530,22 @@ class AgentOrchestrator:
             r = self.tools.run_by_marker("productivity", cmd, user_text)
             return r.message or ("Feito." if r.ok else "Nao executado.")
 
-        # 7) run_finance_command
+        # 7) run_finance_command -> Nexus Aether (SQLite unificado)
         if name == "run_finance_command":
             cmd = (args.get("command") or "").strip()
-            r = self.tools.run_by_marker("finance", cmd, user_text)
+            r = self.tools.run_by_marker("nexus", cmd, user_text)
+            return r.message or ("Feito." if r.ok else "Nao executado.")
+
+        # 7b) nexus_command — acoes estruturadas (financas, habitos, notas, quiz)
+        if name == "nexus_command":
+            import json as _json
+
+            payload = dict(args or {})
+            r = self.tools.run_by_marker(
+                "nexus",
+                "__NEXUS_JSON__" + _json.dumps(payload, ensure_ascii=False),
+                user_text,
+            )
             return r.message or ("Feito." if r.ok else "Nao executado.")
 
         # 8) control_visualizer
@@ -444,14 +553,15 @@ class AgentOrchestrator:
             cmd = (args.get("command") or "").strip()
             r = self.tools.run_by_marker("visualizer_control", cmd, user_text)
             return r.message or "Feito."
-            
+
         # 9) whatsapp_send
         if name == "whatsapp_send":
             target = (args.get("target") or "").strip()
             msg = (args.get("message") or "").strip()
-            # Bypassa confirmacao de terminal pois pedimos p/ LLM confirmar via voz
             wa = self.tools._find_tool("whatsapp")
             if not wa: return "WhatsApp indisponivel."
+            if not self.tools.confirm_if_critical(wa):
+                return "Envio cancelado por seguranca, Sir."
             r = wa.run(f"{target}|{msg}")
             return r.message or ("Enviado." if r.ok else "Falhou.")
 
@@ -494,17 +604,25 @@ class AgentOrchestrator:
             query = (args.get("query") or "").strip()
             if load_settings().enable_command_logs:
                 print(f"[🤖 DELEGANDO] Chamando o agente '{target_name}' para: {query}")
-            
+
             target_agent = self.agent_manager.find_agent_by_name(target_name)
             if not target_agent:
                 return f"Erro: Agente '{target_name}' não encontrado no sistema."
-            
+
             # Instancia o prompt do agente alvo
             from src.agent.prompts import build_function_calling_system_prompt
+
+            crit_on = bool(self._confirm_bus and getattr(self._confirm_bus, "enabled", False))
+            from src.config import load_settings as _ls_del
+
             sys_prompt = build_function_calling_system_prompt(
-                target_agent.persona, [], ""
+                target_agent.persona,
+                [],
+                "",
+                critical_confirm_enabled=crit_on,
+                study_professor_mode=_ls_del().study_professor_mode,
             )
-            # Sem passar history grande para o delegado para economizar contexto e manter o escopo, 
+            # Sem passar history grande para o delegado para economizar contexto e manter o escopo,
             # apenas a query enviada.
             try:
                 ans = self.llm.chat(system_prompt=sys_prompt, messages=[{"role": "user", "content": query}])
@@ -686,12 +804,12 @@ class AgentOrchestrator:
         if enable:
             try:
                 self.live_service = GeminiLiveService(
-                    api_key=api_key, 
+                    api_key=api_key,
                     tool_registry=self.tools,
                     visualizer=self.tools._find_tool("visualizer_control") # Tenta vincular o visualizer
                 )
                 self.is_live_mode = True
-                
+
                 # Inicia o loop do Live em uma thread separada para não travar o app
                 def run_live():
                     loop = asyncio.new_event_loop()
@@ -700,7 +818,7 @@ class AgentOrchestrator:
 
                 self._live_thread = threading.Thread(target=run_live, daemon=True)
                 self._live_thread.start()
-                
+
                 return "Modo Live ativado, Sir. A partir de agora estou ouvindo você em tempo real."
             except Exception as e:
                 self.is_live_mode = False

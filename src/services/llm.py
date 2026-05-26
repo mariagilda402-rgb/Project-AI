@@ -10,6 +10,7 @@ from google import genai
 from google.genai import types
 from openai import OpenAI
 from src.services.rate_limit import SlidingWindowRateLimiter
+from src.telemetry.events import log_event
 
 logger = logging.getLogger(__name__)
 
@@ -45,13 +46,13 @@ def sleep_before_gemini_retry(exc: BaseException, failed_attempt: int) -> None:
     if "GenerateRequestsPerDay" in text:
         logger.error("Cota DIÁRIA do Gemini excedida! Abortando tentativas.")
         raise Exception("Cota diária do Gemini excedida.")
-        
+
     if gemini_error_looks_transient(exc):
         # Como temos rotação, esperamos pouco: 1s, 2s, 4s...
         delay = min(10.0, 1.0 * (2 ** (failed_attempt - 1)))
     else:
         delay = min(2.0, 0.5 * (2 ** (failed_attempt - 1)))
-    
+
     logger.debug("Gemini: Rotação rápida em %.1fs...", delay)
     time.sleep(delay)
 
@@ -78,10 +79,12 @@ class LLMService:
         primary_llm_provider: str = "gemini",
         http_timeout: float = 180.0,
         fallback_gemini: bool = False,
+        runtime_status: Any | None = None,
     ) -> None:
         self.primary_llm_provider = primary_llm_provider
         self.fallback_gemini = fallback_gemini
         self._http_timeout = max(30.0, min(600.0, http_timeout))
+        self._runtime_status = runtime_status
 
         # Rotação de chaves Gemini com Cooldown
         self.gemini_keys = []
@@ -94,7 +97,7 @@ class LLMService:
                     'client': genai.Client(api_key=val),
                     'blocked_until': 0.0
                 })
-        
+
         self.openrouter_client = (
             OpenAI(
                 api_key=openrouter_api_key,
@@ -145,7 +148,7 @@ class LLMService:
 
         self.current_key_idx = 0
         self.gemini_model = gemini_model
-        
+
         # Ajusta RPM total baseado no número de chaves (ex: 12 RPM por chave para segurança)
         total_rpm = max(10, len(self.gemini_keys) * 12)
         self.gemini_limiter = SlidingWindowRateLimiter(max_requests_per_minute=total_rpm)
@@ -154,26 +157,48 @@ class LLMService:
     def _get_active_gemini_client(self):
         """Busca a próxima chave que não está em cooldown."""
         now = time.time()
-        for i in range(len(self.gemini_keys)):
+
+        # 1. Tenta achar uma chave que não está bloqueada
+        for _ in range(len(self.gemini_keys)):
             candidate = self.gemini_keys[self.current_key_idx]
             idx_usado = self.current_key_idx
             self.current_key_idx = (self.current_key_idx + 1) % len(self.gemini_keys)
-            
-            if now > candidate['blocked_until']:
+
+            if now >= candidate['blocked_until']:
                 logger.info(f"[Gemini] Utilizando Chave #{idx_usado}")
                 return candidate['client']
-        
-        # Se todas estiverem bloqueadas
-        logger.warning("Todas as chaves Gemini em cooldown. Respiro de 1s...")
-        time.sleep(1)
-        return self.gemini_keys[0]['client']
+
+        # 2. Se todas estiverem bloqueadas, descobrimos qual é a que vai expirar primeiro
+        next_available_idx = 0
+        min_blocked_until = self.gemini_keys[0]['blocked_until']
+        for idx, key_data in enumerate(self.gemini_keys):
+            if key_data['blocked_until'] < min_blocked_until:
+                min_blocked_until = key_data['blocked_until']
+                next_available_idx = idx
+
+        # Calcula quanto tempo precisamos esperar de verdade
+        sleep_time = max(0.1, min_blocked_until - now)
+        # Capa o sleep para no máximo 5 segundos para não travar totalmente
+        sleep_time = min(5.0, sleep_time)
+
+        logger.warning(f"Todas as chaves Gemini em cooldown. Aguardando {sleep_time:.1f}s para liberar chave #{next_available_idx}...")
+        time.sleep(sleep_time)
+
+        # Atualiza o índice para usar essa chave que esperou
+        self.current_key_idx = (next_available_idx + 1) % len(self.gemini_keys)
+        logger.info(f"[Gemini] Utilizando Chave #{next_available_idx} após cooldown.")
+        return self.gemini_keys[next_available_idx]['client']
 
     def _mark_key_as_blocked(self):
-        """Marca a chave atual como bloqueada por 30 segundos."""
+        """Marca a chave atual como bloqueada por tempo proporcional ao número de chaves."""
         # A chave usada foi a anterior à current_key_idx devido ao incremento
         idx = (self.current_key_idx - 1) % len(self.gemini_keys)
-        self.gemini_keys[idx]['blocked_until'] = time.time() + 30.0
-        logger.error(f"Chave Gemini {idx} bloqueada por 30s devido a Rate Limit.")
+
+        # Se tiver poucas chaves, o cooldown é menor para não congelar a aplicação
+        cooldown = 3.0 if len(self.gemini_keys) == 1 else (10.0 if len(self.gemini_keys) == 2 else 30.0)
+
+        self.gemini_keys[idx]['blocked_until'] = time.time() + cooldown
+        logger.error(f"Chave Gemini {idx} bloqueada por {cooldown}s devido a Rate Limit.")
 
     def change_provider(self, new_provider: str, model_name: str = "") -> str:
         """Alterna o provedor de LLM em tempo de execução (hot-swap)."""
@@ -181,9 +206,9 @@ class LLMService:
         p = new_provider.lower().strip()
         if p not in valid_providers:
             return f"Provedor inválido. Opções: {valid_providers}"
-            
+
         self.primary_llm_provider = p
-        
+
         # Opcional: Atualiza o modelo específico do provedor
         if model_name:
             if p == "gemini": self.gemini_model = model_name
@@ -191,7 +216,7 @@ class LLMService:
             elif p == "nvidia": self.nvidia_model = model_name
             elif p == "groq": self.groq_model = model_name
             elif p == "ollama": self.ollama_model = model_name
-            
+
         return f"Provedor alterado para {p}" + (f" (modelo: {model_name})" if model_name else "")
 
     def wants_gemini_native_tools(self) -> bool:
@@ -214,6 +239,21 @@ class LLMService:
         """
         return False
 
+    def _provider_has_backend(self, provider: str) -> bool:
+        """True apenas se o cliente HTTP/modelo estiver configurado (evita ordem fantasma)."""
+        p = (provider or "").strip().lower()
+        if p == "gemini":
+            return len(self.gemini_keys) > 0
+        if p == "openrouter":
+            return self.openrouter_client is not None and bool((self.openrouter_model or "").strip())
+        if p == "nvidia":
+            return self.nvidia_client is not None and bool((self.nvidia_model or "").strip())
+        if p == "groq":
+            return self.groq_client is not None and bool((self.groq_model or "").strip())
+        if p == "ollama":
+            return self.ollama_client is not None and bool((self.ollama_model or "").strip())
+        return False
+
     def _chat_provider_order(self, skip_gemini: bool) -> list[str]:
         all_p = ["gemini", "openrouter", "nvidia", "groq", "ollama"]
         primary = self.primary_llm_provider
@@ -225,12 +265,12 @@ class LLMService:
         elif primary != "gemini" and not self.fallback_gemini:
             # Evita gastar cota Gemini quando o usuario escolheu outro provedor principal.
             order = [p for p in order if p != "gemini"]
-        return order
+        return [p for p in order if self._provider_has_backend(p)]
 
     def _sleep_before_gemini_retry(self, exc: BaseException, failed_attempt: int) -> None:
         sleep_before_gemini_retry(exc, failed_attempt)
 
-    def chat_with_functions(
+    def chat_with_functions_stream(
         self,
         system_instruction: str,
         messages: list[dict[str, str]],
@@ -238,39 +278,30 @@ class LLMService:
         on_function_call: Callable[[str, dict[str, Any]], str],
         max_rounds: int = 8,
         force_tool: bool = False,
-    ) -> str:
-        """
-        Loop Gemini com function calling nativo. Executa callbacks locais e devolve texto final.
-        """
+    ):
+        """Versão com stream. Retorna um gerador de strings."""
         if not self.gemini_keys or not tools:
-            return ""
+            return
         contents = self._messages_to_gemini_contents(messages)
         if not contents:
-            return ""
+            return
 
         mode = types.FunctionCallingConfigMode.ANY if force_tool else types.FunctionCallingConfigMode.AUTO
-
         config = types.GenerateContentConfig(
             system_instruction=system_instruction.strip(),
             tools=tools,
-            tool_config=types.ToolConfig(
-                function_calling_config=types.FunctionCallingConfig(
-                    mode=mode,
-                )
-            ),
+            tool_config=types.ToolConfig(function_calling_config=types.FunctionCallingConfig(mode=mode)),
         )
         self.last_provider = "gemini"
         self.last_model = self.gemini_model
 
-        last_text = ""
         total_attempts = self.gemini_retry_attempts * len(self.gemini_keys)
 
         for _ in range(max_rounds):
             resp = None
             for attempt in range(1, total_attempts + 1):
                 client = self._get_active_gemini_client()
-                if not client: break
-                
+                if not client: return
                 try:
                     self.gemini_limiter.wait_for_slot()
                     resp = client.models.generate_content(
@@ -282,10 +313,15 @@ class LLMService:
                 except Exception as exc:
                     if "429" in str(exc) or "RESOURCE_EXHAUSTED" in str(exc):
                         self._mark_key_as_blocked()
+                        if attempt == total_attempts:
+                            print(f"\\n[Erro Crítico Gemini] Todas as tentativas falharam (Rate Limit): {exc}")
+                            return
                         continue
-                    if attempt == total_attempts: break
+                    if attempt == total_attempts:
+                        print(f"\\n[Erro Crítico Gemini] Falha ao conectar com a API: {exc}")
+                        return
                     self._sleep_before_gemini_retry(exc, attempt)
-            
+
             if not resp or not resp.candidates:
                 break
             cand = resp.candidates[0]
@@ -293,13 +329,8 @@ class LLMService:
                 break
             parts = list(cand.content.parts)
             contents.append(cand.content)
-            function_calls: list[types.FunctionCall] = []
-            text_chunks: list[str] = []
-            for part in parts:
-                if part.function_call:
-                    function_calls.append(part.function_call)
-                if part.text:
-                    text_chunks.append(part.text)
+
+            function_calls = [p.function_call for p in parts if p.function_call]
             if function_calls:
                 fr_parts: list[types.Part] = []
                 for fc in function_calls:
@@ -308,28 +339,27 @@ class LLMService:
                     try:
                         out = on_function_call(fc.name or "", args)
                     except Exception as exc:
-                        logger.warning("Tool %s falhou: %s", fc.name, exc)
                         out = f"Erro ao executar {fc.name}: {exc}"
-                    fr_parts.append(
-                        types.Part(
-                            function_response=types.FunctionResponse(
-                                id=fc.id,
-                                name=fc.name,
-                                response={"output": out},
-                            )
-                        )
-                    )
+                    fr_parts.append(types.Part(function_response=types.FunctionResponse(id=fc.id, name=fc.name, response={"output": out})))
                 contents.append(types.Content(role="user", parts=fr_parts))
                 continue
-            last_text = "".join(text_chunks).strip()
+
+            # Final round: return the text stream using generate_content_stream
+            # Wait, we already have the text in `parts`. Since we used generate_content (blocking), we have the full text.
+            # To stream the text, we would need to call generate_content_stream initially, but tools don't work well with stream.
+            # We will just yield the text in chunks here to simulate the generator, or better, we can invoke generate_content_stream for the final call.
+            # But we already made the API call! If we want true streaming, we must use `generate_content_stream` instead of `generate_content` above.
+            for p in parts:
+                if p.text:
+                    yield p.text
             break
-        else:
-            if not last_text:
-                last_text = (
-                    "Limite de rodadas com ferramentas atingido. "
-                    "Tente simplificar o pedido."
-                )
-        return last_text
+
+    def chat_with_functions(self, *args, **kwargs) -> str:
+        # Retro-compatibilidade
+        res = ""
+        for chunk in self.chat_with_functions_stream(*args, **kwargs):
+            if chunk: res += chunk
+        return res
 
     def chat_with_openai_tools(
         self,
@@ -446,12 +476,12 @@ class LLMService:
     ) -> types.GenerateContentResponse | None:
         # Multiplica tentativas pelo numero de chaves para garantir cobertura
         total_attempts = self.gemini_retry_attempts * len(self.gemini_keys)
-        
+
         for attempt in range(1, total_attempts + 1):
             client = self._get_active_gemini_client()
             if not client:
                 return None
-                
+
             try:
                 self.gemini_limiter.wait_for_slot()
                 return client.models.generate_content(
@@ -463,7 +493,7 @@ class LLMService:
                 if "Cota diária" in str(exc):
                     logger.error("Cota diária abortando chamada de tool.")
                     return None
-                
+
                 # Se for erro de rate limit, bloqueia a chave específica
                 if "429" in str(exc) or "RESOURCE_EXHAUSTED" in str(exc):
                     self._mark_key_as_blocked()
@@ -567,7 +597,9 @@ class LLMService:
                 "Chat: ordem %s (Gemini omitido nesta rodada).",
                 order,
             )
+        failed: list[str] = []
         for provider in order:
+            result = ""
             if provider == "gemini":
                 result = self._try_gemini(system_prompt, messages)
                 if result:
@@ -589,17 +621,98 @@ class LLMService:
                 if result:
                     self.last_provider, self.last_model = "nvidia", self.nvidia_model
             if result:
+                if failed:
+                    log_event(
+                        "llm_provider_recovered",
+                        {"after_failures": failed, "used": provider},
+                    )
+                if self._runtime_status:
+                    self._runtime_status.clear_llm_error()
                 return result
+            failed.append(provider)
+            log_event("llm_provider_fail", {"provider": provider})
+
+        if not order and has_backend:
+            log_event("llm_no_route", {"skip_gemini": skip_gemini})
+            if self._runtime_status:
+                self._runtime_status.set_llm_error(
+                    "Nenhum provedor disponível nesta rota (ex.: skip_gemini sem fallback)."
+                )
+            return (
+                "Não há provedor LLM disponível para esta tentativa (ordem vazia). "
+                "Verifique chaves no .env ou desative skip_gemini."
+            )
 
         if not has_backend:
+            if self._runtime_status:
+                self._runtime_status.set_llm_error("Nenhuma LLM configurada.")
             return (
                 "Nenhuma LLM cloud configurada. Defina LLM_PROVIDER e a chave do provedor "
                 "(GEMINI_API_KEY, OPENROUTER_API_KEY, NVIDIA_API_KEY ou GROQ_API_KEY)."
             )
+        err_detail = ", ".join(failed) if failed else "nenhuma rota"
+        if self._runtime_status:
+            self._runtime_status.set_llm_error(f"Todas falharam: {err_detail}")
         return (
             "As LLMs configuradas falharam (rede, cota, modelo ou erro da API). "
             "Veja mensagens [llm] no terminal ou defina logging.basicConfig(level=logging.WARNING)."
         )
+
+    def chat_stream(
+        self,
+        system_prompt: str,
+        messages: list[dict[str, str]],
+        *,
+        skip_gemini: bool = False,
+    ):
+        """Versão de chat com stream (generator). Retorna iterador de strings."""
+        has_backend = bool(
+            len(self.gemini_keys) > 0
+            or self.openrouter_client
+            or self.nvidia_client
+            or self.groq_client
+            or self.ollama_client
+        )
+        order = self._chat_provider_order(skip_gemini)
+
+        # Apenas tenta o Gemini para stream por enquanto
+        for provider in order:
+            if provider == "gemini":
+                prompt = self._to_single_prompt(system_prompt, messages)
+                total_attempts = self.gemini_retry_attempts * len(self.gemini_keys)
+                for attempt in range(1, total_attempts + 1):
+                    client = self._get_active_gemini_client()
+                    if not client: yield ""; return
+                    try:
+                        self.gemini_limiter.wait_for_slot()
+                        resp_stream = client.models.generate_content_stream(
+                            model=self.gemini_model,
+                            contents=prompt,
+                        )
+                        self.last_provider, self.last_model = "gemini", self.gemini_model
+                        for chunk in resp_stream:
+                            if chunk.text:
+                                yield chunk.text
+                        return
+                    except Exception as exc:
+                        if "429" in str(exc) or "RESOURCE_EXHAUSTED" in str(exc):
+                            self._mark_key_as_blocked()
+                            continue
+                        if attempt == total_attempts:
+                            print(f"\\n[Erro Crítico Gemini] Stream falhou: {exc}")
+                            yield ""
+                            return
+                        try:
+                            self._sleep_before_gemini_retry(exc, attempt)
+                        except Exception:
+                            yield ""; return
+
+            # Se cair em outros providers, cai no fallback iterando sobre a string (fake stream rápido)
+            else:
+                res = self.chat(system_prompt, messages, skip_gemini=skip_gemini)
+                for chunk in res.split(" "):
+                    yield chunk + " "
+                return
 
     def _try_gemini(self, system_prompt: str, messages: list[dict[str, str]]) -> str:
         prompt = self._to_single_prompt(system_prompt, messages)
@@ -609,7 +722,7 @@ class LLMService:
             client = self._get_active_gemini_client()
             if not client:
                 return ""
-                
+
             try:
                 self.gemini_limiter.wait_for_slot()
                 resp = client.models.generate_content(
@@ -619,7 +732,7 @@ class LLMService:
                 return (resp.text or "").strip()
             except Exception as exc:
                 if "Cota diária" in str(exc): return ""
-                
+
                 if "429" in str(exc) or "RESOURCE_EXHAUSTED" in str(exc):
                     self._mark_key_as_blocked()
                     continue
@@ -644,7 +757,7 @@ class LLMService:
         """
         if not self.gemini_keys:
             return "chat"
-        
+
         client = self._get_active_gemini_client()
         prompt = (
             "Classifique a mensagem do usuario em exatamente UMA opcao.\n"
@@ -756,7 +869,7 @@ class LLMService:
             return []
 
         total_attempts = self.gemini_retry_attempts * len(self.gemini_keys)
-        
+
         for attempt in range(1, total_attempts + 1):
             client = self._get_active_gemini_client()
             if not client: break
@@ -776,7 +889,7 @@ class LLMService:
                 if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
                     self._mark_key_as_blocked()
                     continue
-                
+
                 if attempt == total_attempts: break
                 time.sleep(0.5)
         return []

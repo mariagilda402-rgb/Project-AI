@@ -28,7 +28,7 @@ def append_daily_log(entry: str) -> None:
         with open(path, "a", encoding="utf-8") as f:
             f.write(line)
     except Exception as e:
-        print(f"[Heartbeat] ⚠️ Falha ao salvar log diário: {e}")
+        print(f"[Heartbeat] [AVISO] Falha ao salvar log diário: {e}")
 
 
 def read_recent_logs(max_lines: int = 50) -> str:
@@ -82,11 +82,11 @@ class HeartbeatService:
             target=self._loop, daemon=True, name="HeartbeatService"
         )
         self._thread.start()
-        print(f"[Heartbeat] ✅ Iniciado (intervalo: {self.interval_minutes}min)")
+        print(f"[Heartbeat] OK - Iniciado (intervalo: {self.interval_minutes}min)")
 
     def stop(self) -> None:
         self._running = False
-        print("[Heartbeat] 🔴 Parado")
+        print("[Heartbeat] Parado")
 
     def _loop(self) -> None:
         while self._running:
@@ -97,7 +97,7 @@ class HeartbeatService:
                 self._run_consolidation()
                 cleanup_old_logs()
             except Exception as e:
-                print(f"[Heartbeat] ⚠️ Erro no loop: {e}")
+                print(f"[Heartbeat] [AVISO] Erro no loop: {e}")
                 time.sleep(30)
 
     def _run_consolidation(self) -> None:
@@ -147,7 +147,7 @@ class HeartbeatService:
                     print(f"[Heartbeat] 💾 Memória consolidada: {list(data.keys())}")
 
         except Exception as e:
-            print(f"[Heartbeat] ⚠️ Consolidação falhou: {e}")
+            print(f"[Heartbeat] [AVISO] Consolidação falhou: {e}")
 
     def force_consolidation(self) -> str:
         """Força uma consolidação imediata (para uso manual)."""

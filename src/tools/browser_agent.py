@@ -187,7 +187,7 @@ class BrowserAgentTool(BaseTool):
                     if match:
                         try:
                             action_obj = json.loads(match.group(0))
-                        except:
+                        except Exception:
                             pass
                 
                 if not action_obj or not isinstance(action_obj, dict):

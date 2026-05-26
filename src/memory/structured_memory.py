@@ -152,7 +152,7 @@ def format_memory_for_prompt(memory: dict | None = None) -> str:
     prefs = memory.get("preferences", {})
     if prefs:
         lines.append("")
-        lines.append("Preferencias:")
+        lines.append("Preferências:")
         for key, entry in list(prefs.items())[:15]:
             val = entry.get("value") if isinstance(entry, dict) else entry
             if val:

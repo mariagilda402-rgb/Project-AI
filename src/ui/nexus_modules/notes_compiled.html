@@ -1,0 +1,1069 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Nexus · MindPalace</title>
+  <style>
+    @keyframes slideIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+    @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+    @keyframes pulse { 0%,100% { opacity:0.4; } 50% { opacity:1; } }
+    @keyframes zenIn { from { opacity:0; transform:scale(0.98); } to { opacity:1; transform:scale(1); } }
+
+    #nx-app-wrapper .nx-chrome-inner > header { padding:14px 24px !important; display:none; }
+    #nx-app-wrapper .nx-chrome-inner > main { padding:0 !important; height: 100vh; display:flex; flex-direction:column; overflow: hidden; }
+
+    .notes-layout { display:flex; height:100%; width:100%; overflow:hidden; }
+
+    /* ─── Sidebar ─── */
+    .sidebar {
+      width: 260px; min-width: 260px; background: rgba(0, 0, 0, 0.12);
+      border-right: 1px solid rgba(255,255,255,0.06); overflow-y: auto;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      display: flex; flex-direction: column;
+    }
+    .sidebar.collapsed { width: 0; min-width: 0; padding: 0; border: none; opacity: 0; overflow: hidden; }
+
+    .sidebar-top { padding: 16px 14px 0; }
+    .sidebar-scroll { flex: 1; overflow-y: auto; padding: 0 14px 16px; }
+
+    .sidebar-search {
+      width: 100%; padding: 9px 12px; border-radius: 8px;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06);
+      color: var(--text); font-size: 13px; outline: none; margin-bottom: 12px;
+      transition: border-color 0.2s;
+    }
+    .sidebar-search:focus { border-color: rgba(139,92,246,0.4); }
+    .sidebar-search::placeholder { color: rgba(255,255,255,0.2); }
+
+    .sidebar-title { font-size: 10px; color: var(--text-dim); text-transform: uppercase; font-weight: 700; margin: 14px 0 6px 4px; letter-spacing: 0.8px; }
+
+    .sidebar-action-btn {
+      width: 100%; text-align: left; background: transparent; border: none; padding: 7px 8px;
+      color: var(--text-dim); font-size: 13px; font-weight: 500; border-radius: 6px; cursor: pointer;
+      display: flex; align-items: center; gap: 8px; transition: all 0.15s;
+    }
+    .sidebar-action-btn:hover { background: rgba(255,255,255,0.06); color: var(--text); }
+
+    .sidebar-actions-row { display: flex; gap: 4px; margin-bottom: 12px; }
+    .sidebar-actions-row .sidebar-action-btn { flex: 1; justify-content: center; font-size: 12px; padding: 8px 4px; }
+
+    /* View Toggle */
+    .view-toggle { display: flex; gap: 2px; margin-bottom: 12px; padding: 3px; background: rgba(255,255,255,0.03); border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); }
+    .view-toggle-btn {
+      flex: 1; padding: 5px; border: none; border-radius: 6px; background: transparent;
+      color: var(--text-dim); font-size: 12px; cursor: pointer; transition: all 0.2s; text-align: center;
+    }
+    .view-toggle-btn.active { background: rgba(139,92,246,0.15); color: #a78bfa; }
+    .view-toggle-btn:hover:not(.active) { background: rgba(255,255,255,0.04); }
+
+    .subject-rail { display: flex; flex-direction: column; gap: 1px; margin-bottom: 12px; }
+    .subject-chip {
+      background: transparent; border: none; padding: 6px 8px; border-radius: 6px;
+      color: var(--text-dim); font-size: 12px; text-align: left; cursor: pointer; transition: 0.15s;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .subject-chip:hover { background: rgba(255,255,255,0.04); color: var(--text); }
+    .subject-chip.active { background: rgba(139,92,246,0.1); color: #a78bfa; font-weight: 500; }
+    .subject-chip .count { font-size: 10px; opacity: 0.5; }
+
+    .tags-rail { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 12px; }
+    .tag-chip {
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); padding: 3px 8px; border-radius: 12px;
+      color: var(--text-dim); font-size: 10px; cursor: pointer; transition: 0.15s;
+    }
+    .tag-chip:hover { background: rgba(255,255,255,0.08); color: var(--text); }
+    .tag-chip.active { background: rgba(139,92,246,0.2); color: #a78bfa; border-color: rgba(139,92,246,0.3); }
+
+    .note-btn {
+      width: 100%; padding: 8px 8px; border: none; border-radius: 6px; background: transparent;
+      color: var(--text-dim); font-size: 12px; cursor: pointer; text-align: left;
+      transition: all 0.15s; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 1px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .note-btn:hover { background: rgba(255,255,255,0.04); color: var(--text); }
+    .note-btn.active { background: rgba(139,92,246,0.1); color: var(--text); font-weight: 500; }
+    .note-btn-icon { font-size: 11px; }
+    .note-btn-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+
+    .nav-group-title { font-size: 9px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-dim); opacity: 0.5; margin: 10px 0 4px 4px; }
+
+    /* ─── Editor Area ─── */
+    .editor-area { flex: 1; display: flex; flex-direction: column; background: var(--bg-panel); overflow: hidden; position: relative; }
+
+    /* Top Tabs */
+    .affine-tabs {
+      display: flex; align-items: flex-end; padding: 6px 12px 0; background: rgba(0,0,0,0.12);
+      border-bottom: 1px solid rgba(255,255,255,0.04); min-height: 36px; gap: 2px; overflow-x: auto;
+    }
+    .icon-btn {
+      background: transparent; border: none; color: var(--text-dim); font-size: 15px; cursor: pointer;
+      padding: 5px 8px; border-radius: 6px; transition: 0.15s; display: flex; align-items: center; justify-content: center;
+    }
+    .icon-btn:hover { background: rgba(255,255,255,0.08); color: var(--text); }
+
+    .affine-tab {
+      display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px;
+      border-radius: 6px 6px 0 0; background: rgba(255,255,255,0.02); color: var(--text-dim);
+      font-size: 11px; cursor: pointer; border: 1px solid transparent; border-bottom: none;
+      max-width: 160px; position: relative;
+    }
+    .affine-tab:hover { background: rgba(255,255,255,0.04); }
+    .affine-tab.active { background: var(--bg-panel); color: var(--text); font-weight: 500; border-color: rgba(255,255,255,0.04); }
+    .affine-tab.active::after { content: ""; position: absolute; bottom: -1px; left: 0; right: 0; height: 1px; background: var(--bg-panel); }
+    .affine-tab-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border:none; background:transparent; color:inherit; font:inherit; cursor:pointer; padding:0; }
+    .affine-tab-close { border: none; background: transparent; color: inherit; opacity: 0.3; font-size: 12px; cursor: pointer; padding: 0 2px; line-height: 1; border-radius: 3px; }
+    .affine-tab-close:hover { opacity: 1; background: rgba(255,255,255,0.1); }
+
+    /* Editor Scroll */
+    .editor-scroll { flex: 1; overflow-y: auto; display: flex; flex-direction: column; position: relative; }
+    .editor-content-wrapper { padding: 36px 12%; position: relative; display: flex; flex-direction: column; flex: 1; max-width: 100%; }
+
+    /* Page Cover & Icon */
+    .page-cover { width: 100%; height: 180px; background-size: cover; background-position: center; background-color: rgba(0,0,0,0.15); display: none; }
+    .page-cover.active { display: block; }
+    .page-icon { font-size: 56px; margin-top: -28px; margin-bottom: 12px; display: none; filter: drop-shadow(0 3px 6px rgba(0,0,0,0.4)); }
+    .page-icon.active { display: block; }
+
+    /* Editor Header */
+    .editor-header { position: relative; margin-bottom: 20px; display:flex; flex-direction:column; gap: 6px; }
+    .editor-header input#nt {
+      background: transparent; border: none; font-size: 34px !important; font-weight: 800 !important;
+      color: var(--text); padding: 0 !important; width: 100%; outline: none; font-family: inherit;
+      letter-spacing: -0.02em;
+    }
+    .editor-header input#nt::placeholder { color: rgba(255,255,255,0.12); }
+
+    .editor-meta { display: flex; align-items: center; gap: 10px; }
+    .editor-meta input#ns {
+      background: transparent; border: none; font-size: 12px !important; color: var(--text-dim);
+      padding: 0 !important; width: 100px; outline: none; border-bottom: 1px dashed rgba(255,255,255,0.1);
+    }
+    .star-btn { font-size: 14px; color: var(--text-dim); opacity: 0.4; background: transparent; border: none; cursor: pointer; transition: 0.2s; padding: 0; }
+    .star-btn:hover { opacity: 1; color: var(--text); }
+    .star-btn.is-fav { color: #facc15; opacity: 1; text-shadow: 0 0 8px rgba(250,204,21,0.3); }
+
+    /* Save Indicator (Cloud Icon) */
+    .save-indicator {
+      display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--text-dim);
+      opacity: 0.5; transition: all 0.3s; margin-left: auto;
+    }
+    .save-indicator .save-icon { font-size: 13px; }
+    .save-indicator.saving .save-icon { animation: pulse 1s infinite; }
+    .save-indicator.saved { color: #10b981; opacity: 0.7; }
+    .save-indicator.error { color: #ef4444; opacity: 1; }
+
+    /* Color Picker */
+    .color-picker-row { display: flex; gap: 4px; margin-left: 6px; }
+    .color-dot {
+      width: 14px; height: 14px; border-radius: 50%; cursor: pointer; border: 2px solid transparent;
+      transition: all 0.2s; opacity: 0.6;
+    }
+    .color-dot:hover { opacity: 1; transform: scale(1.2); }
+    .color-dot.active { border-color: var(--text); opacity: 1; }
+
+    /* Action Menu */
+    .action-menu-container { position: absolute; top: 36px; right: 36px; z-index: 50; }
+    .action-menu-btn {
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06); color: var(--text-dim);
+      font-size: 16px; cursor: pointer; border-radius: 8px; padding: 6px 10px; transition: 0.15s;
+    }
+    .action-menu-btn:hover { background: rgba(255,255,255,0.08); color: var(--text); }
+    .action-dropdown {
+      position: absolute; right: 0; top: 100%; margin-top: 6px; background: rgba(18,18,22,0.96);
+      backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px;
+      padding: 6px; width: 200px; box-shadow: 0 12px 30px rgba(0,0,0,0.5); z-index: 100;
+      opacity: 0; pointer-events: none; transform: translateY(-8px); transition: all 0.2s;
+    }
+    .action-dropdown.show { opacity: 1; pointer-events: auto; transform: translateY(0); }
+    .action-dropdown button { width: 100%; text-align: left; background: transparent; border: none; padding: 7px 10px; color: var(--text); font-size: 12px; border-radius: 6px; cursor: pointer; transition: 0.15s; }
+    .action-dropdown button:hover { background: rgba(255,255,255,0.06); }
+    .action-dropdown hr { border: none; border-top: 1px solid rgba(255,255,255,0.05); margin: 4px 0; }
+
+    /* Slash Menu */
+    .slash-menu {
+      position: absolute; background: rgba(18, 18, 22, 0.95); backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 12px; width: 240px; box-shadow: 0 16px 40px rgba(0,0,0,0.5); z-index: 200;
+      display: none; padding: 6px; transform: translate(-50%, -50%); top: 50%; left: 50%;
+    }
+    .slash-menu-title { font-size: 9px; color: var(--text-dim); text-transform: uppercase; padding: 4px 10px; margin-bottom: 2px; letter-spacing: 1px; font-weight: 700; }
+    .slash-btn {
+      width: 100%; text-align: left; background: transparent; border: none; padding: 8px 10px;
+      color: var(--text); font-size: 12px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 10px; transition: all 0.15s;
+    }
+    .slash-btn:hover { background: rgba(139,92,246,0.12); color: #fff; }
+    .slash-btn span { font-size: 14px; width: 22px; text-align: center; }
+
+    /* Floating Toolbar (WYSIWYG) */
+    .floating-toolbar {
+      position: absolute; z-index: 300; display: none; padding: 4px 6px;
+      background: rgba(18,18,22,0.96); backdrop-filter: blur(14px);
+      border: 1px solid rgba(255,255,255,0.1); border-radius: 10px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5); gap: 2px;
+      animation: fadeIn 0.15s ease;
+    }
+    .floating-toolbar.active { display: flex; }
+    .ft-btn {
+      width: 30px; height: 30px; border: none; border-radius: 6px; background: transparent;
+      color: var(--text-dim); font-size: 13px; font-weight: 700; cursor: pointer;
+      display: grid; place-items: center; transition: all 0.15s;
+    }
+    .ft-btn:hover { background: rgba(139,92,246,0.15); color: #a78bfa; }
+    .ft-sep { width: 1px; height: 20px; background: rgba(255,255,255,0.08); align-self: center; margin: 0 2px; }
+
+    /* Editor Surface */
+    .editor-surface { display: grid; grid-template-columns: 1fr 1fr 180px; gap: 20px; flex: 1; align-items: start; }
+    #nc {
+      background: transparent; border: none; font-size: 15px !important; color: var(--text);
+      line-height: 1.7 !important; width: 100%; outline: none; resize: none; min-height: 50vh;
+      font-family: inherit !important; padding: 0 !important;
+    }
+    #nc::placeholder { color: rgba(255,255,255,0.12); }
+
+    /* Preview */
+    .note-preview {
+      font-size: 14px; line-height: 1.7; color: var(--text-dim); padding: 0 16px;
+      border-left: 1px solid rgba(255,255,255,0.04); min-height: 50vh;
+    }
+    .note-preview h1 { font-size: 1.8em; font-weight: 800; color: var(--text); margin: 8px 0 12px; line-height: 1.2; letter-spacing: -0.02em; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 8px; }
+    .note-preview h2 { font-size: 1.4em; font-weight: 700; color: var(--text); margin: 6px 0 10px; line-height: 1.25; }
+    .note-preview h3 { font-size: 1.15em; font-weight: 600; color: var(--text); margin: 4px 0 8px; line-height: 1.3; opacity: 0.9; }
+    .note-preview h4 { font-size: 1em; font-weight: 600; color: var(--text-dim); margin: 4px 0 6px; text-transform: uppercase; letter-spacing: 0.03em; font-size: 0.85em; }
+    .note-preview img { max-width: 100%; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); margin: 10px 0; }
+    .note-preview blockquote { border-left: 3px solid #8b5cf6; padding: 8px 14px; margin: 8px 0; background: rgba(139,92,246,0.05); border-radius: 0 6px 6px 0; color: var(--text); font-style: italic; }
+    .note-preview code { background: rgba(255,255,255,0.06); padding: 2px 6px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 0.9em; }
+    .note-preview strong { color: var(--text); }
+    .note-preview em { opacity: 0.85; }
+    .note-preview p { margin: 4px 0; }
+    .note-preview ul, .note-preview ol { padding-left: 20px; margin: 4px 0; }
+    .note-preview li { margin: 2px 0; }
+    .note-preview hr { border: none; border-top: 1px solid rgba(255,255,255,0.06); margin: 16px 0; }
+
+    /* TOC */
+    .toc-panel { border-left: 1px solid rgba(255,255,255,0.04); padding-left: 14px; position: sticky; top: 0; max-height: 70vh; overflow-y: auto; }
+    .toc-title { font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; font-weight: 700; }
+    .toc-item { font-size: 11px; color: var(--text-dim); cursor: pointer; margin-bottom: 6px; display: block; text-decoration: none; transition: 0.15s; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .toc-item:hover { color: #a78bfa; }
+    .toc-item.level-2 { padding-left: 8px; font-size: 10.5px; }
+    .toc-item.level-3 { padding-left: 16px; font-size: 10px; opacity: 0.7; }
+    .toc-item.level-4 { padding-left: 24px; font-size: 9.5px; opacity: 0.5; }
+
+    /* Panels */
+    .floating-panel { margin-bottom: 20px; padding: 14px; border-radius: 10px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); }
+    .floating-panel[hidden] { display: none !important; }
+    .floating-panel-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-dim); margin-bottom: 10px; display: flex; justify-content: space-between; font-weight: 600; }
+    .floating-panel input, .floating-panel textarea {
+      width: 100%; background: rgba(0,0,0,0.2) !important; border: 1px solid rgba(255,255,255,0.05) !important;
+      padding: 8px 12px !important; border-radius: 6px !important; color: var(--text) !important;
+      font-size: 13px !important; margin-bottom: 6px; outline: none;
+    }
+
+    .btn-action { background: rgba(139,92,246,0.1); color: #a78bfa; border: 1px solid rgba(139,92,246,0.2); padding: 6px 12px; border-radius: 6px; font-size: 11px; cursor: pointer; transition: 0.15s; font-weight: 600; }
+    .btn-action:hover { background: rgba(139,92,246,0.2); }
+
+    /* Receipts */
+    #nx-app-wrapper .command-receipt {
+      position: fixed; bottom: 20px; right: 20px; z-index: 1000;
+      background: rgba(18,18,22,0.95); backdrop-filter: blur(12px);
+      border: 1px solid rgba(255,255,255,0.08); border-radius: 10px;
+      padding: 10px 14px; display: flex; align-items: center; gap: 10px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4); animation: slideIn 0.3s ease;
+    }
+    #nx-app-wrapper .command-receipt[hidden] { display: none !important; }
+    #nx-app-wrapper .receipt-main { font-size: 12px; font-weight: 600; color: var(--text); }
+    #nx-app-wrapper .receipt-meta { font-size: 10px; color: var(--text-dim); }
+
+    /* ─── Card Grid View ─── */
+    .cards-view { display: none; flex: 1; overflow-y: auto; padding: 24px; }
+    .cards-view.active { display: block; }
+    .cards-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 12px;
+    }
+    .note-card {
+      padding: 16px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.06);
+      background: rgba(255,255,255,0.02); cursor: pointer; transition: all 0.2s;
+      animation: slideIn 0.3s ease; min-height: 120px; display: flex; flex-direction: column;
+      position: relative; overflow: hidden;
+    }
+    .note-card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; border-radius: 12px 12px 0 0;
+    }
+    .note-card:hover { border-color: rgba(139,92,246,0.25); transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,0.2); }
+    .note-card-title { font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .note-card-preview { font-size: 11px; color: var(--text-dim); line-height: 1.5; flex: 1; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; }
+    .note-card-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; font-size: 10px; color: var(--text-dim); opacity: 0.6; }
+    .note-card-subject { background: rgba(139,92,246,0.1); color: #a78bfa; padding: 2px 6px; border-radius: 4px; font-size: 9px; font-weight: 600; }
+    .note-card-fav { position: absolute; top: 10px; right: 10px; font-size: 12px; color: #facc15; }
+
+    /* ─── Zen Mode ─── */
+    .zen-overlay {
+      position: fixed; inset: 0; z-index: 500; background: rgba(8,8,12,0.96);
+      display: none; flex-direction: column; align-items: center; justify-content: center;
+    }
+    .zen-overlay.active { display: flex; animation: zenIn 0.4s ease; }
+    .zen-editor-wrapper {
+      width: 100%; max-width: 680px; padding: 40px 30px; flex: 1; display: flex; flex-direction: column;
+    }
+    .zen-title {
+      background: transparent; border: none; font-size: 32px; font-weight: 800; color: var(--text);
+      padding: 0; width: 100%; outline: none; margin-bottom: 20px; letter-spacing: -0.02em;
+    }
+    .zen-title::placeholder { color: rgba(255,255,255,0.1); }
+    .zen-textarea {
+      background: transparent; border: none; font-size: 16px; color: var(--text); line-height: 1.8;
+      width: 100%; outline: none; resize: none; flex: 1; font-family: inherit;
+    }
+    .zen-textarea::placeholder { color: rgba(255,255,255,0.1); }
+    .zen-close {
+      position: fixed; top: 20px; right: 24px; background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.08); color: var(--text-dim); font-size: 13px;
+      padding: 8px 16px; border-radius: 8px; cursor: pointer; z-index: 501; transition: 0.2s;
+    }
+    .zen-close:hover { background: rgba(255,255,255,0.1); color: var(--text); }
+
+    @media (max-width: 1100px) {
+      .editor-surface { grid-template-columns: 1fr 1fr; }
+      .toc-panel { display: none; }
+    }
+    @media (max-width: 800px) {
+      .editor-surface { grid-template-columns: 1fr; }
+      .note-preview { border-left: none; border-top: 1px solid rgba(255,255,255,0.04); padding: 16px 0 0; }
+      .editor-content-wrapper { padding: 20px; }
+      .cards-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+    }
+  </style>
+<base href="file:///C:/Users/jamil/Documents/Projeto%20AI/src/ui/nexus_modules/"><script>window.__NEXUS_BOOT__={"module": "overview", "theme": "dark", "theme_preset": "dark-neon", "theme_name": "Dark Neon", "theme_tokens": {"--accent": "#8b5cf6", "--accent-glow": "rgba(139,92,246,0.30)", "--accent-hover": "#7c3aed", "--accent-subtle": "rgba(139,92,246,0.08)", "--bg": "#0a0a0a", "--bg-panel": "#111111", "--border": "rgba(255,255,255,0.08)", "--border-accent": "rgba(139,92,246,0.35)", "--muted": "#71717a", "--shadow": "0 0 25px rgba(0,0,0,0.80)", "--sidebar": "#080808", "--surface": "rgba(255,255,255,0.04)", "--surface-hover": "rgba(255,255,255,0.08)", "--text": "#e4e4e7", "--text-dim": "#71717a", "--text-muted": "#52525b"}, "section": "overview"};</script><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"><link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet"><link rel="stylesheet" href="nexus_frame.css" /><style>html, body { background: transparent !important; }</style></head>
+<body><div id="nx-app-wrapper" class="neon-enabled" data-theme="dark" data-theme-preset="dark-neon" style="--accent: #8b5cf6; --accent-glow: rgba(139,92,246,0.30); --accent-hover: #7c3aed; --accent-subtle: rgba(139,92,246,0.08); --bg: #0a0a0a; --bg-panel: #111111; --border: rgba(255,255,255,0.08); --border-accent: rgba(139,92,246,0.35); --muted: #71717a; --shadow: 0 0 25px rgba(0,0,0,0.80); --sidebar: #080808; --surface: rgba(255,255,255,0.04); --surface-hover: rgba(255,255,255,0.08); --text: #e4e4e7; --text-dim: #71717a; --text-muted: #52525b"><div class="nx-chrome-inner" style="border-radius: 0;">
+  <main>
+    <div class="command-receipt note-receipt" id="noteReceipt" hidden>
+      <div id="receiptIcon">✨</div>
+      <div>
+        <div class="receipt-main" id="receiptNoteTitle">Ação concluída</div>
+        <div class="receipt-meta" id="receiptNoteMeta">Detalhes</div>
+      </div>
+      <button class="affine-tab-close" onclick="document.getElementById('noteReceipt').hidden=true" style="margin-left: 12px;">x</button>
+    </div>
+
+    <!-- Zen Mode Overlay -->
+    <div class="zen-overlay" id="zenOverlay">
+      <button class="zen-close" onclick="exitZen()">Esc · Sair do Modo Foco</button>
+      <div class="zen-editor-wrapper">
+        <input class="zen-title" id="zenTitle" placeholder="Título..." />
+        <textarea class="zen-textarea" id="zenContent" placeholder="Apenas escreva..."></textarea>
+      </div>
+    </div>
+
+    <!-- Floating Toolbar -->
+    <div class="floating-toolbar" id="floatingToolbar">
+      <button class="ft-btn" onclick="wrapSelection('**','**')" title="Negrito"><b>B</b></button>
+      <button class="ft-btn" onclick="wrapSelection('*','*')" title="Itálico"><i>I</i></button>
+      <button class="ft-btn" onclick="wrapSelection('~~','~~')" title="Riscado"><s>S</s></button>
+      <button class="ft-btn" onclick="wrapSelection('`','`')" title="Código">&lt;/&gt;</button>
+      <div class="ft-sep"></div>
+      <button class="ft-btn" onclick="wrapSelection('==','==')" title="Highlight">🖍</button>
+      <button class="ft-btn" onclick="prefixLine('# ')" title="H1">H1</button>
+      <button class="ft-btn" onclick="prefixLine('## ')" title="H2">H2</button>
+      <button class="ft-btn" onclick="prefixLine('### ')" title="H3">H3</button>
+    </div>
+
+    <div class="notes-layout">
+      <!-- Sidebar -->
+      <div class="sidebar" id="sidebar">
+        <div class="sidebar-top">
+          <input class="sidebar-search" id="sidebarSearch" type="text" placeholder="🔍 Buscar notas..." />
+          <div class="sidebar-actions-row">
+            <button class="sidebar-action-btn" id="btnNew"><span>+</span> Nova</button>
+            <button class="sidebar-action-btn" id="btnNewSubject"><span>📁</span> Matéria</button>
+          </div>
+          <div class="view-toggle">
+            <button class="view-toggle-btn active" data-view="editor" onclick="setView('editor')">📝 Editor</button>
+            <button class="view-toggle-btn" data-view="cards" onclick="setView('cards')">🗂 Cards</button>
+          </div>
+        </div>
+        <div class="sidebar-scroll">
+          <div class="sidebar-title">Matérias</div>
+          <div id="subjectRail" class="subject-rail"></div>
+          <div class="sidebar-title">Tags</div>
+          <div id="tagsRail" class="tags-rail"></div>
+          <div class="sidebar-title" style="margin-top: 10px;">Anotações</div>
+          <div id="nav"></div>
+        </div>
+      </div>
+
+      <!-- Editor Area -->
+      <div class="editor-area" id="editorView">
+        <div class="affine-tabs" id="openTabs"></div>
+
+        <div class="slash-menu" id="slashMenu">
+          <div class="slash-menu-title">IA Assistente ✨</div>
+          <button class="slash-btn" onclick="execSlash('resumo')"><span>📝</span> Gerar Resumo</button>
+          <button class="slash-btn" onclick="execSlash('flashcard')"><span>🗂️</span> Criar Flashcards</button>
+          <button class="slash-btn" onclick="execSlash('prof')"><span>👨‍🏫</span> Modo Professor</button>
+          <div class="slash-menu-title" style="margin-top: 6px;">Blocos</div>
+          <button class="slash-btn" onclick="execSlash('h1')"><span style="font-weight:800;">H1</span> Título</button>
+          <button class="slash-btn" onclick="execSlash('h2')"><span style="font-weight:700;">H2</span> Subtítulo</button>
+          <button class="slash-btn" onclick="execSlash('h3')"><span style="font-weight:600;">H3</span> Seção</button>
+          <button class="slash-btn" onclick="execSlash('h4')"><span style="font-weight:500;">H4</span> Subseção</button>
+          <button class="slash-btn" onclick="execSlash('check')"><span>☑</span> Checklist</button>
+          <button class="slash-btn" onclick="execSlash('quote')"><span>"</span> Citação</button>
+          <button class="slash-btn" onclick="execSlash('hr')"><span>─</span> Divisor</button>
+        </div>
+
+        <div class="editor-scroll" id="editorScroll">
+          <div class="page-cover" id="pageCover"></div>
+          <div class="editor-content-wrapper">
+            <div class="page-icon" id="pageIcon"></div>
+
+            <div class="action-menu-container">
+              <button class="action-menu-btn" onclick="toggleMenu(event)">•••</button>
+              <div class="action-dropdown" id="actionMenu">
+                <button onclick="enterZen()">🧘 Modo Foco</button>
+                <hr/>
+                <button id="btnSummarize">✨ Resumo IA</button>
+                <button id="btnTeacher">👨‍🏫 Modo Professor</button>
+                <button id="btnFlashcards">🗂️ Gerar Flashcards</button>
+                <button id="btnSubjectFlashcards">🗂️ Flashcards (Matéria)</button>
+                <button id="btnSubjectTeacher">👨‍🏫 Professor (Matéria)</button>
+                <hr/>
+                <button onclick="addFrontmatter('cover', prompt('URL da Capa:'))">🖼️ Capa</button>
+                <button onclick="addFrontmatter('icon', prompt('Emoji:'))">😀 Ícone</button>
+                <button onclick="document.getElementById('mediaPanel').hidden = false">📎 Anexar Mídia</button>
+                <button id="btnSaveManual">💾 Salvar</button>
+                <hr/>
+                <button id="btnDel" style="color: #ef4444;">🗑️ Excluir</button>
+              </div>
+            </div>
+
+            <div class="editor-header">
+              <input id="nt" type="text" placeholder="Título da nota" />
+              <div class="editor-meta">
+                <input id="ns" type="text" value="Geral" placeholder="Matéria" />
+                <button class="star-btn" id="btnFav" title="Favoritar">★</button>
+                <div class="color-picker-row" id="colorPicker"></div>
+                <div class="save-indicator" id="saveIndicator">
+                  <span class="save-icon">☁</span> <span class="save-text">Salvo</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Panels -->
+            <div class="floating-panel" id="noteCaptureForm" hidden>
+              <div class="floating-panel-title"><span>Captura da Web</span><button class="affine-tab-close" onclick="this.parentElement.parentElement.hidden=true">x</button></div>
+              <input id="captureTitle" type="text" placeholder="Título" />
+              <input id="captureSubject" type="text" placeholder="Matéria" />
+              <input id="captureUrl" type="text" placeholder="URL da fonte" />
+              <textarea id="captureContent" placeholder="Cole o conteúdo..." rows="3"></textarea>
+              <button type="button" class="btn-action" onclick="captureNote()">Salvar Captura</button>
+            </div>
+
+            <div class="floating-panel" id="mediaPanel" hidden>
+              <div class="floating-panel-title"><span>Anexar Mídia</span><button class="affine-tab-close" onclick="this.parentElement.parentElement.hidden=true">x</button></div>
+              <input id="mediaUrl" type="text" placeholder="URL ou Caminho" />
+              <input id="mediaCaption" type="text" placeholder="Legenda" />
+              <button type="button" class="btn-action" id="btnAttachMedia">Anexar</button>
+            </div>
+
+            <div class="floating-panel" id="teacherPanel" hidden>
+               <div class="floating-panel-title"><span>Modo Professor</span><button class="affine-tab-close" onclick="this.parentElement.parentElement.hidden=true">x</button></div>
+               <input id="teacherQuestion" type="text" placeholder="Pergunte algo..." />
+               <button type="button" class="btn-action" onclick="askTeacher()">Explicar Nota</button>
+               <button type="button" class="btn-action" onclick="askSubjectTeacher()">Explicar Matéria</button>
+               <div id="teacherOutput" style="margin-top: 10px; font-size: 13px; color: var(--text);"></div>
+            </div>
+
+            <div class="floating-panel" id="flashcardPreview" hidden>
+               <div class="floating-panel-title"><span id="flashcardPreviewTitle">Flashcards</span><button class="affine-tab-close" onclick="this.parentElement.parentElement.hidden=true">x</button></div>
+               <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 6px;" id="flashcardPreviewMeta"></div>
+               <div id="flashcardPreviewList" style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;"></div>
+               <button class="btn-action" style="margin-top: 10px;" onclick="pywebview.api.jump('study','{}')">Ir para Revisão</button>
+            </div>
+
+            <div id="mediaStrip" style="display:flex; gap:8px; margin-bottom: 20px;" hidden></div>
+
+            <div class="editor-surface">
+              <textarea id="nc" placeholder="Escreva... (use '/' para comandos IA, # ## ### para títulos)"></textarea>
+              <div class="note-preview" id="notePreview"></div>
+              <div class="toc-panel" id="tocPanel">
+                <div class="toc-title">Sumário</div>
+                <div id="tocContent"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Cards View -->
+      <div class="cards-view" id="cardsView">
+        <div class="cards-grid" id="cardsGrid"></div>
+      </div>
+    </div>
+  </main>
+
+  <script src="nexus_boot.js"></script>
+  <script>
+    const boot = readBoot();
+    if (boot.toast) showToastBanner(boot.toast);
+
+    let activeId = null;
+    let currentMedia = [];
+    let activeSubject = '';
+    let activeTag = '';
+    let allNotes = [];
+    let openNoteTabs = [];
+    let currentView = 'editor';
+    let currentColor = null;
+    let searchQuery = '';
+
+    const NOTE_COLORS = [
+      { name: 'none', css: 'transparent' },
+      { name: 'purple', css: '#8b5cf6' },
+      { name: 'blue', css: '#3b82f6' },
+      { name: 'cyan', css: '#06b6d4' },
+      { name: 'green', css: '#10b981' },
+      { name: 'yellow', css: '#eab308' },
+      { name: 'orange', css: '#f97316' },
+      { name: 'red', css: '#ef4444' },
+      { name: 'pink', css: '#ec4899' },
+    ];
+
+    function getColorCSS(name) { return (NOTE_COLORS.find(c => c.name === name) || NOTE_COLORS[0]).css; }
+
+    // Render Color Picker
+    function renderColorPicker() {
+      const picker = document.getElementById('colorPicker');
+      picker.innerHTML = NOTE_COLORS.map(c =>
+        '<button class="color-dot' + (currentColor === c.name ? ' active' : '') + '" style="background:' + c.css + (c.name === 'none' ? '; border: 1px dashed rgba(255,255,255,0.2)' : '') + ';" onclick="setNoteColor(\'' + c.name + '\')" title="' + c.name + '"></button>'
+      ).join('');
+    }
+
+    async function setNoteColor(name) {
+      currentColor = name === 'none' ? null : name;
+      renderColorPicker();
+      if (activeId) {
+        await nxBridge('note_patch', { note_id: activeId, color: name === 'none' ? '' : name });
+      }
+    }
+
+    // Favorites
+    let favNotesIds = JSON.parse(localStorage.getItem('nexus_notes_fav') || '[]');
+
+    document.getElementById('btnFav').onclick = () => {
+      if(!activeId) return;
+      const idx = favNotesIds.indexOf(activeId);
+      if(idx > -1) { favNotesIds.splice(idx, 1); document.getElementById('btnFav').classList.remove('is-fav'); }
+      else { favNotesIds.push(activeId); document.getElementById('btnFav').classList.add('is-fav'); }
+      localStorage.setItem('nexus_notes_fav', JSON.stringify(favNotesIds));
+      renderNav();
+    };
+
+    // Search
+    document.getElementById('sidebarSearch').addEventListener('input', (e) => {
+      searchQuery = e.target.value.trim().toLowerCase();
+      renderNav();
+      if (currentView === 'cards') renderCards();
+    });
+
+    // View Toggle
+    function setView(v) {
+      currentView = v;
+      document.querySelectorAll('.view-toggle-btn').forEach(b => b.classList.toggle('active', b.dataset.view === v));
+      document.getElementById('editorView').style.display = v === 'editor' ? 'flex' : 'none';
+      document.getElementById('cardsView').classList.toggle('active', v === 'cards');
+      if (v === 'cards') renderCards();
+    }
+
+    // Cards View
+    function renderCards() {
+      const grid = document.getElementById('cardsGrid');
+      let notes = allNotes;
+      if (activeSubject) notes = notes.filter(n => (n.subject || 'Geral').trim() === activeSubject);
+      if (activeTag) notes = notes.filter(n => (n.content || '').includes(activeTag));
+      if (searchQuery) notes = notes.filter(n => (n.title || '').toLowerCase().includes(searchQuery) || (n.content || '').toLowerCase().includes(searchQuery));
+
+      if (!notes.length) {
+        grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text-dim);font-size:13px;">Sem notas.</div>';
+        return;
+      }
+      grid.innerHTML = notes.map(n => {
+        const color = getColorCSS(n.color || 'none');
+        const isFav = favNotesIds.includes(n.id);
+        const preview = (n.content || '').replace(/^---[\s\S]*?---\n?/, '').replace(/[#*>\-\[\]`~=]/g, '').substring(0, 140);
+        const date = (n.updated_at || '').substring(0, 10);
+        return '<div class="note-card" onclick="setView(\'editor\'); openNote(' + n.id + ')" style="border-top-color:' + color + ';">' +
+          '<div style="position:absolute;top:0;left:0;right:0;height:3px;background:' + color + ';border-radius:12px 12px 0 0;"></div>' +
+          (isFav ? '<div class="note-card-fav">★</div>' : '') +
+          '<div class="note-card-title">' + esc(n.title || 'Sem título') + '</div>' +
+          '<div class="note-card-preview">' + esc(preview) + '</div>' +
+          '<div class="note-card-footer">' +
+            '<span class="note-card-subject">' + esc(n.subject || 'Geral') + '</span>' +
+            '<span>' + date + '</span>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+    }
+
+    // Auto-save
+    let saveTimer = null;
+    function triggerAutoSave() {
+      clearTimeout(saveTimer);
+      const ind = document.getElementById('saveIndicator');
+      ind.className = 'save-indicator saving';
+      ind.querySelector('.save-text').textContent = '...';
+      saveTimer = setTimeout(saveNote, 1500);
+      renderNotePreview();
+    }
+    document.getElementById('nt').addEventListener('input', triggerAutoSave);
+    document.getElementById('ns').addEventListener('input', triggerAutoSave);
+    document.getElementById('nc').addEventListener('input', triggerAutoSave);
+
+    // Dropdown
+    function toggleMenu(e) { e.stopPropagation(); document.getElementById('actionMenu').classList.toggle('show'); }
+    document.addEventListener('click', () => { document.getElementById('actionMenu').classList.remove('show'); });
+
+    // Sidebar Toggle
+    function toggleSidebar() { document.getElementById('sidebar').classList.toggle('collapsed'); }
+
+    // Zen Mode
+    function enterZen() {
+      document.getElementById('actionMenu').classList.remove('show');
+      const zen = document.getElementById('zenOverlay');
+      document.getElementById('zenTitle').value = document.getElementById('nt').value;
+      document.getElementById('zenContent').value = document.getElementById('nc').value;
+      zen.classList.add('active');
+      document.getElementById('zenContent').focus();
+    }
+    function exitZen() {
+      const zen = document.getElementById('zenOverlay');
+      document.getElementById('nt').value = document.getElementById('zenTitle').value;
+      document.getElementById('nc').value = document.getElementById('zenContent').value;
+      zen.classList.remove('active');
+      triggerAutoSave();
+    }
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && document.getElementById('zenOverlay').classList.contains('active')) exitZen();
+    });
+    document.getElementById('zenContent').addEventListener('input', () => {
+      document.getElementById('nc').value = document.getElementById('zenContent').value;
+    });
+    document.getElementById('zenTitle').addEventListener('input', () => {
+      document.getElementById('nt').value = document.getElementById('zenTitle').value;
+    });
+
+    // Floating Toolbar (WYSIWYG)
+    const nc = document.getElementById('nc');
+    const floatingToolbar = document.getElementById('floatingToolbar');
+
+    nc.addEventListener('mouseup', showToolbarIfSelection);
+    nc.addEventListener('keyup', (e) => { if (e.shiftKey) showToolbarIfSelection(); });
+    document.addEventListener('mousedown', (e) => {
+      if (!floatingToolbar.contains(e.target) && e.target !== nc) {
+        floatingToolbar.classList.remove('active');
+      }
+    });
+
+    function showToolbarIfSelection() {
+      const start = nc.selectionStart;
+      const end = nc.selectionEnd;
+      if (start === end) { floatingToolbar.classList.remove('active'); return; }
+      // Position near cursor
+      const rect = nc.getBoundingClientRect();
+      floatingToolbar.style.top = (rect.top - 48) + 'px';
+      floatingToolbar.style.left = (rect.left + rect.width / 2 - 120) + 'px';
+      floatingToolbar.classList.add('active');
+    }
+
+    function wrapSelection(before, after) {
+      const start = nc.selectionStart;
+      const end = nc.selectionEnd;
+      const selected = nc.value.substring(start, end);
+      nc.value = nc.value.substring(0, start) + before + selected + after + nc.value.substring(end);
+      nc.selectionStart = start + before.length;
+      nc.selectionEnd = end + before.length;
+      nc.focus();
+      floatingToolbar.classList.remove('active');
+      triggerAutoSave();
+    }
+
+    function prefixLine(prefix) {
+      const start = nc.selectionStart;
+      const lineStart = nc.value.lastIndexOf('\n', start - 1) + 1;
+      nc.value = nc.value.substring(0, lineStart) + prefix + nc.value.substring(lineStart);
+      nc.selectionStart = nc.selectionEnd = start + prefix.length;
+      nc.focus();
+      floatingToolbar.classList.remove('active');
+      triggerAutoSave();
+    }
+
+    // Slash Menu
+    const slashMenu = document.getElementById('slashMenu');
+    let slashActive = false;
+
+    nc.addEventListener('keydown', (e) => {
+      if (slashActive && e.key === 'Escape') { slashActive = false; slashMenu.style.display = 'none'; e.preventDefault(); }
+    });
+
+    nc.addEventListener('keyup', (e) => {
+      if (e.key === '/') {
+        const lines = nc.value.substr(0, nc.selectionStart).split('\n');
+        if (lines[lines.length - 1].trim() === '/') { slashActive = true; slashMenu.style.display = 'block'; }
+      } else if (slashActive && e.key !== 'Shift') {
+        const lines = nc.value.substr(0, nc.selectionStart).split('\n');
+        if (lines[lines.length - 1].indexOf('/') === -1) { slashActive = false; slashMenu.style.display = 'none'; }
+      }
+    });
+
+    function execSlash(cmd) {
+      slashMenu.style.display = 'none'; slashActive = false;
+      let val = nc.value; let pos = nc.selectionStart;
+      const before = val.substring(0, pos); const after = val.substring(pos);
+      const lastSlash = before.lastIndexOf('/');
+      if (lastSlash !== -1) { nc.value = before.substring(0, lastSlash) + after; nc.selectionStart = nc.selectionEnd = lastSlash; }
+      if (cmd === 'h1') insertText('# ');
+      else if (cmd === 'h2') insertText('## ');
+      else if (cmd === 'h3') insertText('### ');
+      else if (cmd === 'h4') insertText('#### ');
+      else if (cmd === 'check') insertText('- [ ] ');
+      else if (cmd === 'quote') insertText('> ');
+      else if (cmd === 'hr') insertText('\n---\n');
+      else if (cmd === 'resumo') summarizeNote();
+      else if (cmd === 'flashcard') generateFlashcards();
+      else if (cmd === 'prof') { document.getElementById('teacherPanel').hidden = false; document.getElementById('teacherQuestion').focus(); }
+    }
+
+    function insertText(prefix) {
+      const val = nc.value; const pos = nc.selectionStart;
+      nc.value = val.substring(0, pos) + prefix + val.substring(pos);
+      nc.selectionStart = nc.selectionEnd = pos + prefix.length;
+      nc.focus(); triggerAutoSave();
+    }
+
+    // Drag and Drop
+    nc.addEventListener('dragover', e => { e.preventDefault(); });
+    nc.addEventListener('drop', e => {
+      e.preventDefault();
+      if(e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        const file = e.dataTransfer.files[0];
+        if(file.type.startsWith('image/')) {
+          const reader = new FileReader();
+          reader.onload = (ev) => { insertText('\n![Imagem](' + ev.target.result + ')\n'); };
+          reader.readAsDataURL(file);
+        }
+      }
+    });
+
+    function esc(value) { return String(value ?? '').replace(/[&<>"']/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":"&#39;" }[ch])); }
+
+    function renderNoteReceipt() {
+      const r = boot.receipt || {};
+      const animate = String(boot.animate || r.action || '').trim();
+      if (!(r.kind === 'note' || ['note_summarize', 'teacher_mode', 'subject_teacher_mode', 'note_media_attach'].includes(animate))) return;
+      document.getElementById('noteReceipt').hidden = false;
+      document.getElementById('receiptNoteTitle').textContent = 'Ação IA concluída';
+      document.getElementById('receiptNoteMeta').textContent = boot.toast || 'Operação realizada com sucesso.';
+      setTimeout(() => document.getElementById('noteReceipt').hidden = true, 5000);
+    }
+
+    function parseMediaLinks(raw) { try { const p = JSON.parse(raw || '[]'); return Array.isArray(p) ? p : []; } catch(_) { return []; } }
+
+    function renderMediaStrip() {
+      const strip = document.getElementById('mediaStrip');
+      strip.hidden = !currentMedia.length;
+      strip.innerHTML = currentMedia.map(item => '<div style="background: rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.05); padding: 4px; border-radius: 6px; display:flex; align-items:center; gap:8px;"><img src="' + esc(item.url || item.path) + '" style="height:28px; border-radius:4px; object-fit:cover;" /><span style="font-size:10px; color:var(--text);">' + esc(item.caption || 'Mídia') + '</span></div>').join('');
+    }
+
+    function addFrontmatter(key, value) {
+      if(!value) return;
+      let content = nc.value;
+      if(content.startsWith('---\n')) {
+        const end = content.indexOf('\n---\n', 4);
+        if(end !== -1) {
+          const fm = content.substring(4, end);
+          const lines = fm.split('\n').filter(l => !l.startsWith(key + ':'));
+          lines.push(key + ': ' + value);
+          nc.value = '---\n' + lines.join('\n') + '\n---\n' + content.substring(end + 5);
+        } else { nc.value = '---\n' + key + ': ' + value + '\n---\n\n' + content; }
+      } else { nc.value = '---\n' + key + ': ' + value + '\n---\n\n' + content; }
+      triggerAutoSave();
+    }
+
+    function parseFrontmatter(text) {
+      const match = text.match(/^---\n([\s\S]*?)\n---/);
+      if(!match) return { icon: null, cover: null, cleanContent: text };
+      const fm = match[1]; let icon = null; let cover = null;
+      fm.split('\n').forEach(line => {
+        if(line.startsWith('icon:')) icon = line.replace('icon:', '').trim();
+        if(line.startsWith('cover:')) cover = line.replace('cover:', '').trim();
+      });
+      return { icon, cover, cleanContent: text.replace(/^---\n[\s\S]*?\n---\n/, '') };
+    }
+
+    // Enhanced Markdown Preview with proper heading hierarchy
+    function renderNotePreview() {
+      const target = document.getElementById('notePreview');
+      const toc = document.getElementById('tocContent');
+      let rawContent = nc.value || '';
+
+      const parsed = parseFrontmatter(rawContent);
+      const coverEl = document.getElementById('pageCover');
+      const iconEl = document.getElementById('pageIcon');
+
+      if(parsed.cover) { coverEl.style.backgroundImage = 'url(' + esc(parsed.cover) + ')'; coverEl.classList.add('active'); }
+      else { coverEl.classList.remove('active'); }
+      if(parsed.icon) { iconEl.textContent = parsed.icon; iconEl.classList.add('active'); }
+      else { iconEl.classList.remove('active'); }
+
+      const lines = parsed.cleanContent.split(/\r?\n/);
+      const parts = [];
+      const tocItems = [];
+      let headingId = 0;
+
+      lines.forEach(line => {
+        const text = line.trim();
+        if (!text) { parts.push('<br/>'); return; }
+
+        const img = text.match(/^!\[(.*?)\]\((.*?)\)$/);
+        if (img) { parts.push('<img src="' + esc(img[2] || '') + '" alt="' + esc(img[1] || '') + '" />'); return; }
+
+        if (text === '---' || text === '***') { parts.push('<hr/>'); return; }
+
+        // Headings with proper visual hierarchy
+        if (text.startsWith('#### ')) {
+          headingId++;
+          parts.push('<h4 id="head-' + headingId + '">' + inlineFormat(text.slice(5)) + '</h4>');
+          tocItems.push('<a href="#head-' + headingId + '" class="toc-item level-4" onclick="document.getElementById(\'head-' + headingId + '\').scrollIntoView({behavior:\'smooth\'}); return false;">' + esc(text.slice(5)) + '</a>');
+        }
+        else if (text.startsWith('### ')) {
+          headingId++;
+          parts.push('<h3 id="head-' + headingId + '">' + inlineFormat(text.slice(4)) + '</h3>');
+          tocItems.push('<a href="#head-' + headingId + '" class="toc-item level-3" onclick="document.getElementById(\'head-' + headingId + '\').scrollIntoView({behavior:\'smooth\'}); return false;">' + esc(text.slice(4)) + '</a>');
+        }
+        else if (text.startsWith('## ')) {
+          headingId++;
+          parts.push('<h2 id="head-' + headingId + '">' + inlineFormat(text.slice(3)) + '</h2>');
+          tocItems.push('<a href="#head-' + headingId + '" class="toc-item level-2" onclick="document.getElementById(\'head-' + headingId + '\').scrollIntoView({behavior:\'smooth\'}); return false;">' + esc(text.slice(3)) + '</a>');
+        }
+        else if (text.startsWith('# ')) {
+          headingId++;
+          parts.push('<h1 id="head-' + headingId + '">' + inlineFormat(text.slice(2)) + '</h1>');
+          tocItems.push('<a href="#head-' + headingId + '" class="toc-item" style="font-weight:700;" onclick="document.getElementById(\'head-' + headingId + '\').scrollIntoView({behavior:\'smooth\'}); return false;">' + esc(text.slice(2)) + '</a>');
+        }
+        else if (text.startsWith('- [ ]')) parts.push('<div><input type="checkbox" disabled style="margin-right:6px;">' + inlineFormat(text.slice(5)) + '</div>');
+        else if (text.startsWith('- [x]')) parts.push('<div><input type="checkbox" disabled checked style="margin-right:6px;"><del>' + inlineFormat(text.slice(5)) + '</del></div>');
+        else if (text.startsWith('- ') || text.startsWith('* ')) parts.push('<div>&bull; ' + inlineFormat(text.slice(2)) + '</div>');
+        else if (text.startsWith('> ')) parts.push('<blockquote>' + inlineFormat(text.slice(2)) + '</blockquote>');
+        else if (/^\d+\.\s/.test(text)) { const m = text.match(/^\d+\.\s(.*)$/); parts.push('<div style="padding-left:4px;">' + text.match(/^\d+/)[0] + '. ' + inlineFormat(m[1]) + '</div>'); }
+        else parts.push('<p>' + inlineFormat(text) + '</p>');
+      });
+
+      target.innerHTML = parts.length ? parts.join('') : '<div style="color:var(--text-dim);opacity:0.3;padding:20px 0;">Escreva markdown para ver o preview...</div>';
+      toc.innerHTML = tocItems.length ? tocItems.join('') : '<div style="font-size:10px; color:var(--text-dim); opacity:0.4;">Use # ## ### #### para títulos</div>';
+    }
+
+    // Inline formatting: bold, italic, code, strikethrough, highlight
+    function inlineFormat(text) {
+      let s = esc(text);
+      s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+      s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+      s = s.replace(/\*(.+?)\*/g, '<em>$1</em>');
+      s = s.replace(/~~(.+?)~~/g, '<del>$1</del>');
+      s = s.replace(/==(.+?)==/g, '<mark style="background:rgba(250,204,21,0.25);color:var(--text);padding:1px 3px;border-radius:3px;">$1</mark>');
+      return s;
+    }
+
+    function extractTags(notes) {
+      const tagSet = new Set();
+      notes.forEach(n => { const matches = (n.content || '').match(/#\w+/g); if(matches) matches.forEach(t => tagSet.add(t)); });
+      return Array.from(tagSet).sort();
+    }
+
+    function renderSubjectRail(notes) {
+      const rail = document.getElementById('subjectRail');
+      const counts = {};
+      (notes || []).forEach(n => { const s = String(n.subject || 'Geral').trim() || 'Geral'; counts[s] = (counts[s] || 0) + 1; });
+      rail.innerHTML = '<button type="button" class="subject-chip' + (!activeSubject ? ' active' : '') + '" onclick="activeSubject=\'\';renderSubjectRail(allNotes);renderNav();if(currentView===\'cards\')renderCards();">📁 Todas <span class="count">' + (notes || []).length + '</span></button>' +
+        Object.keys(counts).sort().map(s => '<button type="button" class="subject-chip' + (activeSubject === s ? ' active' : '') + '" onclick="activeSubject=\'' + esc(s) + '\';renderSubjectRail(allNotes);renderNav();if(currentView===\'cards\')renderCards();">📁 ' + esc(s) + ' <span class="count">' + counts[s] + '</span></button>').join('');
+
+      const tags = extractTags(notes);
+      const tagsRail = document.getElementById('tagsRail');
+      if(tags.length === 0) { tagsRail.innerHTML = '<div style="font-size:10px;color:var(--text-dim);opacity:0.4;">Use #tags no texto</div>'; }
+      else { tagsRail.innerHTML = tags.map(t => '<button class="tag-chip ' + (activeTag === t ? 'active' : '') + '" onclick="toggleTag(\'' + esc(t) + '\')">' + esc(t) + '</button>').join(''); }
+    }
+
+    function toggleTag(t) { activeTag = activeTag === t ? '' : t; renderSubjectRail(allNotes); renderNav(); if(currentView === 'cards') renderCards(); }
+
+    function renderOpenTabs(activeOrTempId) {
+      const tabs = document.getElementById('openTabs');
+      let html = '<button class="icon-btn" onclick="toggleSidebar()" title="Sidebar" style="margin-right: 6px;">☰</button>';
+      html += openNoteTabs.map(tab => '<div class="affine-tab' + ((Number(tab.id) === Number(activeId) || tab.id === activeOrTempId) ? ' active' : '') + '" data-tab-id="' + tab.id + '"><button class="affine-tab-title">' + esc(tab.title) + '</button><button class="affine-tab-close" data-close-id="' + tab.id + '">×</button></div>').join('');
+      tabs.innerHTML = html;
+      tabs.querySelectorAll('.affine-tab-title').forEach(btn => btn.onclick = () => {
+        const tid = btn.parentElement.dataset.tabId;
+        if(String(tid).startsWith('temp-')) return;
+        openNote(parseInt(tid));
+      });
+      tabs.querySelectorAll('.affine-tab-close').forEach(btn => {
+        btn.onclick = (e) => {
+          e.stopPropagation();
+          const id = String(btn.dataset.closeId);
+          openNoteTabs = openNoteTabs.filter(tab => String(tab.id) !== id);
+          if ((String(activeId) === id || activeOrTempId === id) && openNoteTabs.length > 0) {
+            if(String(openNoteTabs[0].id).startsWith('temp-')) document.getElementById('btnNew').click();
+            else openNote(openNoteTabs[0].id);
+          }
+          else if (openNoteTabs.length === 0) document.getElementById('btnNew').click();
+          else renderOpenTabs();
+        };
+      });
+    }
+
+    function renderNav() {
+      const nav = document.getElementById('nav');
+      let notes = allNotes;
+      if(activeSubject) notes = notes.filter(n => (n.subject || 'Geral').trim() === activeSubject);
+      if(activeTag) notes = notes.filter(n => (n.content || '').includes(activeTag));
+      if(searchQuery) notes = notes.filter(n => (n.title || '').toLowerCase().includes(searchQuery) || (n.content || '').toLowerCase().includes(searchQuery));
+
+      const favs = notes.filter(n => favNotesIds.includes(n.id));
+      const others = notes.filter(n => !favNotesIds.includes(n.id));
+
+      let html = '';
+      if(favs.length > 0) {
+        html += '<div class="nav-group-title">Favoritas</div>';
+        html += favs.map(n => {
+          const dotColor = getColorCSS(n.color || 'none');
+          return '<button type="button" class="note-btn' + (n.id === activeId ? ' active' : '') + '" onclick="openNote(' + n.id + ')">' +
+            (dotColor !== 'transparent' ? '<span class="note-btn-dot" style="background:' + dotColor + ';"></span>' : '') +
+            '<span class="note-btn-icon" style="color:#facc15;">★</span> ' + esc(n.title || 'Sem título') + '</button>';
+        }).join('');
+      }
+      if(others.length > 0) {
+        if(favs.length > 0) html += '<div class="nav-group-title">Todas</div>';
+        html += others.map(n => {
+          const dotColor = getColorCSS(n.color || 'none');
+          return '<button type="button" class="note-btn' + (n.id === activeId ? ' active' : '') + '" onclick="openNote(' + n.id + ')">' +
+            (dotColor !== 'transparent' ? '<span class="note-btn-dot" style="background:' + dotColor + ';"></span>' : '') +
+            esc(n.title || 'Sem título') + '</button>';
+        }).join('');
+      }
+      if(!notes.length) html = '<div style="font-size:11px;color:var(--text-dim);padding:8px;opacity:0.5;">Sem notas.</div>';
+      nav.innerHTML = html;
+      renderOpenTabs();
+    }
+
+    async function loadNav() { const r = await nxBridge('notes_list', {}); if (r.ok) { allNotes = r.data || []; renderSubjectRail(allNotes); renderNav(); } }
+
+    async function openNote(id) {
+      activeId = id;
+      const r = await nxBridge('note_get', { note_id: id });
+      if (!r.ok || !r.data) return;
+      document.getElementById('nt').value = r.data.title || '';
+      document.getElementById('ns').value = r.data.subject || 'Geral';
+      document.getElementById('nc').value = r.data.content || '';
+      currentColor = r.data.color || null;
+      renderColorPicker();
+      const ind = document.getElementById('saveIndicator');
+      ind.className = 'save-indicator saved';
+      ind.querySelector('.save-text').textContent = 'Salvo';
+
+      if(favNotesIds.includes(id)) document.getElementById('btnFav').classList.add('is-fav');
+      else document.getElementById('btnFav').classList.remove('is-fav');
+
+      currentMedia = parseMediaLinks(r.data.media_links);
+      const item = { id: Number(id), title: r.data.title || 'Sem título' };
+      openNoteTabs = openNoteTabs.filter(tab => Number(tab.id) !== item.id);
+      openNoteTabs.unshift(item); openNoteTabs = openNoteTabs.slice(0, 8);
+      renderMediaStrip(); renderNotePreview(); loadNav();
+      if (currentView === 'cards') setView('editor');
+    }
+
+    document.getElementById('btnNew').onclick = () => {
+      activeId = null; currentMedia = []; currentColor = null;
+      document.getElementById('nt').value = ''; document.getElementById('ns').value = activeSubject || 'Geral'; document.getElementById('nc').value = '';
+      const ind = document.getElementById('saveIndicator');
+      ind.className = 'save-indicator'; ind.querySelector('.save-text').textContent = 'Nova';
+      document.getElementById('btnFav').classList.remove('is-fav');
+      renderColorPicker();
+      const tempId = 'temp-' + Date.now();
+      const item = { id: tempId, title: 'Nova Nota', isTemp: true };
+      openNoteTabs = openNoteTabs.filter(t => !t.isTemp);
+      openNoteTabs.unshift(item); openNoteTabs = openNoteTabs.slice(0, 8);
+      renderMediaStrip(); renderNotePreview(); renderOpenTabs(tempId); loadNav();
+      if (currentView === 'cards') setView('editor');
+    };
+
+    document.getElementById('btnNewSubject').onclick = () => {
+      const subjectName = prompt('Nome da Nova Matéria:');
+      if (!subjectName) return;
+      activeSubject = subjectName.trim();
+      document.getElementById('btnNew').click();
+      document.getElementById('ns').value = activeSubject;
+      document.getElementById('nt').focus();
+      triggerAutoSave();
+    };
+
+    let isSaving = false;
+    async function saveNote() {
+      if (isSaving) return;
+      isSaving = true;
+      const title = document.getElementById('nt').value.trim() || 'Sem título';
+      const subject = document.getElementById('ns').value.trim() || 'Geral';
+      const content = document.getElementById('nc').value;
+      const ind = document.getElementById('saveIndicator');
+      ind.className = 'save-indicator saving'; ind.querySelector('.save-text').textContent = 'Salvando';
+
+      const args = activeId ? { note_id: activeId, title, subject, content, color: currentColor } : { subject, title, content, media: currentMedia, color: currentColor };
+      const r = await nxBridge(activeId ? 'note_patch' : 'note_save', args);
+
+      if (r.ok) {
+        if (!activeId && r.data && r.data.id) { activeId = r.data.id; openNoteTabs = openNoteTabs.filter(t => !t.isTemp); }
+        ind.className = 'save-indicator saved'; ind.querySelector('.save-text').textContent = 'Salvo';
+        const item = { id: activeId, title };
+        openNoteTabs = openNoteTabs.filter(t => Number(t.id) !== Number(item.id)); openNoteTabs.unshift(item); openNoteTabs = openNoteTabs.slice(0, 8);
+      } else {
+        ind.className = 'save-indicator error'; ind.querySelector('.save-text').textContent = 'Erro';
+      }
+      await loadNav();
+      isSaving = false;
+    }
+    document.getElementById('btnSaveManual').onclick = saveNote;
+
+    async function summarizeNote() {
+      if (!activeId) return;
+      document.getElementById('noteReceipt').hidden = false; document.getElementById('receiptNoteTitle').textContent = 'Resumindo...';
+      const r = await nxBridge('note_summarize', { note_id: activeId, append_summary: true, max_sentences: 4 });
+      if (r.ok) { const ref = await nxBridge('note_get', { note_id: activeId }); if (ref.ok && ref.data) { nc.value = ref.data.content || ''; renderNotePreview(); } }
+    }
+
+    function renderFlashcardPreview(cards, scope) {
+      document.getElementById('flashcardPreview').hidden = false;
+      document.getElementById('flashcardPreviewTitle').textContent = 'Flashcards · ' + scope;
+      document.getElementById('flashcardPreviewMeta').textContent = cards.length + ' cards gerados pela IA';
+      document.getElementById('flashcardPreviewList').innerHTML = cards.map(c =>
+        '<div style="padding:10px;border-radius:8px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.05);"><div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:4px;">' + esc(c.front) + '</div><div style="font-size:11px;color:var(--text-dim);">' + esc(c.back) + '</div></div>'
+      ).join('');
+    }
+
+    document.getElementById('btnFlashcards').onclick = () => { if(activeId) generateFlashcards(); };
+    document.getElementById('btnSubjectFlashcards').onclick = () => { generateSubjectFlashcards(); };
+    document.getElementById('btnSubjectTeacher').onclick = () => { askSubjectTeacher(); };
+    document.getElementById('btnSummarize').onclick = summarizeNote;
+    document.getElementById('btnTeacher').onclick = () => { if(activeId) { document.getElementById('teacherPanel').hidden = false; document.getElementById('teacherQuestion').focus(); } };
+    document.getElementById('btnDel').onclick = async () => { if (!activeId || !confirm('Excluir esta nota?')) return; await nxBridge('note_delete', { note_id: activeId }); document.getElementById('btnNew').click(); };
+
+    async function generateFlashcards() { const r = await nxBridge('flashcards_generate', { note_id: activeId, max_cards: 8 }); if (r.ok) renderFlashcardPreview((r.data && r.data.cards) || [], 'Nota atual'); }
+    async function generateSubjectFlashcards() { const s = (activeSubject || document.getElementById('ns').value || '').trim(); if(!s) return; const r = await nxBridge('flashcards_generate', { subject: s, max_cards: 20 }); if (r.ok) renderFlashcardPreview((r.data && r.data.cards) || [], 'Matéria'); }
+    function renderTeacherOutput(d) { document.getElementById('teacherOutput').innerHTML = '<p>' + esc(d.lesson || 'Pronto.') + '</p>' + ((d.key_points || []).map(p => '<li>' + esc(p) + '</li>').join('')); }
+    async function askTeacher() { const q = document.getElementById('teacherQuestion').value.trim(); document.getElementById('teacherOutput').innerHTML = 'Processando...'; const r = await nxBridge('note_teach', { note_id: activeId, question: q, max_points: 4 }); if (r.ok && r.data) renderTeacherOutput(r.data); }
+    async function askSubjectTeacher() { const s = (activeSubject || document.getElementById('ns').value || '').trim(); document.getElementById('teacherPanel').hidden = false; document.getElementById('teacherOutput').innerHTML = 'Processando...'; const q = document.getElementById('teacherQuestion').value.trim(); const r = await nxBridge('subject_teach', { subject: s, question: q, max_points: 6 }); if (r.ok && r.data) renderTeacherOutput(r.data); }
+    async function attachMedia() { const url = document.getElementById('mediaUrl').value.trim(); const cap = document.getElementById('mediaCaption').value.trim(); if (!url) return; const r = await nxBridge('note_attach_media', { note_id: activeId, media_url: url, caption: cap }); if (r.ok) { const ref = await nxBridge('note_get', { note_id: activeId }); if (ref.ok && ref.data) currentMedia = parseMediaLinks(ref.data.media_links); document.getElementById('mediaPanel').hidden = true; renderMediaStrip(); } }
+    document.getElementById('btnAttachMedia').onclick = attachMedia;
+    async function captureNote() { const title = document.getElementById('captureTitle').value.trim(); const subject = document.getElementById('captureSubject').value.trim(); const url = document.getElementById('captureUrl').value.trim(); const content = document.getElementById('captureContent').value.trim(); if (!title || !content) return; const r = await nxBridge('note_capture', { title, subject, url, content }); if (r.ok) { document.getElementById('noteCaptureForm').hidden = true; if (r.data && r.data.note_id) openNote(r.data.note_id); } }
+
+    renderColorPicker();
+    renderNoteReceipt(); renderNotePreview();
+    loadNav().then(() => { if (boot.highlight_id) openNote(Number(boot.highlight_id)); });
+    window.addEventListener('message', (e) => { if (e.data === 'nexus-tab-focus') loadNav(); });
+  </script>
+</div></div></body>
+</html>

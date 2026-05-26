@@ -1,53 +1,70 @@
+from __future__ import annotations
+
+from src.services.nexus_service import get_nexus_service
 from src.tools.base import BaseTool
+
 
 class NewsTool(BaseTool):
     """
-    Busca notícias atuais via DuckDuckGo.
+    Busca noticias atuais usando o mesmo motor do Nexus News Briefing Studio.
     """
+
     name = "get_news"
-    description = "Busca as manchetes de notícias mais recentes sobre um tema específico ou notícias gerais do Brasil/Mundo."
+    description = "Busca manchetes recentes sobre um tema e reutiliza o cache local do Nexus quando a busca ao vivo falha."
     parameters = {
         "type": "object",
         "properties": {
             "query": {
                 "type": "string",
-                "description": "O tema da notícia (ex: 'tecnologia', 'política', 'economia'). Se vazio, buscará 'top news Brasil'."
+                "description": "Tema da noticia (ex: tecnologia, politica, economia). Se vazio, usa top news Brasil.",
             },
             "max_results": {
                 "type": "integer",
-                "description": "Número máximo de notícias para retornar (padrão 5, máximo 10)."
-            }
-        }
+                "description": "Numero maximo de noticias para retornar (padrao 5, maximo 10).",
+            },
+        },
     }
 
-    def execute(self, query: str = "", max_results: int = 5) -> str:
+    def execute(
+        self,
+        args: dict | str | None = None,
+        context: dict | None = None,
+        *,
+        query: str = "",
+        max_results: int = 5,
+    ) -> str:
+        if isinstance(args, dict):
+            query = str(args.get("query") or args.get("topic") or query or "").strip()
+            max_results = args.get("max_results") or args.get("limit") or max_results
+        elif isinstance(args, str):
+            query = args.strip() or query
+        query = (query or "").strip() or "top news Brasil"
         try:
-            from duckduckgo_search import DDGS
-            
-            if not query:
-                query = "top news Brasil"
-                
-            max_results = min(max(1, max_results), 10)
-            
-            results = []
-            with DDGS() as ddgs:
-                for r in ddgs.news(query, max_results=max_results):
-                    results.append(r)
-            
-            if not results:
-                return f"Nenhuma notícia encontrada para o tema: {query}"
-                
-            formatted_news = [f"Notícias recentes sobre '{query}':"]
-            for idx, r in enumerate(results, 1):
-                title = r.get("title", "Sem título")
-                source = r.get("source", "Fonte desconhecida")
-                date = r.get("date", "")
-                body = r.get("body", "")
-                formatted_news.append(f"{idx}. {title} ({source} - {date})\n   Resumo: {body}\n")
-                
-            return "\n".join(formatted_news)
+            limit = min(max(1, int(max_results or 5)), 10)
+        except (TypeError, ValueError):
+            limit = 5
 
-        except ImportError:
-            return "Erro: pacote 'duckduckgo-search' não está instalado."
+        try:
+            briefing = get_nexus_service().build_news_briefing(
+                query,
+                limit=limit,
+                open_window=False,
+            )
         except Exception as e:
-            return f"Erro ao buscar notícias: {str(e)}"
+            return f"Erro ao buscar noticias: {e}"
+
+        items = briefing.get("items") or []
+        if not briefing.get("ok") or not items:
+            return briefing.get("error") or f"Nenhuma noticia encontrada para o tema: {query}"
+
+        suffix = " (ultimo briefing salvo)" if briefing.get("from_cache") else ""
+        lines = [f"Noticias recentes sobre '{briefing.get('query') or query}':{suffix}"]
+        for idx, item in enumerate(items, 1):
+            source = item.get("source") or "Fonte desconhecida"
+            published = item.get("published_at") or ""
+            lines.append(
+                f"{idx}. {item.get('title') or 'Sem titulo'} ({source} - {published})\n"
+                f"   Resumo: {item.get('summary') or ''}\n"
+                f"   Fonte: {item.get('url') or 'sem link'}"
+            )
+        return "\n".join(lines)

@@ -29,7 +29,7 @@ def _save_state():
                     current = json.load(f)
                     current.update(_state)
                     to_save = current
-            except:
+            except Exception:
                 pass
             
         with open(STATE_FILE, "w", encoding="utf-8") as f:
@@ -163,10 +163,16 @@ def set_thinking():
     """Estado: pensando — a IA está processando."""
     _safe_set_state("thinking", subtitle="")
 
+def set_executing(detail: str = ""):
+    _safe_set_state("executing", subtitle=detail)
+
 def set_speaking(subtitle: str = ""):
     """Estado: falando — a IA está respondendo com voz."""
     emotion = detect_emotion(subtitle) if subtitle else "neutral"
     _safe_set_state("speaking", subtitle=subtitle, emotion=emotion)
+
+def set_alert(detail: str = ""):
+    _safe_set_state("alert", subtitle=detail)
 
 def set_error(detail: str = ""):
     """Estado: erro — algo deu errado."""

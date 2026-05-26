@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Nexus · Tarefas</title>
+  <style>
+    @keyframes slideIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+    #nx-app-wrapper .nx-chrome-inner > header { padding:14px 24px !important; }
+    #nx-app-wrapper .nx-chrome-inner > header h1 { font-size:18px !important; font-weight:700 !important; }
+    #nx-app-wrapper .nx-chrome-inner > main { padding:20px 24px 40px !important; }
+
+    /* Heatmap */
+    .heatmap-section { margin-bottom:16px; padding:14px 18px; border-radius:12px; background:var(--bg-panel); border:1px solid var(--border); }
+    .heatmap-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+    .heatmap-header h3 { margin:0; font-size:12px; color:var(--text-dim); text-transform:uppercase; letter-spacing:0; font-weight:600; }
+    .heatmap-date-label { font-size:11px; color:var(--text-dim); font-weight:500; }
+    .heatmap-grid { display:flex; gap:4px; flex-wrap:wrap; }
+    .hm { width:18px; height:18px; border-radius:4px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.04); transition:all 0.15s; cursor:pointer; }
+    .hm:hover { transform:scale(1.2); z-index:10; border-color:rgba(255,255,255,0.3); }
+    .hm.active-day { border:1px solid #a78bfa; transform:scale(1.15); box-shadow:0 0 8px rgba(167,139,250,0.5); }
+    .hm.hm-green { background:#22c55e; box-shadow:0 0 4px rgba(34,197,94,0.4); }
+    .hm.hm-yellow { background:#eab308; box-shadow:0 0 4px rgba(234,179,8,0.3); }
+    .hm.hm-red { background:#ef4444; box-shadow:0 0 4px rgba(239,68,68,0.3); }
+    .hm.hm-gray { background:rgba(255,255,255,0.06); }
+
+    .heatmap-legend { display:flex; gap:12px; margin-top:8px; align-items:center; }
+    .legend-item { display:flex; align-items:center; gap:4px; font-size:10px; color:var(--text-dim); }
+    .legend-box { width:12px; height:12px; border-radius:3px; }
+
+    /* Selected day info bar */
+    .day-info-bar {
+      display:flex; align-items:center; justify-content:space-between; padding:10px 14px;
+      border-radius:10px; background:rgba(139,92,246,0.06); border:1px solid rgba(139,92,246,0.15);
+      margin-bottom:12px; animation:slideIn 0.2s ease;
+    }
+    .day-info-bar .day-label { font-size:13px; font-weight:600; color:var(--text); }
+    .day-info-bar .day-stats { font-size:11px; color:var(--text-dim); }
+    .day-info-bar .btn-back-today { font-size:11px; color:#a78bfa; background:transparent; border:1px solid rgba(139,92,246,0.3); padding:4px 10px; border-radius:6px; cursor:pointer; transition:0.15s; }
+    .day-info-bar .btn-back-today:hover { background:rgba(139,92,246,0.1); }
+
+    /* Fab e Modal */
+    .fab-btn { position:fixed; bottom:24px; right:24px; width:56px; height:56px; border-radius:28px; background:linear-gradient(135deg,#8b5cf6,#6d28d9); color:#fff; font-size:28px; display:flex; align-items:center; justify-content:center; cursor:pointer; border:none; box-shadow:0 4px 14px rgba(139,92,246,0.4); transition:all 0.2s; z-index:100; font-weight:300; }
+    .fab-btn:hover { transform:scale(1.05); box-shadow:0 6px 20px rgba(139,92,246,0.5); }
+    .fab-btn:active { transform:scale(0.95); }
+
+    .modal-backdrop { position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); z-index:200; display:flex; align-items:center; justify-content:center; opacity:0; pointer-events:none; transition:opacity 0.2s ease; }
+    .modal-backdrop.active { opacity:1; pointer-events:auto; }
+
+    .task-modal { background:var(--bg-panel); border:1px solid var(--border); border-radius:16px; padding:24px; width:100%; max-width:360px; transform:translateY(20px) scale(0.95); transition:all 0.2s ease; box-shadow:0 10px 30px rgba(0,0,0,0.3); }
+    .modal-backdrop.active .task-modal { transform:translateY(0) scale(1); }
+    .task-modal h3 { margin:0 0 16px; font-size:16px; color:var(--text); font-weight:600; }
+
+    .form-field { margin-bottom:16px; }
+    .form-field label { display:block; font-size:11px; color:var(--text-dim); text-transform:uppercase; letter-spacing:1px; font-weight:600; margin-bottom:6px; }
+    #nx-app-wrapper .task-modal input { font-size:14px !important; padding:12px 14px !important; width:100%; border-radius:8px; background:rgba(0,0,0,0.2); border:1px solid var(--border); color:var(--text); box-sizing:border-box; }
+
+    .modal-actions { display:flex; gap:12px; margin-top:24px; justify-content:flex-end; }
+    .btn-cancel { padding:10px 16px; border:1px solid var(--border); border-radius:8px; background:transparent; color:var(--text); font-size:13px; font-weight:600; cursor:pointer; transition:all 0.2s; }
+    .btn-cancel:hover { background:rgba(255,255,255,0.05); }
+    .btn-add { padding:10px 20px; border:none; border-radius:8px; background:linear-gradient(135deg,#8b5cf6,#6d28d9); color:#fff; font-size:13px; font-weight:700; cursor:pointer; transition:all 0.2s; }
+    .btn-add:hover { filter:brightness(1.1); box-shadow:0 2px 10px rgba(139,92,246,0.4); }
+
+    .task-item {
+      display:flex; align-items:center; gap:12px; padding:12px 16px;
+      border-radius:10px; background:var(--bg-panel); border:1px solid var(--border);
+      margin-bottom:6px; animation:slideIn 0.25s ease; transition:all 0.2s;
+    }
+    .task-item:hover { border-color:rgba(139,92,246,0.25); }
+    .task-item.task-done { opacity:0.5; }
+    .task-check {
+      width:24px; height:24px; border-radius:6px; border:2px solid rgba(255,255,255,0.15);
+      background:transparent; cursor:pointer; display:flex; align-items:center; justify-content:center;
+      transition:all 0.2s; flex-shrink:0; color:transparent; font-size:12px;
+    }
+    .task-check:hover { border-color:#22c55e; background:rgba(34,197,94,0.1); }
+    .task-check.checked { background:#22c55e; border-color:#22c55e; color:#fff; }
+    .task-info { flex:1; }
+    .task-title { font-size:14px; font-weight:600; color:var(--text); }
+    .task-title.striked { text-decoration:line-through; opacity:0.6; }
+    .task-meta { font-size:11px; color:var(--text-dim); margin-top:2px; }
+    .task-pts { font-size:11px; font-weight:700; color:#a78bfa; padding:3px 8px; border-radius:4px; background:rgba(139,92,246,0.1); border:1px solid rgba(139,92,246,0.2); }
+    .btn-del { width:28px; height:28px; border-radius:6px; border:1px solid var(--border); background:transparent; color:var(--text-dim); cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all 0.2s; font-size:12px; }
+    .btn-del:hover { background:rgba(239,68,68,0.1); border-color:rgba(239,68,68,0.3); color:#ef4444; }
+    .empty-state { text-align:center; padding:40px; color:var(--text-dim); font-size:13px; }
+  </style>
+<base href="file:///C:/Users/jamil/Documents/Projeto%20AI/src/ui/nexus_modules/"><script>window.__NEXUS_BOOT__={"module": "overview", "theme": "dark", "theme_preset": "dark-neon", "theme_name": "Dark Neon", "theme_tokens": {"--accent": "#8b5cf6", "--accent-glow": "rgba(139,92,246,0.30)", "--accent-hover": "#7c3aed", "--accent-subtle": "rgba(139,92,246,0.08)", "--bg": "#0a0a0a", "--bg-panel": "#111111", "--border": "rgba(255,255,255,0.08)", "--border-accent": "rgba(139,92,246,0.35)", "--muted": "#71717a", "--shadow": "0 0 25px rgba(0,0,0,0.80)", "--sidebar": "#080808", "--surface": "rgba(255,255,255,0.04)", "--surface-hover": "rgba(255,255,255,0.08)", "--text": "#e4e4e7", "--text-dim": "#71717a", "--text-muted": "#52525b"}, "section": "overview"};</script><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"><link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet"><link rel="stylesheet" href="nexus_frame.css" /><style>html, body { background: transparent !important; }</style></head>
+<body><div id="nx-app-wrapper" class="neon-enabled" data-theme="dark" data-theme-preset="dark-neon" style="--accent: #8b5cf6; --accent-glow: rgba(139,92,246,0.30); --accent-hover: #7c3aed; --accent-subtle: rgba(139,92,246,0.08); --bg: #0a0a0a; --bg-panel: #111111; --border: rgba(255,255,255,0.08); --border-accent: rgba(139,92,246,0.35); --muted: #71717a; --shadow: 0 0 25px rgba(0,0,0,0.80); --sidebar: #080808; --surface: rgba(255,255,255,0.04); --surface-hover: rgba(255,255,255,0.08); --text: #e4e4e7; --text-dim: #71717a; --text-muted: #52525b"><div class="nx-chrome-inner" style="border-radius: 0;">
+  <header>
+    <div><h1># Tarefas</h1><span>Lista aberta · pontos ao concluir</span></div>
+    <div style="display:flex; gap:8px; align-items:center;">
+      <button type="button" class="btn btn-ghost" id="btnOpenCalendar" style="font-weight:600; color:#a78bfa;" onclick="openCalendarModal()">📅 <span id="btnDateLabel">Hoje</span></button>
+      <button type="button" class="btn btn-ghost" onclick="pywebview.api.jump('overview','{}')">Visão geral</button>
+    </div>
+  </header>
+  <main>
+    <div class="modal-backdrop" id="calendarModalBackdrop">
+      <div class="task-modal calendar-modal" onclick="event.stopPropagation()" style="max-width:320px; padding:20px;">
+        <div class="heatmap-header" style="margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+          <h3 style="margin:0; font-size:12px; color:var(--text-dim); text-transform:uppercase; letter-spacing:0; font-weight:600;">Calendário</h3>
+          <div style="display:flex; gap:4px; align-items:center; margin-left:auto;">
+            <button type="button" class="btn btn-ghost" style="padding:3px 7px; font-size:11px;" onclick="changeMonth(-1)">&lt;</button>
+            <span id="monthLabel" style="font-size:12px; font-weight:600; min-width:80px; text-align:center;"></span>
+            <button type="button" class="btn btn-ghost" style="padding:3px 7px; font-size:11px;" onclick="changeMonth(1)">&gt;</button>
+            <button type="button" class="btn btn-ghost" style="padding:3px 7px; font-size:11px;" onclick="goToday()">Hoje</button>
+          </div>
+        </div>
+        <div style="display:grid; grid-template-columns:repeat(7,1fr); text-align:center; font-size:10px; font-weight:bold; color:var(--text-dim); margin-bottom:6px; padding:0 4px;">
+          <div>D</div><div>S</div><div>T</div><div>Q</div><div>Q</div><div>S</div><div>S</div>
+        </div>
+        <div class="heatmap-grid" id="heatmap" style="display:grid; grid-template-columns:repeat(7,1fr); gap:4px; padding:0 4px;"></div>
+        <div class="heatmap-legend" style="justify-content:center; margin-top:12px;">
+          <div class="legend-item"><div class="legend-box" style="background:#22c55e;"></div> 100%</div>
+          <div class="legend-item"><div class="legend-box" style="background:#eab308;"></div> ≥50%</div>
+          <div class="legend-item"><div class="legend-box" style="background:#ef4444;"></div> &lt;50%</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Day Info Bar (shown when past day is selected) -->
+    <div id="dayInfoBar" style="display:none;"></div>
+
+    <div id="list"></div>
+    <button class="fab-btn" id="fabBtn">+</button>
+
+    <div class="modal-backdrop" id="taskModalBackdrop">
+      <div class="task-modal" onclick="event.stopPropagation()">
+        <h3>### Nova Tarefa</h3>
+        <div class="form-field">
+          <label>Título</label>
+          <input id="tt" type="text" placeholder="O que precisa fazer?" />
+        </div>
+        <div class="form-field">
+          <label>Prazo (Opcional)</label>
+          <input id="td" type="date" />
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-cancel" id="btnCancel">Cancelar</button>
+          <button type="button" class="btn-add" id="btnAdd">Criar Tarefa</button>
+        </div>
+      </div>
+    </div>
+  </main>
+  <script src="nexus_boot.js"></script>
+  <script>
+    const boot = readBoot();
+    const todayISO = new Date().toISOString().split('T')[0];
+    let selectedDateISO = todayISO;
+
+    let currentYear = new Date().getFullYear();
+    let currentMonth = new Date().getMonth() + 1;
+
+    async function loadHeatmap() {
+      const heatmap = document.getElementById('heatmap');
+      heatmap.innerHTML = '';
+      const histReq = await nxBridge('task_history', { year: currentYear, month: currentMonth });
+      const history = (histReq.ok ? histReq.data : []) || [];
+      const historyMap = {};
+      history.forEach(day => { historyMap[day.date] = day; });
+
+      const firstDay = new Date(currentYear, currentMonth - 1, 1).getDay();
+      const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
+
+      const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+      document.getElementById('monthLabel').textContent = `${monthNames[currentMonth - 1]} ${currentYear}`;
+
+      for (let i = 0; i < firstDay; i++) {
+        const emptyBox = document.createElement('div');
+        emptyBox.style.visibility = 'hidden';
+        heatmap.appendChild(emptyBox);
+      }
+
+      for (let i = 1; i <= daysInMonth; i++) {
+        const dateStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+        const dayData = historyMap[dateStr] || { total: 0, completed: 0 };
+        const box = document.createElement('div');
+        box.className = 'hm';
+        box.style.width = '100%';
+        box.style.aspectRatio = '1/1';
+        box.style.height = 'auto';
+        box.style.display = 'flex';
+        box.style.alignItems = 'center';
+        box.style.justifyContent = 'center';
+        box.style.fontSize = '10px';
+        box.style.fontWeight = 'bold';
+        box.style.color = 'var(--text)';
+        box.textContent = i;
+
+        const total = dayData.total || 0;
+        const completed = dayData.completed || 0;
+        if (total === 0) {
+          box.classList.add('hm-gray');
+        } else {
+          const ratio = completed / total;
+          if (ratio >= 1) box.classList.add('hm-green');
+          else if (ratio >= 0.5) box.classList.add('hm-yellow');
+          else box.classList.add('hm-red');
+        }
+
+        box.title = `${i} de ${monthNames[currentMonth - 1]} — ${completed}/${total} tarefas`;
+        box.dataset.date = dateStr;
+        box.onclick = () => selectDay(dateStr);
+        if (dateStr === selectedDateISO) box.classList.add('active-day');
+        heatmap.appendChild(box);
+      }
+    }
+
+    function changeMonth(delta) {
+      currentMonth += delta;
+      if (currentMonth < 1) { currentMonth = 12; currentYear--; }
+      else if (currentMonth > 12) { currentMonth = 1; currentYear++; }
+      loadHeatmap();
+    }
+
+    function goToday() {
+      currentYear = new Date().getFullYear();
+      currentMonth = new Date().getMonth() + 1;
+      selectDay(todayISO);
+      loadHeatmap();
+    }
+
+    const calBackdrop = document.getElementById('calendarModalBackdrop');
+    function openCalendarModal() { calBackdrop.classList.add('active'); loadHeatmap(); }
+    function closeCalendarModal() { calBackdrop.classList.remove('active'); }
+    calBackdrop.onclick = closeCalendarModal;
+
+    function selectDay(dateISO) {
+      selectedDateISO = dateISO;
+      document.querySelectorAll('.hm').forEach(b => {
+        if (b.dataset.date === dateISO) b.classList.add('active-day');
+        else b.classList.remove('active-day');
+      });
+      const label = document.getElementById('btnDateLabel');
+      if (dateISO === todayISO) {
+        label.textContent = "Hoje";
+      } else {
+        label.textContent = new Date(dateISO + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+      }
+      closeCalendarModal();
+      loadTasks();
+    }
+    async function loadTasks() {
+      const isToday = selectedDateISO === todayISO;
+      const dayInfoBar = document.getElementById('dayInfoBar');
+      const list = document.getElementById('list');
+
+      if (isToday) {
+        // Modo hoje: mostra TODAS as tarefas (pendentes + concluídas) para permitir desmarcar
+        dayInfoBar.style.display = 'none';
+        const r = await nxBridge('tasks_list', { include_done: true });
+        if (!r.ok) { list.innerHTML = '<div class="empty-state">' + (r.error||'Erro') + '</div>'; return; }
+        const allTasks = r.data || [];
+        const tasks = allTasks.filter(t => {
+          const created = (t.created_at || '').slice(0,10);
+          return !created || created <= todayISO;
+        });
+        if (!tasks.length) { list.innerHTML = '<div class="empty-state">Sem tarefas! Tudo limpo ✨</div>'; return; }
+        // Pendentes primeiro, depois concluídas com visual riscado
+        const pending = tasks.filter(t => !t.done_at);
+        const done = tasks.filter(t => !!t.done_at);
+        list.innerHTML = [...pending, ...done].map(t => renderTaskItem(t, true, !!t.done_at)).join('');
+        bindTaskButtons(true);
+      } else {
+        // Modo viagem no tempo
+        const r = await nxBridge('tasks_list', { target_date: selectedDateISO, include_done: true });
+        if (!r.ok) { list.innerHTML = '<div class="empty-state">' + (r.error||'Erro') + '</div>'; return; }
+        const tasks = r.data || [];
+        const done = tasks.filter(t => t._was_done);
+        const dateLabel = new Date(selectedDateISO + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
+        dayInfoBar.style.display = 'flex';
+        dayInfoBar.className = 'day-info-bar';
+        dayInfoBar.innerHTML =
+          '<div><div class="day-label">📅 ' + dateLabel + '</div>' +
+          '<div class="day-stats">' + done.length + '/' + tasks.length + ' concluídas</div></div>' +
+          '<button class="btn-back-today" onclick="selectDay(\'' + todayISO + '\')">Voltar para Hoje</button>';
+        if (!tasks.length) {
+          list.innerHTML = '<div class="empty-state">Nenhuma tarefa existia nesta data 📭</div>';
+          return;
+        }
+        list.innerHTML = tasks.map(t => renderTaskItem(t, false, t._was_done)).join('');
+        bindTaskButtons(false);
+      }
+    }
+
+    function renderTaskItem(t, isLive, wasDone) {
+      const doneClass = wasDone ? ' task-done' : '';
+      const checkClass = wasDone ? ' checked' : '';
+      const titleClass = wasDone ? ' striked' : '';
+      const checkContent = wasDone ? '✓' : '';
+      const checkAction = isLive
+        ? 'onclick="toggleTask(this)"'
+        : '';
+      const cursorStyle = isLive ? 'cursor:pointer;' : 'cursor:default;';
+      const delBtn = isLive
+        ? '<button type="button" class="btn-del btnDel" title="Apagar">✕</button>'
+        : '';
+      return (
+        '<div class="task-item' + doneClass + '" data-id="' + t.id + '">' +
+          '<button type="button" class="task-check' + checkClass + '" style="' + cursorStyle + '" ' + checkAction + ' title="' + (isLive ? 'Concluir/Desmarcar' : 'Registro passado') + '">' + checkContent + '</button>' +
+          '<div class="task-info"><div class="task-title' + titleClass + '">' + (t.title||'') + '</div><div class="task-meta">Prazo: ' + (t.due_date||'Sem prazo') + '</div></div>' +
+          '<span class="task-pts">+' + (t.points_reward||10) + ' pts</span>' +
+          delBtn +
+        '</div>'
+      );
+    }
+
+    async function toggleTask(btn) {
+      const item = btn.closest('.task-item');
+      const id = parseInt(item.dataset.id);
+      const isDone = btn.classList.contains('checked');
+      if (isDone) {
+        // Desmarcar
+        await nxBridge('task_complete', { task_id: id }); // toggle behaviour
+      } else {
+        await nxBridge('task_complete', { task_id: id });
+      }
+      await loadHeatmap();
+      await loadTasks();
+    }
+
+    function bindTaskButtons(isLive) {
+      if (!isLive) return;
+      document.querySelectorAll('.btnDel').forEach(b => {
+        b.onclick = async () => {
+          if (!confirm('Apagar tarefa?')) return;
+          await nxBridge('task_delete', { task_id: parseInt(b.closest('.task-item').dataset.id) });
+          await loadHeatmap();
+          await loadTasks();
+        };
+      });
+    }
+
+    // ---- Modal ----
+    const backdrop = document.getElementById('taskModalBackdrop');
+    const fabBtn = document.getElementById('fabBtn');
+    const btnCancel = document.getElementById('btnCancel');
+
+    function closeModal() {
+      backdrop.classList.remove('active');
+    }
+
+    fabBtn.onclick = () => {
+      backdrop.classList.add('active');
+      document.getElementById('tt').focus();
+    };
+    btnCancel.onclick = closeModal;
+    backdrop.onclick = closeModal;
+
+    document.getElementById('btnAdd').onclick = async () => {
+      const title = document.getElementById('tt').value.trim();
+      if (!title) return;
+      const due = document.getElementById('td').value.trim() || null;
+      const r = await nxBridge('task_add', { title, due_date: due, points_reward: 10 });
+      if (r.ok) {
+        document.getElementById('tt').value = '';
+        document.getElementById('td').value = '';
+        closeModal();
+        await loadHeatmap();
+        await loadTasks();
+      }
+      else alert(r.error || 'Erro');
+    };
+
+    // ---- Init ----
+    selectDay(todayISO);
+    loadHeatmap();
+    window.addEventListener('message', (e) => {
+      if (e.data === 'nexus-tab-focus') {
+        loadHeatmap();
+        loadTasks();
+      }
+    });
+  </script>
+</div></div></body>
+</html>

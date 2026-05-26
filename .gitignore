@@ -4,6 +4,7 @@ __pycache__/
 *$py.class
 .pytest_cache/
 .venv/
+.venv_*/
 venv/
 env/
 
@@ -15,6 +16,8 @@ build/
 
 # Environment variables
 .env
+.env.*
+!.env.example
 
 # Media / temporary files
 *.mp3
@@ -22,13 +25,43 @@ build/
 *.mp4
 out.mp3
 teste*.mp3
+temp_*
+screenshot*.jpg
+screenshot*.jpeg
+screenshot*.png
+scratch.py
+scratch2.py
+test_fish.py
+test_rvc.py
+test_tts.py
+dump_db.py
+scratch/
+run-logs/
 
 # OS generated files
 .DS_Store
 Thumbs.db
 
-# Modelos pesados e arquivos de cache
+# Local app data, caches and telemetry
+*.db
+*.sqlite3
 data/cache/
+data/coqui/
+data/logs/
+data/nltk_data/
+data/tts_benchmarks/
+data/rvc_models/
+data/*.pid
+data/critical_confirm_enabled.json
+
+# Local reference repos / generated catalogs
+Affine/
+hermes-agent-main/
+skills_catalog.md
+
+# Models and generated ML artifacts
 *.onnx
 *.bin
 *.pt
+*.pth
+*.index

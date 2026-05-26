@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Nexus · Loja & Metas</title>
+  <style>
+    @keyframes slideIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+    @keyframes celebrate { 0% { transform:scale(1); } 50% { transform:scale(1.05); } 100% { transform:scale(1); } }
+
+    #nx-app-wrapper .nx-chrome-inner > header { padding:14px 24px !important; }
+    #nx-app-wrapper .nx-chrome-inner > header h1 { font-size:18px !important; font-weight:700 !important; }
+    #nx-app-wrapper .nx-chrome-inner > main { padding:20px 24px 40px !important; }
+
+    /* Points banner */
+    .points-banner {
+      display:flex; align-items:center; justify-content:center; gap:12px;
+      padding:18px; border-radius:12px; margin-bottom:20px;
+      background:linear-gradient(135deg, rgba(139,92,246,0.12), rgba(0,0,0,0.4));
+      border:1px solid rgba(139,92,246,0.3);
+    }
+    .points-banner .pts-label { font-size:11px; color:var(--text-dim); text-transform:uppercase; letter-spacing:1px; font-weight:600; }
+    .points-banner .pts-value { font-size:28px; font-weight:900; color:#a78bfa; text-shadow:0 0 10px rgba(139,92,246,0.4); }
+    .points-banner .pts-unit { font-size:12px; color:var(--text-dim); }
+
+    /* Tabs */
+    .tab-bar { display:flex; gap:4px; margin-bottom:16px; padding:4px; background:rgba(255,255,255,0.03); border-radius:10px; border:1px solid var(--border); }
+    .tab-btn { flex:1; padding:8px; border:none; border-radius:8px; background:transparent; color:var(--text-dim); font-size:12px; font-weight:600; cursor:pointer; transition:all 0.2s; text-transform:uppercase; letter-spacing:0.5px; }
+    .tab-btn.active { background:rgba(139,92,246,0.15); color:#a78bfa; }
+    .tab-btn:hover:not(.active) { background:rgba(255,255,255,0.05); }
+
+    /* Section */
+    .section-title { font-size:12px; color:var(--text-dim); text-transform:uppercase; letter-spacing:1px; font-weight:600; margin:16px 0 10px; }
+
+    /* Reward cards */
+    .reward-card {
+      display:flex; align-items:center; gap:14px; padding:14px 16px;
+      border-radius:12px; background:var(--bg-panel); border:1px solid var(--border);
+      margin-bottom:8px; animation:slideIn 0.3s ease; transition:all 0.2s;
+    }
+    .reward-card:hover { border-color:rgba(139,92,246,0.3); transform:translateY(-1px); }
+    .reward-icon { font-size:24px; width:44px; height:44px; border-radius:10px; background:rgba(139,92,246,0.1); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .reward-info { flex:1; }
+    .reward-name { font-size:14px; font-weight:600; color:var(--text); }
+    .reward-desc { font-size:11px; color:var(--text-dim); margin-top:2px; }
+    .reward-cost { font-size:13px; font-weight:800; color:#a78bfa; flex-shrink:0; margin-right:10px; }
+    .btn-redeem {
+      padding:8px 16px; border:none; border-radius:8px;
+      background:linear-gradient(135deg,#8b5cf6,#6d28d9); color:#fff;
+      font-size:11px; font-weight:700; cursor:pointer; text-transform:uppercase;
+      letter-spacing:0.5px; transition:all 0.2s; flex-shrink:0;
+    }
+    .btn-redeem:hover { filter:brightness(1.1); box-shadow:0 2px 10px rgba(139,92,246,0.4); }
+    .btn-redeem:active { transform:scale(0.95); }
+    .btn-redeem:disabled { opacity:0.45; cursor:not-allowed; filter:saturate(0.55); box-shadow:none; }
+    .btn-del {
+      width:30px; height:30px; border-radius:8px; border:1px solid var(--border);
+      background:transparent; color:var(--text-dim); cursor:pointer;
+      display:flex; align-items:center; justify-content:center; transition:all 0.2s; font-size:14px;
+      margin-left:6px;
+    }
+    .btn-del:hover { background:rgba(239,68,68,0.1); border-color:rgba(239,68,68,0.3); color:#ef4444; }
+    .reward-status {
+      margin:-8px 0 16px; padding:12px 14px; border-radius:12px;
+      background:rgba(255,255,255,0.035); border:1px solid var(--border);
+      color:var(--text-dim); font-size:12px; line-height:1.45;
+    }
+    .reward-status strong { color:#a78bfa; }
+    .reward-status.locked { border-color:rgba(245,158,11,0.28); background:rgba(245,158,11,0.08); }
+    .reward-rule-panel {
+      display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px;
+      margin:-8px 0 16px;
+    }
+    .rule-card {
+      padding:12px; border-radius:12px; background:rgba(255,255,255,0.035);
+      border:1px solid var(--border); min-height:64px;
+    }
+    .rule-card strong { display:block; font-size:20px; line-height:1; color:#22d3ee; margin-bottom:8px; }
+    .rule-card span { display:block; color:var(--text-dim); font-size:10px; text-transform:uppercase; letter-spacing:0.7px; }
+    .reward-card.locked { opacity:0.74; }
+    .reward-card.ready { border-color:rgba(34,211,238,0.32); box-shadow:0 0 0 1px rgba(34,211,238,0.08) inset; }
+    .reward-availability { font-size:10px; color:#22d3ee; margin-top:4px; text-transform:uppercase; letter-spacing:0.55px; }
+    .reward-card.locked .reward-availability { color:var(--text-dim); }
+    .reward-history {
+      margin-top:16px; padding:14px; border-radius:12px; background:rgba(255,255,255,0.03);
+      border:1px solid var(--border);
+    }
+    .reward-history h3 { margin:0 0 10px; font-size:12px; color:var(--text); text-transform:uppercase; letter-spacing:0.8px; }
+    .history-row {
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+      padding:9px 0; border-top:1px solid rgba(255,255,255,0.07);
+      font-size:12px; color:var(--text-dim);
+    }
+    .history-row:first-child { border-top:none; }
+    .history-row strong { color:var(--text); font-size:12px; }
+    .history-row span { color:#a78bfa; font-weight:700; white-space:nowrap; }
+
+    /* Goals */
+    .goal-card {
+      padding:16px; border-radius:12px; background:var(--bg-panel);
+      border:1px solid var(--border); margin-bottom:8px; animation:slideIn 0.3s ease;
+    }
+    .goal-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+    .goal-name { font-size:14px; font-weight:600; color:var(--text); }
+    .goal-date { font-size:11px; color:var(--text-dim); }
+    .goal-bar-bg { width:100%; height:8px; background:rgba(255,255,255,0.06); border-radius:4px; overflow:hidden; }
+    .goal-bar-fill { height:100%; border-radius:4px; background:linear-gradient(90deg,#8b5cf6,#06b6d4); transition:width 0.4s; }
+    .goal-pct { font-size:12px; color:var(--text-dim); margin-top:6px; text-align:right; }
+
+    /* Add form */
+    .add-section { padding:16px 18px; border-radius:12px; background:var(--bg-panel); border:1px solid var(--border); margin-bottom:16px; }
+    .add-section h3 { margin:0 0 12px; font-size:13px; color:var(--text); font-weight:600; }
+    .form-row { display:flex; gap:10px; align-items:end; }
+    .form-field { flex:1; }
+    .form-field label { display:block; font-size:10px; color:var(--text-dim); text-transform:uppercase; letter-spacing:1px; font-weight:600; margin-bottom:5px; }
+    #nx-app-wrapper .add-section input { font-size:13px !important; padding:10px 12px !important; }
+    .btn-add {
+      padding:10px 18px; border:none; border-radius:8px;
+      background:linear-gradient(135deg,#8b5cf6,#6d28d9); color:#fff;
+      font-size:12px; font-weight:700; cursor:pointer; text-transform:uppercase; white-space:nowrap;
+      transition:all 0.2s;
+    }
+    .btn-add:hover { filter:brightness(1.1); }
+
+    .empty-state { text-align:center; padding:30px; color:var(--text-dim); font-size:13px; }
+
+    .toast-msg {
+      padding:12px 16px; border-radius:10px; margin-bottom:12px;
+      background:rgba(34,197,94,0.1); border:1px solid rgba(34,197,94,0.3);
+      color:#22c55e; font-size:13px; animation:celebrate 0.5s ease;
+    }
+
+    @media (max-width:720px) {
+      .reward-rule-panel { grid-template-columns:1fr; }
+      .reward-card { align-items:flex-start; flex-wrap:wrap; }
+      .reward-cost { margin-left:58px; }
+      .btn-redeem { width:100%; }
+      .form-row { flex-direction:column; align-items:stretch; }
+      .form-field { width:100%; }
+      .form-field[style] { max-width:none !important; }
+    }
+
+    .fab-add {
+      position: fixed; bottom: 30px; right: 30px; width: 56px; height: 56px;
+      border-radius: 50%; background: linear-gradient(135deg, #8b5cf6, #06b6d4);
+      color: #fff; font-size: 28px; font-weight: 300; border: none;
+      box-shadow: 0 4px 15px rgba(139,92,246,0.4); cursor: pointer;
+      display: grid; place-items: center; z-index: 100; transition: transform 0.2s, filter 0.2s;
+    }
+    .fab-add:hover { transform: scale(1.05); filter: brightness(1.1); }
+    .modal-overlay {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.6); backdrop-filter: blur(5px);
+      z-index: 200; display: flex; align-items: center; justify-content: center;
+      opacity: 0; pointer-events: none; transition: opacity 0.3s;
+    }
+    .modal-overlay.active { opacity: 1; pointer-events: auto; }
+    .modal-overlay .add-section {
+      width: 90%; max-width: 400px;
+      margin: 0; box-shadow: 0 20px 40px rgba(0,0,0,0.5); position: relative;
+    }
+    .modal-close {
+      position: absolute; top: 16px; right: 16px; background: none; border: none;
+      color: var(--text-dim); font-size: 18px; cursor: pointer; z-index: 10;
+    }
+
+  </style>
+<base href="file:///C:/Users/jamil/Documents/Projeto%20AI/src/ui/nexus_modules/"><script>window.__NEXUS_BOOT__={"module": "overview", "theme": "dark", "theme_preset": "dark-neon", "theme_name": "Dark Neon", "theme_tokens": {"--accent": "#8b5cf6", "--accent-glow": "rgba(139,92,246,0.30)", "--accent-hover": "#7c3aed", "--accent-subtle": "rgba(139,92,246,0.08)", "--bg": "#0a0a0a", "--bg-panel": "#111111", "--border": "rgba(255,255,255,0.08)", "--border-accent": "rgba(139,92,246,0.35)", "--muted": "#71717a", "--shadow": "0 0 25px rgba(0,0,0,0.80)", "--sidebar": "#080808", "--surface": "rgba(255,255,255,0.04)", "--surface-hover": "rgba(255,255,255,0.08)", "--text": "#e4e4e7", "--text-dim": "#71717a", "--text-muted": "#52525b"}, "section": "overview"};</script><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"><link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet"><link rel="stylesheet" href="nexus_frame.css" /><style>html, body { background: transparent !important; }</style></head>
+<body><div id="nx-app-wrapper" class="neon-enabled" data-theme="dark" data-theme-preset="dark-neon" style="--accent: #8b5cf6; --accent-glow: rgba(139,92,246,0.30); --accent-hover: #7c3aed; --accent-subtle: rgba(139,92,246,0.08); --bg: #0a0a0a; --bg-panel: #111111; --border: rgba(255,255,255,0.08); --border-accent: rgba(139,92,246,0.35); --muted: #71717a; --shadow: 0 0 25px rgba(0,0,0,0.80); --sidebar: #080808; --surface: rgba(255,255,255,0.04); --surface-hover: rgba(255,255,255,0.08); --text: #e4e4e7; --text-dim: #71717a; --text-muted: #52525b"><div class="nx-chrome-inner" style="border-radius: 0;">
+  <header>
+    <div>
+      <h1># Metas & Loja</h1>
+      <span>Recompensas · 1 resgate por dia</span>
+    </div>
+    <button type="button" class="btn btn-ghost" onclick="pywebview.api.jump('overview','{}')">Visão geral</button>
+  </header>
+  <main>
+    <div id="banner"></div>
+
+    <div class="points-banner">
+      <div>
+        <div class="pts-label">Seus Pontos</div>
+        <div class="pts-value" id="ptsValue">0</div>
+      </div>
+      <div class="pts-unit">pts</div>
+    </div>
+    <div class="reward-status" id="rewardStatus">Checando loja...</div>
+    <div class="reward-rule-panel" id="rewardRulePanel">
+      <div class="rule-card">
+        <strong id="rewardDailyLimit">1</strong>
+        <span>resgate por dia</span>
+      </div>
+      <div class="rule-card">
+        <strong id="rewardRemaining">1</strong>
+        <span>liberado hoje</span>
+      </div>
+      <div class="rule-card">
+        <strong id="rewardResetHint">Hoje</strong>
+        <span>proxima janela</span>
+      </div>
+    </div>
+
+    <button class="fab-add" onclick="openActiveModal()">+</button>
+
+    <div class="tab-bar">
+      <button class="tab-btn active" data-tab="shop" onclick="showTab('shop')">🛒 Loja</button>
+      <button class="tab-btn" data-tab="goals" onclick="showTab('goals')">🎯 Metas</button>
+    </div>
+
+    <div id="shopSection">
+
+
+      <div id="rewardsList"></div>
+      <div class="reward-history">
+        <h3>### Historico recente</h3>
+        <div id="rewardHistoryList"><div class="empty-state">Carregando historico...</div></div>
+      </div>
+    </div>
+
+    <div id="goalsSection" style="display:none;">
+
+      <div id="goalsList"></div>
+    </div>
+  <div id="shopModal" class="modal-overlay"><div class="add-section" id="rewardAddForm">
+        <button type="button" class="modal-close" onclick="closeShopModal()">✕</button><h3>### Criar Recompensa</h3>
+        <div class="form-row">
+          <div class="form-field" style="flex:2;">
+            <label>Nome</label>
+            <input id="rn" type="text" placeholder="Ex.: Sorvete" />
+          </div>
+          <div class="form-field" style="flex:2;">
+            <label>Descrição</label>
+            <input id="rd" type="text" placeholder="Opcional" />
+          </div>
+          <div class="form-field" style="max-width:100px;">
+            <label>Custo (pts)</label>
+            <input id="rc" type="number" value="100" min="1" />
+          </div>
+          <button type="button" class="btn-add" onclick="addCustomReward()">Criar</button>
+        </div>
+      </div></div>
+  <div id="goalModal" class="modal-overlay"><div class="add-section">
+        <button type="button" class="modal-close" onclick="closeGoalModal()">✕</button><h3>### Nova Meta</h3>
+        <div class="form-row">
+          <div class="form-field">
+            <label>Nome</label>
+            <input id="gn" type="text" placeholder="Ex.: Passar no ENEM" />
+          </div>
+          <div class="form-field" style="max-width:160px;">
+            <label>Data Alvo</label>
+            <input id="gd" type="date" />
+          </div>
+          <button type="button" class="btn-add" id="btnGoalAdd">Criar</button>
+        </div>
+      </div></div>
+  </main>
+
+  <script src="nexus_boot.js"></script>
+  <script>
+    const boot = readBoot();
+    if (boot.toast) showToastBanner(boot.toast);
+    let redeemedToday = false;
+    let currentPoints = 0;
+
+    function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
+    function fmtDate(value) {
+      if (!value) return '--';
+      const text = String(value).slice(0, 10);
+      const parts = text.split('-');
+      return parts.length === 3 ? parts[2] + '/' + parts[1] : text;
+    }
+
+    const REWARD_ICONS = {'anime':'📺','rodízio':'🍖','games':'🎮','sorvete':'🍦','folga':'😴','filme':'🎬'};
+    function getRewardIcon(name) {
+      const n = (name||'').toLowerCase();
+      for (const [k,v] of Object.entries(REWARD_ICONS)) { if (n.includes(k)) return v; }
+      return '🎁';
+    }
+
+    let activeTab = 'shop';
+    function showTab(tab) {
+      activeTab = tab;
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+      document.getElementById('shopSection').style.display = tab === 'shop' ? 'block' : 'none';
+      document.getElementById('goalsSection').style.display = tab === 'goals' ? 'block' : 'none';
+    }
+    function openActiveModal() {
+      if(activeTab === 'shop') document.getElementById('shopModal').classList.add('active');
+      else document.getElementById('goalModal').classList.add('active');
+    }
+    function closeShopModal() { document.getElementById('shopModal').classList.remove('active'); }
+    function closeGoalModal() { document.getElementById('goalModal').classList.remove('active'); }
+
+    function renderRewardHistory(history) {
+      const el = document.getElementById('rewardHistoryList');
+      const rows = Array.isArray(history) ? history : [];
+      if (!rows.length) {
+        el.innerHTML = '<div class="empty-state">Nenhum resgate recente. Guarde pontos para uma recompensa boa.</div>';
+        return;
+      }
+      el.innerHTML = rows.map(item => (
+        '<div class="history-row">' +
+          '<div><strong>' + esc(item.name || 'Recompensa') + '</strong><div>' + esc(item.description || 'Resgate') + '</div></div>' +
+          '<span>' + fmtDate(item.redemption_date || item.created_at) + ' · ' + Number(item.cost || 0) + ' pts</span>' +
+        '</div>'
+      )).join('');
+    }
+
+    function renderRewardStatus(data) {
+      const el = document.getElementById('rewardStatus');
+      redeemedToday = !!data.redeemed_today;
+      currentPoints = Number(data.points || currentPoints || 0);
+      const today = data.today_reward;
+      const limit = Number(data.daily_limit || 1);
+      const remaining = Number(data.remaining_today ?? (redeemedToday ? 0 : limit));
+      document.getElementById('ptsValue').textContent = currentPoints.toLocaleString();
+      document.getElementById('rewardDailyLimit').textContent = limit;
+      document.getElementById('rewardRemaining').textContent = remaining;
+      document.getElementById('rewardResetHint').textContent = fmtDate(data.next_available_date || data.date);
+      el.classList.toggle('locked', redeemedToday);
+      el.innerHTML = redeemedToday
+        ? '<strong>Loja usada hoje.</strong> Recompensa liberada: ' + esc(today && today.name ? today.name : 'registrada') + '. Novo resgate em ' + fmtDate(data.next_available_date) + '.'
+        : '<strong>Disponivel hoje.</strong> Voce ainda pode resgatar ' + remaining + ' de ' + limit + ' recompensa nesta data.';
+      renderRewardHistory(data.history || []);
+    }
+
+    async function loadAll() {
+      const stats = await nxBridge('user_stats', {});
+      if (stats.ok && stats.data) {
+        currentPoints = stats.data.points || 0;
+        document.getElementById('ptsValue').textContent = currentPoints.toLocaleString();
+      }
+      await loadRewardStatus();
+      await loadRewards();
+      await loadGoals();
+    }
+
+    async function loadRewardStatus() {
+      const r = await nxBridge('reward_status', { limit: 5 });
+      const el = document.getElementById('rewardStatus');
+      if (!r.ok || !r.data) {
+        el.textContent = 'Nao consegui verificar o limite diario da loja.';
+        return;
+      }
+      renderRewardStatus(r.data);
+    }
+
+    async function loadRewards() {
+      const r = await nxBridge('rewards_list', {});
+      const el = document.getElementById('rewardsList');
+      if (!r.ok) { el.innerHTML = '<div class="empty-state">' + esc(r.error) + '</div>'; return; }
+      const rows = r.data || [];
+      if (!rows.length) { el.innerHTML = '<div class="empty-state">Sem recompensas cadastradas.</div>'; return; }
+      el.innerHTML = rows.map(rw => {
+        const icon = getRewardIcon(rw.name);
+        const cost = Number(rw.cost || 0);
+        const canRedeem = !redeemedToday && currentPoints >= cost;
+        const reason = redeemedToday
+          ? 'Limite diario atingido'
+          : (currentPoints < cost ? 'Faltam ' + (cost - currentPoints) + ' pts' : 'Liberado hoje');
+        return (
+          '<div class="reward-card ' + (canRedeem ? 'ready' : 'locked') + '" data-reward-name="' + esc(rw.name) + '">' +
+            '<div class="reward-icon">' + icon + '</div>' +
+            '<div class="reward-info">' +
+              '<div class="reward-name">' + esc(rw.name) + '</div>' +
+              '<div class="reward-desc">' + esc(rw.description || '') + '</div>' +
+              '<div class="reward-availability">' + esc(reason) + '</div>' +
+            '</div>' +
+            '<div class="reward-cost">' + cost + ' pts</div>' +
+            '<button type="button" class="btn-redeem btnRedeem" ' + (!canRedeem ? 'disabled' : '') + '>' +
+              (redeemedToday ? 'Usado hoje' : (currentPoints < cost ? 'Sem pontos' : 'Resgatar')) +
+            '</button>' +
+            '<button type="button" class="btn-del" onclick="deleteReward(' + rw.id + ')" title="Remover">✕</button>' +
+          '</div>'
+        );
+      }).join('');
+      el.querySelectorAll('.btnRedeem').forEach(b => {
+        b.onclick = async () => {
+          const card = b.closest('.reward-card');
+          const name = card.dataset.rewardName;
+          if (!confirm('Resgatar "' + name + '"? (máx. 1 por dia)')) return;
+          const out = await nxBridge('reward_redeem', { reward_name: name });
+          if (out.ok) {
+            const ban = document.getElementById('banner');
+            ban.innerHTML = '<div class="toast-msg">🎉 ' + ((out.data && out.data.message) || 'Resgatado!') + '</div>';
+            setTimeout(() => ban.innerHTML = '', 4000);
+            loadAll();
+          } else alert(out.error || 'Erro');
+        };
+      });
+    }
+
+    async function addCustomReward() {
+      const name = document.getElementById('rn').value.trim();
+      const cost = parseInt(document.getElementById('rc').value, 10);
+      if (!name || isNaN(cost)) return;
+      const desc = document.getElementById('rd').value.trim();
+      const out = await nxBridge('reward_add', { name, cost, description: desc });
+      if (out.ok) {
+        document.getElementById('rn').value = '';
+        document.getElementById('rc').value = '100';
+        document.getElementById('rd').value = '';
+        closeShopModal(); loadAll();
+      } else alert(out.error || 'Erro ao criar recompensa');
+    }
+
+    async function deleteReward(id) {
+      if (!confirm('Remover esta recompensa?')) return;
+      const out = await nxBridge('reward_delete', { reward_id: id });
+      if (out.ok) {
+        loadAll();
+      } else alert(out.error || 'Erro ao remover recompensa');
+    }
+
+    async function loadGoals() {
+      const r = await nxBridge('goals_list', {});
+      const el = document.getElementById('goalsList');
+      if (!r.ok) { el.innerHTML = '<div class="empty-state">' + esc(r.error) + '</div>'; return; }
+      const rows = r.data || [];
+      if (!rows.length) { el.innerHTML = '<div class="empty-state">Sem metas ativas.</div>'; return; }
+      el.innerHTML = rows.map(g => {
+        const prog = Math.max(0, Math.min(100, parseInt(g.progress)||0));
+        return (
+          '<div class="goal-card" data-goal-name="' + esc(g.name) + '">' +
+            '<div class="goal-header">' +
+              '<div class="goal-name">' + esc(g.name) + '</div>' +
+              '<div class="goal-date">' + esc(g.target_date || 'Sem prazo') + '</div>' +
+            '</div>' +
+            '<div class="goal-bar-bg"><div class="goal-bar-fill" style="width:' + prog + '%"></div></div>' +
+            '<div class="goal-pct">' + prog + '%</div>' +
+          '</div>'
+        );
+      }).join('');
+    }
+
+    document.getElementById('btnGoalAdd').onclick = async () => {
+      const name = document.getElementById('gn').value.trim();
+      if (!name) return;
+      const td = document.getElementById('gd').value.trim();
+      const out = await nxBridge('goal_add', { name, target_date: td || undefined });
+      if (out.ok) { document.getElementById('gn').value = ''; document.getElementById('gd').value = ''; closeGoalModal(); loadGoals(); }
+      else alert(out.error || 'Erro');
+    };
+
+    loadAll();
+
+    window.addEventListener('message', (e) => {
+      if (e.data === 'nexus-tab-focus') loadAll();
+    });
+  </script>
+</div></div></body>
+</html>

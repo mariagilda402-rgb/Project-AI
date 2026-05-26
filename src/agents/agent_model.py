@@ -34,7 +34,7 @@ class AgentProfile:
     name: str = "Assistente"
     persona: str = "Você é uma assistente virtual amigável e prestativa."
     # TTS
-    tts_provider: str = "edge"           # edge, kokoro, openai, local
+    tts_provider: str = "edge"           # styletts2, xtts, edge, piper, rvc, kokoro, openai, local
     tts_voice: str = "pt-BR-FranciscaNeural"
     tts_speed: float = 1.0               # Multiplicador de velocidade (0.5 a 2.0)
     edge_tts_rate: str = "+10%"

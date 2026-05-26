@@ -18,13 +18,16 @@ def test_merge_openai_messages_fuses_extra_system():
     assert msgs[-1] == {"role": "user", "content": "Oi"}
 
 
-def test_order_primary_gemini_skip_gemini():
+def test_order_primary_gemini_skip_gemini_uses_configured_fallbacks_only():
     llm = LLMService(
         gemini_api_key="x",
         gemini_model="m",
+        openrouter_api_key="k",
+        openrouter_model="qwen/free",
         primary_llm_provider="gemini",
     )
-    assert llm._chat_provider_order(skip_gemini=True) == ["openrouter", "nvidia", "groq"]
+    order = llm._chat_provider_order(skip_gemini=True)
+    assert order == ["openrouter"]
 
 
 def test_order_primary_nvidia():
@@ -50,7 +53,7 @@ def test_order_primary_groq():
     order = llm._chat_provider_order(skip_gemini=False)
     assert order[0] == "groq"
     assert "gemini" not in order
-    assert llm.wants_groq_native_tools() is True
+    assert llm.wants_groq_native_tools() is False
 
 
 def test_order_groq_can_include_gemini_fallback_when_enabled():

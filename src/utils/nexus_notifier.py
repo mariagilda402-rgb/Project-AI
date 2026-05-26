@@ -30,12 +30,23 @@ def broadcast_nexus_state(service):
     habits = service.db.get_habits()
     study_stats = service.get_study_stats()
     goals = service.get_goals()
+    try:
+        finance_snapshot = service.get_finance_snapshot()
+    except Exception:
+        finance_snapshot = None
+    try:
+        tasks = service.db.list_tasks(include_done=False)[:40]
+    except Exception:
+        tasks = []
     payload = {
         "type": "nexus_sync",
         "stats": stats,
         "rewards": rewards,
         "habits": habits,
         "study_stats": study_stats,
-        "goals": goals
+        "goals": goals,
+        "finance_snapshot": finance_snapshot,
+        "global_streak": service.db.compute_global_streak(),
+        "tasks": tasks,
     }
     notify_nexus_update(payload)

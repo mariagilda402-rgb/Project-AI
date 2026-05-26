@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from google.genai import types
 
 
@@ -7,7 +9,136 @@ def _str_prop(desc: str) -> types.Schema:
     return types.Schema(type=types.Type.STRING, description=desc)
 
 
-def build_agent_tool(dynamic_tools: list = None) -> types.Tool:
+@dataclass(frozen=True)
+class _NexusModeProfile:
+    description: str
+    properties: frozenset[str]
+
+
+_NEXUS_MODE_PROFILES: dict[str, _NexusModeProfile] = {
+    "news": _NexusModeProfile(
+        description=(
+            "Comandos estruturados Nexus para o Modo Noticias. Use apenas: "
+            "news_briefing (query opcional, limit), news_history (limit), "
+            "news_save_note (item ou briefing + item_index, subject opcional), "
+            "news_followup_task (item ou briefing + item_index, due_date opcional), "
+            "news_flashcards_generate (item ou briefing + item_index, max_cards opcional), "
+            "open_ui (tab: news). Nao use financas, loja, arquivos, ops ou acoes fora de noticias."
+        ),
+        properties=frozenset(
+            {
+                "action",
+                "query",
+                "limit",
+                "item",
+                "briefing",
+                "item_index",
+                "subject",
+                "due_date",
+                "max_cards",
+                "tab",
+            }
+        ),
+    ),
+    "psych_coach": _NexusModeProfile(
+        description=(
+            "Comandos estruturados Nexus para Modo Psicologo/Coach. Use apenas apoio seguro: "
+            "habit_add, habit_complete, task_add, task_list, goal_add, goal_update, "
+            "note_list, note_get, note_save, note_append, open_ui (notes|habits|goals|progress). "
+            "Nao use noticias, financas, loja, ops, arquivos ou mensagens externas neste modo."
+        ),
+        properties=frozenset(
+            {
+                "action",
+                "habit_name",
+                "name",
+                "description",
+                "xp_reward",
+                "title",
+                "due_date",
+                "task_id",
+                "target_date",
+                "progress",
+                "subject",
+                "note_id",
+                "content",
+                "text",
+                "tab",
+            }
+        ),
+    ),
+}
+
+
+def _nexus_mode_profile(active_mode: str | None) -> _NexusModeProfile | None:
+    return _NEXUS_MODE_PROFILES.get((active_mode or "").strip().lower())
+
+
+def _apply_gemini_nexus_profile(
+    declarations: list[types.FunctionDeclaration],
+    active_mode: str | None,
+) -> list[types.FunctionDeclaration]:
+    profile = _nexus_mode_profile(active_mode)
+    if not profile:
+        return declarations
+
+    updated: list[types.FunctionDeclaration] = []
+    for declaration in declarations:
+        if declaration.name != "nexus_command":
+            updated.append(declaration)
+            continue
+
+        existing_props = declaration.parameters.properties if declaration.parameters else {}
+        props = {
+            name: schema
+            for name, schema in dict(existing_props or {}).items()
+            if name in profile.properties
+        }
+        updated.append(
+            types.FunctionDeclaration(
+                name="nexus_command",
+                description=profile.description,
+                parameters=types.Schema(
+                    type=types.Type.OBJECT,
+                    properties=props,
+                    required=["action"],
+                ),
+            )
+        )
+    return updated
+
+
+def _apply_openai_nexus_profile(funcs: list[dict], active_mode: str | None) -> list[dict]:
+    profile = _nexus_mode_profile(active_mode)
+    if not profile:
+        return funcs
+
+    updated: list[dict] = []
+    for item in funcs:
+        if item.get("function", {}).get("name") != "nexus_command":
+            updated.append(item)
+            continue
+
+        function = dict(item["function"])
+        params = dict(function.get("parameters") or {})
+        existing_props = params.get("properties") or {}
+        params["properties"] = {
+            name: schema
+            for name, schema in dict(existing_props).items()
+            if name in profile.properties
+        }
+        params["required"] = ["action"]
+        function["description"] = profile.description
+        function["parameters"] = params
+        updated.append({"type": item.get("type", "function"), "function": function})
+    return updated
+
+
+def build_agent_tool(
+    dynamic_tools: list = None,
+    allowed_tool_names: set[str] | frozenset[str] | None = None,
+    active_mode: str | None = None,
+) -> types.Tool:
     """Declaracoes Gemini (function calling) — funcoes consolidadas + skills dinamicas."""
     declarations = [
             types.FunctionDeclaration(
@@ -102,22 +233,139 @@ def build_agent_tool(dynamic_tools: list = None) -> types.Tool:
             ),
             types.FunctionDeclaration(
                 name="run_finance_command",
-                description="Gastos e relatorios no modulo financeiro local.",
+                description=(
+                    "Financas Nexus (Aether): gastos/receitas em SQLite. "
+                    "Use texto natural (ex.: gastei 50 reais com comida, gasto de ontem 20 reais cafe, ganhei 100 reais)."
+                ),
                 parameters=types.Schema(
                     type=types.Type.OBJECT,
                     properties={
-                        "command": _str_prop("Texto do pedido (gasto, relatorio)."),
+                        "command": _str_prop("Texto do pedido (gasto, receita, relatorio)."),
                     },
                     required=["command"],
                 ),
             ),
             types.FunctionDeclaration(
-                name="control_visualizer",
-                description="Controla o visualizador de midia ou modo de exibicao.",
+                name="nexus_command",
+                description=(
+                    "Comandos estruturados Nexus Life OS. action: "
+                    "finance_add (type expense|income, amount, category, description, occurred_at opcional ISO date, notes, is_debt), "
+                    "finance_list (date_from, date_to opcional), finance_delete (transaction_id ou description/category/occurred_at/type/amount), "
+                    "finance_update (transaction_id ou target_description/target_date; new_amount/new_category/new_description/new_notes/new_is_debt), "
+                    "habit_complete (habit_name), habit_add (name, description, xp_reward, days_of_week opcional lista 0-6), "
+                    "task_add (title, due_date opcional ISO), task_complete (task_id), task_delete (task_id), task_list (due_date, include_done), "
+                    "goal_add (name, target_date), goal_update (name, progress), reward_redeem (reward_name), reward_status, "
+                    "preset_apply_json (habits: lista de objetos), preset_from_goals (goals ou objectives), "
+                    "preset_save (name), preset_apply (name), presets_list, "
+                    "theme_list, theme_apply (module, preset_id), theme_generate (module, prompt, name opcional), "
+                    "news_briefing (query opcional, limit), news_history (limit), "
+                    "news_save_note (item ou briefing + item_index, subject opcional), "
+                    "news_followup_task (item ou briefing + item_index, due_date opcional), "
+                    "news_flashcards_generate (item ou briefing + item_index, max_cards opcional), "
+                    "memory_graph (query opcional, limit, include_markdown), memory_graph_context (query/pergunta para contexto ranqueado), "
+                    "memory_graph_export_obsidian (folder/path, query opcional), memory_graph_import_obsidian (folder/path, subject opcional), "
+                    "ops_dashboard (open_window opcional), ops_metric_set (key, value, label, unit, target, period, trend), "
+                    "open_ui (tab: dashboard|overview|habits|finance|notes|memory_graph|study|tasks|progress|goals|rewards|quiz|news), "
+                    "nexus_batch (steps: JSON array ordenado com acoes Nexus; use para pedidos com mais de uma acao), "
+                    "note_list (subject opcional), note_get (note_id), note_save (subject, title, content: USE MARKDOWN para formatar, ex: # Título, e ![img](url) para imagens da web), note_append (note_id, text), "
+                    "note_summarize (note_id, append_summary opcional, max_sentences opcional), "
+                    "note_teach (note_id, question opcional, max_points opcional), subject_teach (subject, question opcional, max_points opcional), "
+                    "note_attach_media (note_id, media_url, caption opcional), "
+                    "flashcards_generate (note_id ou subject, max_cards), flashcard_review (card_id, quality 0-5), "
+                    "flashcards_due (limit), quiz_random (n, area opcional), quiz_attempt_review (attempt_id), "
+                    "quiz_flashcards_generate (attempt_id, only_wrong opcional), study_recommendations."
+                ),
                 parameters=types.Schema(
                     type=types.Type.OBJECT,
                     properties={
-                        "command": _str_prop("Comando para o visualizador."),
+                        "action": _str_prop("Nome da acao (ver descricao), incluindo memory_graph e memory_graph_context para grafo neural local."),
+                        "steps": _str_prop("Para nexus_batch: JSON array ordenado de objetos de comando Nexus."),
+                        "module": _str_prop("Modulo/janela Nexus para temas: overview, habits, finance, notes, study, tasks, progress, goals, quiz."),
+                        "preset_id": _str_prop("ID do preset visual para theme_apply."),
+                        "prompt": _str_prop("Descricao natural do estilo para theme_generate."),
+                        "type": _str_prop("Para finance_add: expense ou income."),
+                        "amount": _str_prop("Valor numerico como string."),
+                        "category": _str_prop("Categoria financeira."),
+                        "description": _str_prop("Descricao livre."),
+                        "occurred_at": _str_prop("Data ISO YYYY-MM-DD (opcional)."),
+                        "notes": _str_prop("Observacoes (opcional)."),
+                        "is_debt": _str_prop("0 ou 1 para marcar divida (opcional)."),
+                        "transaction_id": _str_prop("ID da transacao para finance_delete ou finance_update."),
+                        "target_description": _str_prop("Texto para localizar transacao no finance_update."),
+                        "target_category": _str_prop("Categoria para localizar transacao no finance_update."),
+                        "target_date": _str_prop("Data para localizar transacao no finance_update ou data alvo ISO para goal_add."),
+                        "target_amount": _str_prop("Valor para localizar transacao no finance_update."),
+                        "new_amount": _str_prop("Novo valor no finance_update."),
+                        "new_category": _str_prop("Nova categoria no finance_update."),
+                        "new_description": _str_prop("Nova descricao no finance_update."),
+                        "new_notes": _str_prop("Novas observacoes no finance_update."),
+                        "new_is_debt": _str_prop("0 ou 1 para atualizar divida no finance_update."),
+                        "reward_name": _str_prop("Nome da recompensa para reward_redeem."),
+                        "progress": _str_prop("Progresso 0-100 para goal_update."),
+                        "habit_name": _str_prop("Nome do habito para completar."),
+                        "name": _str_prop("Nome (habito)."),
+                        "xp_reward": _str_prop("XP do habito."),
+                        "title": _str_prop("Titulo tarefa ou nota."),
+                        "due_date": _str_prop("Data ISO tarefa."),
+                        "task_id": _str_prop("ID numerico tarefa."),
+                        "note_id": _str_prop("ID numerico nota."),
+                        "content": _str_prop("Conteudo markdown nota."),
+                        "subject": _str_prop("Materia / assunto."),
+                        "text": _str_prop("Texto a acrescentar na nota."),
+                        "question": _str_prop("Pergunta para note_teach ou subject_teach / modo professor."),
+                        "media_url": _str_prop("URL, caminho local ou data URL de imagem para note_attach_media."),
+                        "caption": _str_prop("Legenda/alt da imagem para note_attach_media."),
+                        "key": _str_prop("Chave da metrica Business/Ops para ops_metric_set."),
+                        "value": _str_prop("Valor da metrica Business/Ops para ops_metric_set."),
+                        "target": _str_prop("Meta da metrica Business/Ops para ops_metric_set."),
+                        "label": _str_prop("Rotulo legivel da metrica Business/Ops."),
+                        "unit": _str_prop("Unidade da metrica: BRL, count, percent, ratio."),
+                        "period": _str_prop("Periodo da metrica Business/Ops."),
+                        "trend": _str_prop("Direcao desejada: up ou down."),
+                        "open_window": _str_prop("true/false para abrir janela ao montar painel."),
+                        "append_summary": _str_prop("true/false para anexar resumo IA na nota."),
+                        "max_sentences": _str_prop("Quantidade maxima de frases no resumo."),
+                        "max_points": _str_prop("Quantidade maxima de pontos para note_teach ou subject_teach."),
+                        "card_id": _str_prop("ID flashcard."),
+                        "quality": _str_prop("Qualidade revisao 0-5."),
+                        "max_cards": _str_prop("Maximo de flashcards para flashcards_generate."),
+                        "attempt_id": _str_prop("ID da tentativa para quiz_attempt_review ou quiz_flashcards_generate."),
+                        "only_wrong": _str_prop("true/false para gerar flashcards apenas dos erros do simulado."),
+                        "query": _str_prop("Tema de pesquisa para news_briefing."),
+                        "limit": _str_prop("Limite lista."),
+                        "include_markdown": _str_prop("true/false para incluir arquivos .md no memory_graph."),
+                        "folder": _str_prop("Pasta local para import/export Obsidian Markdown."),
+                        "path": _str_prop("Caminho local alternativo para import/export Obsidian Markdown."),
+                        "item": _str_prop("Objeto JSON da noticia selecionada para news_save_note."),
+                        "briefing": _str_prop("Objeto JSON do briefing para news_save_note."),
+                        "item_index": _str_prop("Indice 1-based da noticia dentro do briefing para news_save_note."),
+                        "n": _str_prop("Numero de questoes quiz."),
+                        "area": _str_prop("Area ENEM / quiz."),
+                        "habits": _str_prop("JSON array de habitos para preset_apply_json."),
+                        "goals": _str_prop("Lista ou texto de objetivos para preset_from_goals."),
+                        "objectives": _str_prop("Alias de goals para preset_from_goals."),
+                        "preset_name": _str_prop("Nome opcional do preset gerado/aplicado."),
+                        "tab": _str_prop("Aba UI Nexus."),
+                        "include_done": _str_prop("true/false para task_list."),
+                        "date_from": _str_prop("Inicio periodo finance_list."),
+                        "date_to": _str_prop("Fim periodo finance_list."),
+                    },
+                    required=["action"],
+                ),
+            ),
+            types.FunctionDeclaration(
+                name="control_visualizer",
+                description=(
+                    "Controla o visualizador Jarvis: estado visual do particle core "
+                    "(inativo, escutando, pensando, falando, executando, alerta), emocao, posicao, visibilidade e microfone."
+                ),
+                parameters=types.Schema(
+                    type=types.Type.OBJECT,
+                    properties={
+                        "command": _str_prop(
+                            "Comando para o visualizador. Exemplos: 'estado executando sincronizando comandos', "
+                            "'estado alerta', 'emocao feliz', 'mover para superior direito', 'esconda', 'mutar microfone'."
+                        ),
                     },
                     required=["command"],
                 ),
@@ -307,9 +555,12 @@ def build_agent_tool(dynamic_tools: list = None) -> types.Tool:
         manually_declared = {
             "manage_files", "open_windows_app", "set_ai_volume", "delegate_to_agent",
             "generate_image", "show_image", "list_generated_images", "run_finance_command",
+            "nexus_command",
             "control_visualizer", "whatsapp_send", "control_spotify"
         }
         for tool in dynamic_tools:
+            if allowed_tool_names is not None and tool.name not in allowed_tool_names:
+                continue
             if tool.name in manually_declared:
                 continue
 
@@ -333,6 +584,12 @@ def build_agent_tool(dynamic_tools: list = None) -> types.Tool:
                 )
             )
             
+    declarations = _apply_gemini_nexus_profile(declarations, active_mode)
+
+    if allowed_tool_names is not None:
+        allowed = set(allowed_tool_names)
+        declarations = [fd for fd in declarations if fd.name in allowed]
+
     return types.Tool(function_declarations=declarations)
 
 
@@ -356,7 +613,11 @@ def _openai_fn(
     }
 
 
-def build_openai_agent_tools(dynamic_tools: list = None) -> list[dict]:
+def build_openai_agent_tools(
+    dynamic_tools: list = None,
+    allowed_tool_names: set[str] | frozenset[str] | None = None,
+    active_mode: str | None = None,
+) -> list[dict]:
     """funcoes consolidadas no formato OpenAI (Groq / NVIDIA) + skills dinamicas."""
     funcs = [
         _openai_fn(
@@ -417,14 +678,96 @@ def build_openai_agent_tools(dynamic_tools: list = None) -> list[dict]:
         ),
         _openai_fn(
             "run_finance_command",
-            "Financas locais (gastos, relatorios).",
+            "Financas Nexus Aether (SQLite): gastos e receitas em linguagem natural.",
             {"command": {"type": "string", "description": "Texto do pedido."}},
             ["command"],
         ),
         _openai_fn(
+            "nexus_command",
+            (
+                "Nexus Life OS estruturado. action: finance_add, finance_list, finance_delete, habit_complete, habit_add, "
+                "finance_update, "
+                "task_add, task_complete, task_delete, task_list, goal_add, goal_update, reward_redeem, reward_status, preset_apply_json, open_ui, "
+                "theme_list, theme_apply, theme_generate, "
+                "news_briefing, news_history, news_save_note, news_followup_task, news_flashcards_generate, "
+                "memory_graph, memory_graph_context, memory_graph_export_obsidian, memory_graph_import_obsidian, "
+                "ops_dashboard, ops_metric_set, "
+                "nexus_batch (steps em ordem para pedidos com varias acoes; open_ui aceita dashboard|overview|habits|finance|notes|memory_graph|study|tasks|progress|goals|rewards|quiz|news), "
+                "note_list, note_get, note_save (content: USE MARKDOWN ex: # Titulo, ![img](url)), note_append, note_summarize, note_teach, subject_teach, note_attach_media, flashcards_generate, flashcard_review, "
+                "flashcards_due, quiz_random, quiz_attempt_review, quiz_flashcards_generate, study_recommendations. "
+                "Campos opcionais conforme a acao."
+            ),
+            {
+                "action": {"type": "string", "description": "Acao principal."},
+                "steps": {"type": "string", "description": "JSON array ordenado para nexus_batch."},
+                "module": {"type": "string", "description": "Modulo Nexus para temas por janela."},
+                "preset_id": {"type": "string", "description": "Preset visual para theme_apply."},
+                "prompt": {"type": "string", "description": "Descricao de estilo para theme_generate."},
+                "type": {"type": "string"},
+                "amount": {"type": "string"},
+                "category": {"type": "string"},
+                "description": {"type": "string"},
+                "occurred_at": {"type": "string"},
+                "notes": {"type": "string"},
+                "transaction_id": {"type": "string"},
+                "target_description": {"type": "string"},
+                "target_category": {"type": "string"},
+                "target_amount": {"type": "string"},
+                "new_amount": {"type": "string"},
+                "new_category": {"type": "string"},
+                "new_description": {"type": "string"},
+                "new_notes": {"type": "string"},
+                "new_is_debt": {"type": "string"},
+                "reward_name": {"type": "string"},
+                "progress": {"type": "string"},
+                "target_date": {"type": "string"},
+                "habit_name": {"type": "string"},
+                "name": {"type": "string"},
+                "title": {"type": "string"},
+                "due_date": {"type": "string"},
+                "task_id": {"type": "string"},
+                "note_id": {"type": "string"},
+                "content": {"type": "string"},
+                "subject": {"type": "string"},
+                "text": {"type": "string"},
+                "question": {"type": "string"},
+                "media_url": {"type": "string"},
+                "caption": {"type": "string"},
+                "key": {"type": "string"},
+                "value": {"type": "string"},
+                "target": {"type": "string"},
+                "label": {"type": "string"},
+                "unit": {"type": "string"},
+                "period": {"type": "string"},
+                "trend": {"type": "string"},
+                "open_window": {"type": "string"},
+                "append_summary": {"type": "string"},
+                "max_sentences": {"type": "string"},
+                "max_points": {"type": "string"},
+                "card_id": {"type": "string"},
+                "quality": {"type": "string"},
+                "max_cards": {"type": "string"},
+                "attempt_id": {"type": "string"},
+                "only_wrong": {"type": "string"},
+                "tab": {"type": "string"},
+                "query": {"type": "string"},
+                "limit": {"type": "string"},
+                "include_markdown": {"type": "string"},
+                "folder": {"type": "string"},
+                "path": {"type": "string"},
+                "item": {"type": "string"},
+                "briefing": {"type": "string"},
+                "item_index": {"type": "string"},
+                "habits": {"type": "string"},
+                "n": {"type": "string"},
+                "area": {"type": "string"},
+            },
+            ["action"],
+        ),
+        _openai_fn(
             "control_visualizer",
-            "Move a janela visualizadora (ex. top_right, hide).",
-            {"command": {"type": "string", "description": "top_right, bottom_left, hide, etc."}},
+            "Controla o visualizador Jarvis: estado visual do particle core, emocao, posicao, visibilidade e microfone.",
+            {"command": {"type": "string", "description": "Exemplos: estado executando sincronizando comandos, estado alerta, emocao feliz, top_right, bottom_left, hide, mutar microfone."}},
             ["command"],
         ),
         _openai_fn(
@@ -462,7 +805,7 @@ def build_openai_agent_tools(dynamic_tools: list = None) -> list[dict]:
             ["action", "path"],
         ),
         _openai_fn(
-            "manage_apps",
+            "open_windows_app",
             "Gerencia apps Windows: list_installed, list_running, open_app, open_batch (virgulas), close_app, focus_app, write_to_notepad.",
             {
                 "action": {"type": "string", "description": "Acao."},
@@ -470,14 +813,6 @@ def build_openai_agent_tools(dynamic_tools: list = None) -> list[dict]:
                 "argument": {"type": "string", "description": "Argumento extra."},
             },
             ["action"],
-        ),
-        _openai_fn(
-            "set_ai_volume",
-            "Ajusta o volume da voz da própria IA (TTS).",
-            {
-                "volume": {"type": "string", "description": "Volume em % (ex: 100%, +10%, -20%)."},
-            },
-            ["volume"],
         ),
         _openai_fn(
             "agent_task",
@@ -502,6 +837,8 @@ def build_openai_agent_tools(dynamic_tools: list = None) -> list[dict]:
     
     if dynamic_tools:
         for tool in dynamic_tools:
+            if allowed_tool_names is not None and tool.name not in allowed_tool_names:
+                continue
             props = {}
             required = []
             if getattr(tool, "parameters", None) and "properties" in tool.parameters:
@@ -515,4 +852,10 @@ def build_openai_agent_tools(dynamic_tools: list = None) -> list[dict]:
                 required
             ))
             
+    funcs = _apply_openai_nexus_profile(funcs, active_mode)
+
+    if allowed_tool_names is not None:
+        allowed = set(allowed_tool_names)
+        funcs = [item for item in funcs if item["function"]["name"] in allowed]
+
     return funcs

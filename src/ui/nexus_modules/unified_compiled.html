@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Nexus Life OS</title>
+  <style>
+    @keyframes nxFadeIn { from { opacity:0; transform:translateX(12px); } to { opacity:1; transform:translateX(0); } }
+    @keyframes nxPulse { 0%,100% { box-shadow:0 0 0 rgba(139,92,246,0); } 50% { box-shadow:0 0 18px rgba(139,92,246,0.15); } }
+    @keyframes nxDot { 0%,100% { opacity:.4; } 50% { opacity:1; } }
+
+    /* ── Layout principal ── */
+    #nx-app-wrapper .nx-chrome-inner {
+      display: grid !important;
+      grid-template-columns: 64px minmax(0, 1fr);
+      grid-template-rows: 1fr;
+      overflow: hidden !important;
+      padding: 0 !important;
+    }
+
+    /* Esconde o header padrão do chrome */
+    #nx-app-wrapper .nx-chrome-inner > header { display: none !important; }
+
+    /* ── Sidebar ── */
+    .ux-sidebar {
+      grid-column: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      padding: 12px 0 10px;
+      background:
+        linear-gradient(180deg, rgba(124,58,237,0.10), rgba(6,182,212,0.04) 60%, transparent),
+        var(--bg-panel);
+      border-right: 1px solid var(--border);
+      overflow-y: auto;
+      overflow-x: hidden;
+      scrollbar-width: none;
+    }
+    .ux-sidebar::-webkit-scrollbar { display: none; }
+
+    .ux-brand {
+      width: 38px; height: 38px; border-radius: 10px;
+      display: grid; place-items: center;
+      border: 1px solid var(--border-accent);
+      color: #67e8f9;
+      background: rgba(6,182,212,0.1);
+      font: 800 11px "Share Tech Mono", monospace;
+      margin-bottom: 10px;
+      flex-shrink: 0;
+    }
+
+    .ux-nav-btn {
+      width: 44px; height: 44px; border-radius: 12px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--text-muted);
+      cursor: pointer;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 2px;
+      font-size: 16px;
+      transition: all 0.2s ease;
+      flex-shrink: 0;
+      position: relative;
+    }
+    .ux-nav-btn .ux-nav-label {
+      font-size: 7px; font-weight: 800;
+      text-transform: uppercase; letter-spacing: 0.3px;
+      font-family: "Inter", system-ui, sans-serif;
+      line-height: 1;
+    }
+    .ux-nav-btn:hover {
+      border-color: var(--border-accent);
+      background: var(--accent-subtle);
+      color: var(--text);
+    }
+    .ux-nav-btn.active {
+      border-color: var(--border-accent);
+      background: rgba(139,92,246,0.15);
+      color: #a78bfa;
+      animation: nxPulse 2.8s ease-in-out infinite;
+    }
+    .ux-nav-btn.active .ux-nav-label { color: #a78bfa; }
+
+    .ux-nav-sep {
+      width: 28px; height: 1px;
+      background: var(--border);
+      margin: 6px 0;
+      flex-shrink: 0;
+    }
+
+    .ux-sidebar-status {
+      margin-top: auto;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: #22c55e;
+      animation: nxDot 3s ease-in-out infinite;
+      flex-shrink: 0;
+      margin-bottom: 4px;
+    }
+
+    /* ── Área de conteúdo ── */
+    .ux-content {
+      grid-column: 2;
+      position: relative;
+      overflow: hidden;
+      background: var(--bg);
+    }
+
+    .ux-section-frame {
+      position: absolute;
+      inset: 0;
+      width: 100%; height: 100%;
+      border: none;
+      background: transparent;
+      display: none;
+    }
+    .ux-section-frame.active {
+      display: block;
+      animation: nxFadeIn 0.25s ease both;
+    }
+  </style>
+<base href="file:///C:/Users/jamil/Documents/Projeto%20AI/src/ui/nexus_modules/"><script>window.__NEXUS_BOOT__={"module": "overview", "theme": "dark", "theme_preset": "dark-neon", "theme_name": "Dark Neon", "theme_tokens": {"--accent": "#8b5cf6", "--accent-glow": "rgba(139,92,246,0.30)", "--accent-hover": "#7c3aed", "--accent-subtle": "rgba(139,92,246,0.08)", "--bg": "#0a0a0a", "--bg-panel": "#111111", "--border": "rgba(255,255,255,0.08)", "--border-accent": "rgba(139,92,246,0.35)", "--muted": "#71717a", "--shadow": "0 0 25px rgba(0,0,0,0.80)", "--sidebar": "#080808", "--surface": "rgba(255,255,255,0.04)", "--surface-hover": "rgba(255,255,255,0.08)", "--text": "#e4e4e7", "--text-dim": "#71717a", "--text-muted": "#52525b"}, "section": "overview"};</script><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"><link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet"><link rel="stylesheet" href="nexus_frame.css" /><style>html, body { background: transparent !important; }</style></head>
+<body><div id="nx-app-wrapper" class="neon-enabled" data-theme="dark" data-theme-preset="dark-neon" style="--accent: #8b5cf6; --accent-glow: rgba(139,92,246,0.30); --accent-hover: #7c3aed; --accent-subtle: rgba(139,92,246,0.08); --bg: #0a0a0a; --bg-panel: #111111; --border: rgba(255,255,255,0.08); --border-accent: rgba(139,92,246,0.35); --muted: #71717a; --shadow: 0 0 25px rgba(0,0,0,0.80); --sidebar: #080808; --surface: rgba(255,255,255,0.04); --surface-hover: rgba(255,255,255,0.08); --text: #e4e4e7; --text-dim: #71717a; --text-muted: #52525b"><div class="nx-chrome-bar"><div class="nx-chrome-title"><span class="nx-dot"></span><span>Nexus Life OS</span></div><div class="nx-chrome-actions"><button type="button" class="nx-theme-toggle" onclick="if(window.pywebview&&pywebview.api)pywebview.api.toggle_always_on_top().then(r => this.style.color = r ? 'var(--accent)' : 'inherit');" title="Fixar no Topo">📌</button><button type="button" class="nx-theme-toggle" data-nx-theme-toggle onclick="if(window.nxToggleTheme)window.nxToggleTheme();" title="Alternar tema" aria-label="Alternar tema">◐</button><button type="button" class="nx-chrome-close" onclick="if(window.pywebview&&pywebview.api)pywebview.api.minimize_module();" title="Minimizar">_</button><button type="button" class="nx-chrome-close" onclick="if(window.pywebview&&pywebview.api)pywebview.api.maximize_module();" title="Maximizar">□</button><button type="button" class="nx-chrome-close" onclick="if(window.pywebview&&pywebview.api)pywebview.api.close_module();" title="Fechar">✕</button></div></div><div class="nx-chrome-inner">
+  <!-- Sidebar fixa -->
+  <nav class="ux-sidebar" aria-label="Navegação Nexus">
+    <div class="ux-brand">NX</div>
+
+    <button type="button" class="ux-nav-btn active" data-section="overview" title="Visão Geral" onclick="navTo('overview')">
+      <span>🏠</span><span class="ux-nav-label">Home</span>
+    </button>
+
+    <div class="ux-nav-sep"></div>
+
+    <!-- Estudos -->
+    <button type="button" class="ux-nav-btn" data-section="notes" title="Notas" onclick="navTo('notes')">
+      <span>📝</span><span class="ux-nav-label">Notas</span>
+    </button>
+    <button type="button" class="ux-nav-btn" data-section="study" title="Flashcards SRS" onclick="navTo('study')">
+      <span>📚</span><span class="ux-nav-label">SRS</span>
+    </button>
+    <button type="button" class="ux-nav-btn" data-section="quiz" title="Quiz" onclick="navTo('quiz')">
+      <span>❓</span><span class="ux-nav-label">Quiz</span>
+    </button>
+    <button type="button" class="ux-nav-btn" data-section="progress" title="Progresso" onclick="navTo('progress')">
+      <span>📊</span><span class="ux-nav-label">Stats</span>
+    </button>
+
+    <div class="ux-nav-sep"></div>
+
+    <!-- Hábitos e Tarefas -->
+    <button type="button" class="ux-nav-btn" data-section="habits" title="Hábitos" onclick="navTo('habits')">
+      <span>💪</span><span class="ux-nav-label">Hábitos</span>
+    </button>
+    <button type="button" class="ux-nav-btn" data-section="tasks" title="Tarefas" onclick="navTo('tasks')">
+      <span>✅</span><span class="ux-nav-label">Tasks</span>
+    </button>
+    <button type="button" class="ux-nav-btn" data-section="goals" title="Metas e Loja" onclick="navTo('goals')">
+      <span>🎯</span><span class="ux-nav-label">Loja</span>
+    </button>
+
+    <div class="ux-nav-sep"></div>
+
+    <!-- Finanças -->
+    <button type="button" class="ux-nav-btn" data-section="finance" title="Finanças" onclick="navTo('finance')">
+      <span>💰</span><span class="ux-nav-label">R$</span>
+    </button>
+
+    <div class="ux-sidebar-status" title="Nexus Online"></div>
+  </nav>
+
+  <!-- Área de conteúdo com iframes lazy -->
+  <main class="ux-content">
+    <!-- Os iframes são criados dinamicamente pelo JS ao navegar -->
+  </main>
+
+  <script src="nexus_boot.js"></script>
+  <script>
+    const boot = readBoot();
+    const SECTIONS = ['overview','habits','finance','notes','study','quiz','progress','goals','tasks'];
+    const loaded = {};
+    let currentSection = null;
+
+    function navTo(section) {
+      if (!SECTIONS.includes(section)) section = 'overview';
+      if (section === currentSection) return;
+
+      // Desativa botão anterior
+      document.querySelectorAll('.ux-nav-btn').forEach(b => b.classList.remove('active'));
+      const btn = document.querySelector('.ux-nav-btn[data-section="' + section + '"]');
+      if (btn) btn.classList.add('active');
+
+      // Esconde frame anterior
+      document.querySelectorAll('.ux-section-frame').forEach(f => f.classList.remove('active'));
+
+      // Cria iframe se não existe (lazy-load)
+      let frame = document.getElementById('frame-' + section);
+      if (!frame) {
+        frame = document.createElement('iframe');
+        frame.id = 'frame-' + section;
+        frame.className = 'ux-section-frame';
+        frame.src = section + '_compiled.html';
+        // Fallback para o arquivo original se compilado não existir
+        frame.onerror = function() { frame.src = section + '.html'; };
+        document.querySelector('.ux-content').appendChild(frame);
+        loaded[section] = true;
+      } else {
+        // Iframe exists, notify it to reload its data
+        if (frame.contentWindow) {
+          frame.contentWindow.postMessage('nexus-tab-focus', '*');
+        }
+      }
+
+      frame.classList.add('active');
+      currentSection = section;
+    }
+
+    // Função global para que o Jarvis possa navegar via evaluate_js
+    window.nexusNavigateTo = function(section, payload) {
+      navTo(section);
+      // Se tiver payload com toast, envia para o iframe depois de carregar
+      if (payload && payload.toast) {
+        const frame = document.getElementById('frame-' + section);
+        if (frame && frame.contentWindow) {
+          frame.onload = function() {
+            try { frame.contentWindow.showToastBanner(payload.toast); } catch(_) {}
+          };
+        }
+      }
+    };
+
+    // Boot: abre a seção inicial
+    const initialSection = (boot.section || boot.tab || boot.module || 'overview').toString().toLowerCase();
+    navTo(SECTIONS.includes(initialSection) ? initialSection : 'overview');
+
+    if (boot.toast) showToastBanner(boot.toast);
+  </script>
+</div></div></body>
+</html>

@@ -67,6 +67,8 @@ graph TD
     Agent -->|Resposta Voz| TTS[TTS Service]
 ```
 
+Fluxo principal: o utilizador envia texto ou voz para a `task_queue` em `src/main.py`; o `interaction_worker` consome itens e chama `AgentOrchestrator.handle_user_message`, que usa a LLM (com ou sem function calling) e o `ToolRegistry` para marcadores e ferramentas. O painel PyWebView comunica com o mesmo processo via `DesktopApi` (estado em `RuntimeStatus`, confirmações críticas no `CriticalConfirmationBus`).
+
 ---
 
 ## 🛠️ Ferramentas Disponíveis (Toolbox)
@@ -119,6 +121,26 @@ O visualizador (`src/services/visualizer_web`) é uma aplicação Flask/WebSocke
   - 🟣 **Thinking**: Processa a resposta na LLM.
   - 🟢 **Speaking**: Sincroniza a animação com a fala.
   - 🔴 **Error**: Alerta visual para falhas de API ou conexão.
+
+---
+
+## Nexus Life OS (finanças, hábitos, estudos)
+
+O **Nexus** usa **`data/nexus.db`**. A IA altera os mesmos dados via **`nexus_command`** / **`run_finance_command`**.
+
+### Janelas desktop (principal)
+
+Com o assistente em modo desktop (**pywebview**), os módulos abrem em **janelas separadas** (tema claro, minimalista) em `src/ui/nexus_modules/`. **Só uma janela Nexus fica aberta**: ao abrir outro módulo (ou quando a IA regista um hábito/movimento e pede foco), a anterior fecha. Inclui **Metas e recompensas** e **Quiz** (painel → Configurações, ou botões na visão geral Nexus).
+
+- **Painel → Configurações**: botões *Visão geral*, *Hábitos*, *Finanças*, *Notas*, *SRS*, *Tarefas*, *Progresso*, *Metas / recompensas*, *Quiz*.
+- **Chat**: botão **Nexus** abre a visão geral (desktop).
+- **IA**: ações como `habit_add`, `finance_add`, `note_save`, `task_add`, `open_ui` enfileiram abertura da janela certa (fila drenada por uma janela scheduler oculta).
+
+### HUD web (opcional)
+
+Se `ENABLE_VISUALIZER=true` e existir build em `src/nexus_hud/dist`, o HUD antigo continua em **`http://localhost:5123/nexus/`** (`cd src/nexus_hud && npm ci && npm run build`).
+
+Lista detalhada: **`NEXUS_FEATURES_CHECKLIST.md`**.
 
 ---
 

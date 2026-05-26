@@ -5,7 +5,7 @@ from .base import ToolResult
 
 class VisualizerControlTool:
     name = "visualizer_control"
-    description = "Controla o visualizador (posicao, visibilidade, ativar caixa de texto para input) e microfone (mutar/desmutar)."
+    description = "Controla o visualizador (estado visual, emocao, posicao, visibilidade, caixa de texto e microfone)."
     critical = False
 
     def __init__(self, state_file: str = "data/visualizer_state.json") -> None:
@@ -20,10 +20,68 @@ class VisualizerControlTool:
             try:
                 with open(self.state_file, "r", encoding="utf-8") as f:
                     state = json.load(f)
-            except:
+            except Exception:
                 pass
 
         action_taken = ""
+
+        # Estado visual do particle core / orb. A IA tambem pode acionar isso
+        # via tool para refletir execucao, alerta, fala ou processamento.
+        state_map = {
+            "inativo": "idle",
+            "idle": "idle",
+            "parado": "idle",
+            "escutando": "listening",
+            "ouvindo": "listening",
+            "listening": "listening",
+            "pensando": "thinking",
+            "thinking": "thinking",
+            "falando": "speaking",
+            "speaking": "speaking",
+            "executando": "executing",
+            "processando": "executing",
+            "executing": "executing",
+            "alerta": "alert",
+            "alert": "alert",
+            "erro": "error",
+            "error": "error",
+            "carregando": "loading",
+            "loading": "loading",
+            "sucesso": "success",
+            "success": "success",
+            "aviso": "warning",
+            "warning": "warning",
+            "dormindo": "sleeping",
+            "sleeping": "sleeping",
+        }
+        if any(x in lowered for x in ["estado", "modo visual", "core", "particle", "orb"]):
+            for key, status in state_map.items():
+                if key in lowered:
+                    state["status"] = status
+                    detail = lowered.split(key, 1)[-1].strip(" :,-")
+                    detail = detail.removeprefix("para ").removeprefix("como ").strip()
+                    state["subtitle"] = detail
+                    action_taken = f"Estado visual definido como {key}."
+                    break
+
+        emotion_map = {
+            "feliz": "happy",
+            "happy": "happy",
+            "alegre": "happy",
+            "triste": "sad",
+            "sad": "sad",
+            "surpreso": "surprised",
+            "surpresa": "surprised",
+            "surprised": "surprised",
+            "neutro": "neutral",
+            "neutral": "neutral",
+        }
+        if any(x in lowered for x in ["emocao", "emoção", "humor", "sentimento"]):
+            for key, emotion in emotion_map.items():
+                if key in lowered:
+                    state["emotion"] = emotion
+                    action_taken = f"Emocao visual definida como {key}."
+                    break
         
         # Modos de Exibicao e Visibilidade
         if any(x in lowered for x in ["esconda", "hide", "feche", "esconder", "sumir"]):

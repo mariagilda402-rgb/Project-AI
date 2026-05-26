@@ -23,6 +23,23 @@ def check_murf_keys(api_key: str, voice_id: str) -> bool:
     return bool(api_key.strip()) and bool(voice_id.strip())
 
 
+def run_audio_diagnostics(settings: object | None = None) -> dict:
+    """Diagnóstico rápido sem captura interativa (adequado ao painel)."""
+    s = settings or load_settings()
+    mic_ok = check_microphone_available()
+    murf_ok = check_murf_keys(getattr(s, "murf_api_key", ""), getattr(s, "murf_voice_id", ""))
+    return {
+        "microphone_detected": mic_ok,
+        "murf_configured": murf_ok,
+        "stt_language": getattr(s, "stt_language", "pt-BR"),
+        "use_mic": getattr(s, "use_mic", True),
+        "stt_energy_threshold": getattr(s, "stt_energy_threshold", 1100),
+        "stt_dynamic_energy": getattr(s, "stt_dynamic_energy", True),
+        "stt_pause_threshold": getattr(s, "stt_pause_threshold", 0.8),
+        "stt_min_audio_seconds": getattr(s, "stt_min_audio_seconds", 0.35),
+    }
+
+
 def run_checks() -> None:
     settings = load_settings()
     print("=== Diagnostico de Audio ===")
@@ -71,8 +88,17 @@ def run_checks() -> None:
 
     print("[5] Teste STT (SpeechRecognition + Google): iniciando...")
     try:
-        stt = STTService(use_mic=settings.use_mic, language=settings.stt_language)
+        stt = STTService(
+            use_mic=settings.use_mic,
+            language=settings.stt_language,
+            energy_threshold=settings.stt_energy_threshold,
+            dynamic_energy_threshold=settings.stt_dynamic_energy,
+            pause_threshold=settings.stt_pause_threshold,
+            non_speaking_duration=settings.stt_non_speaking_duration,
+            min_audio_seconds=settings.stt_min_audio_seconds,
+        )
         print(f"    Idioma STT: {settings.stt_language}")
+        print(f"    Threshold energia: {settings.stt_energy_threshold}")
         if not settings.use_mic:
             print("    USE_MIC=false, pulando captura de voz ao vivo.")
         else:

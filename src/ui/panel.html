@@ -31,12 +31,87 @@
       --radius: 10px;
       --font-family: 'Inter', system-ui, sans-serif;
       --bg-element: var(--bg-panel);
+      --motion-fast: 140ms;
+      --motion-normal: 240ms;
+      --motion-slow: 420ms;
+      --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+      --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+      --density-pad: 1;
+    }
+
+    body[data-motion="reduced"] {
+      --motion-fast: 1ms;
+      --motion-normal: 1ms;
+      --motion-slow: 1ms;
+      --ease-out: linear;
+      --ease-spring: linear;
+    }
+    body[data-motion="expressive"] {
+      --motion-fast: 170ms;
+      --motion-normal: 320ms;
+      --motion-slow: 620ms;
+    }
+    body[data-density="compact"] {
+      --density-pad: .78;
     }
 
     html {
       background-color: transparent !important;
       color-scheme: dark;
     }
+    /* ── ANIMATIONS ── */
+    @keyframes panelSlideIn {
+      from {
+        opacity: 0;
+        transform: scale(0.95) translateY(-20px);
+      }
+      to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+      }
+    }
+
+    @keyframes panelSlideOut {
+      from {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+      }
+      to {
+        opacity: 0;
+        transform: scale(0.95) translateY(-20px);
+      }
+    }
+
+    @keyframes pulseActive {
+      0%, 100% {
+        box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.4);
+      }
+      50% {
+        box-shadow: 0 0 0 6px rgba(139, 92, 246, 0.1);
+      }
+    }
+    @keyframes softGlow {
+      0%, 100% { filter: drop-shadow(0 0 0 rgba(139,92,246,0)); }
+      50% { filter: drop-shadow(0 0 14px var(--accent-glow)); }
+    }
+    @keyframes contentRise {
+      from { opacity: 0; transform: translateY(10px) scale(.99); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    @keyframes shimmerLine {
+      from { transform: translateX(-120%); }
+      to { transform: translateX(120%); }
+    }
+
+    body[data-motion="reduced"] *,
+    body[data-motion="reduced"] *::before,
+    body[data-motion="reduced"] *::after {
+      animation-duration: 1ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 1ms !important;
+      scroll-behavior: auto !important;
+    }
+
     body {
       background-color: transparent !important;
       margin: 0;
@@ -48,6 +123,7 @@
       color: var(--text);
       display: flex;
       user-select: none;
+      animation: panelSlideIn var(--motion-slow) var(--ease-spring);
     }
 
     #app-wrapper {
@@ -60,6 +136,8 @@
       display: flex;
       box-shadow: 0 0 25px rgba(0,0,0,0.8);
       border: 1px solid var(--border-accent);
+      animation: pulseActive 2s ease-in-out 0.5s 1;
+      transition: box-shadow var(--motion-normal), border-color var(--motion-normal), transform var(--motion-normal) var(--ease-out);
     }
 
     /* Animated Neon Border Option */
@@ -119,21 +197,25 @@
       border: 1px solid transparent; border-radius: 8px;
       color: var(--text-dim); font-family: inherit;
       font-size: 13px; font-weight: 500; cursor: pointer;
-      text-align: left; transition: all .2s;
-      display: flex; align-items: center; gap: 10px;
+      text-align: left; transition: transform var(--motion-fast) var(--ease-out), background var(--motion-fast), border-color var(--motion-fast), color var(--motion-fast);
+      display: flex; align-items: center; gap: 10px; position: relative;
     }
-    .nav-btn:hover { color: var(--text); background: var(--surface); border-color: var(--border); }
+    .nav-btn:hover { color: var(--text); background: var(--surface); border-color: var(--border); transform: translateX(2px); }
     .nav-btn.active { color: var(--accent); background: var(--accent-subtle); border-color: var(--border-accent); }
+    .nav-btn.active::before { content:""; position:absolute; left:-6px; top:9px; bottom:9px; width:3px; border-radius:999px; background:var(--accent); box-shadow:0 0 12px var(--accent-glow); }
 
     /* ── CONTENT ── */
     .content-area { flex:1; position:relative; overflow:hidden; background: var(--bg); }
 
     .page {
-      position:absolute; inset:0; padding: 28px 32px;
+      position:absolute; inset:0; padding: calc(88px * var(--density-pad)) calc(32px * var(--density-pad)) calc(28px * var(--density-pad)) calc(32px * var(--density-pad));
       display:none; flex-direction:column; overflow-y:auto;
-      animation: pageIn .3s ease forwards; opacity:0;
+      animation: pageIn var(--motion-normal) var(--ease-out) forwards; opacity:0;
     }
     .page.active { display:flex; }
+    .page.active > * { animation: contentRise var(--motion-normal) var(--ease-out) both; }
+    .page.active > *:nth-child(2) { animation-delay:35ms; }
+    .page.active > *:nth-child(3) { animation-delay:70ms; }
     @keyframes pageIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
 
     .page::-webkit-scrollbar { width:4px; }
@@ -146,16 +228,16 @@
     .btn-primary {
       background:var(--accent); color:#fff; border:none;
       padding:9px 18px; border-radius:8px; font-size:13px; font-weight:500;
-      cursor:pointer; transition:all .2s;
+      cursor:pointer; transition:transform var(--motion-fast) var(--ease-out), box-shadow var(--motion-fast), background var(--motion-fast);
     }
-    .btn-primary:hover { background:var(--accent-hover); box-shadow:0 4px 12px var(--accent-glow); }
+    .btn-primary:hover { background:var(--accent-hover); box-shadow:0 6px 16px var(--accent-glow); transform:translateY(-1px); }
 
     .btn-secondary {
       background:transparent; color:var(--text);
       border:1px solid var(--border); padding:9px 18px;
-      border-radius:8px; font-size:13px; cursor:pointer; transition:all .2s;
+      border-radius:8px; font-size:13px; cursor:pointer; transition:transform var(--motion-fast) var(--ease-out), background var(--motion-fast), border-color var(--motion-fast);
     }
-    .btn-secondary:hover { background:var(--surface-hover); border-color:var(--border-accent); }
+    .btn-secondary:hover { background:var(--surface-hover); border-color:var(--border-accent); transform:translateY(-1px); }
 
     .btn-danger {
       background:transparent; color:var(--danger);
@@ -188,21 +270,29 @@
     .home-side { width:280px; display:flex; flex-direction:column; gap:14px; }
     .orb-frame { width:200px; height:200px; border-radius:50%; position:relative; }
     .orb-frame iframe { width:100%; height:100%; border:none; border-radius:50%; pointer-events:none; background: transparent; }
-    .status-badge { padding:5px 14px; border-radius:20px; font-size:10px; font-weight:700; letter-spacing:1.5px; background:transparent; border:1px solid var(--border-accent); color:var(--accent); }
+    .status-badge { padding:5px 14px; border-radius:20px; font-size:10px; font-weight:700; letter-spacing:1.5px; background:transparent; border:1px solid var(--border-accent); color:var(--accent); transition:all var(--motion-normal) var(--ease-out); }
+    .status-badge.is-idle { color:var(--text-dim); border-color:var(--border); }
+    .status-badge.is-listening { color:#67e8f9; border-color:rgba(6,182,212,.45); background:rgba(6,182,212,.08); animation:softGlow 1.8s ease-in-out infinite; }
+    .status-badge.is-processing { color:#86efac; border-color:rgba(34,197,94,.45); background:rgba(34,197,94,.09); animation:pulseActive 1.4s ease-in-out infinite; }
     .chat-box { width:100%; max-width:480px; display:flex; gap:8px; }
 
-    .stats-panel { background:var(--bg-panel); border:1px solid var(--border); border-radius:var(--radius); padding:16px; flex:1; display:flex; flex-direction:column; gap:14px; }
+    .stats-panel { background:var(--bg-panel); border:1px solid var(--border); border-radius:var(--radius); padding:calc(16px * var(--density-pad)); flex:1; display:flex; flex-direction:column; gap:calc(14px * var(--density-pad)); transition:transform var(--motion-normal) var(--ease-out), border-color var(--motion-normal), box-shadow var(--motion-normal); }
+    .stats-panel:hover { transform:translateY(-2px); border-color:rgba(139,92,246,.22); box-shadow:0 12px 34px rgba(0,0,0,.22); }
     .stat-item { display:flex; justify-content:space-between; align-items:center; }
     .stat-label { font-size:11px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.3px; }
     .stat-value { font-size:14px; font-weight:600; font-family:'Share Tech Mono',monospace; color:var(--text); }
     .stat-progress { height:4px; background:var(--surface); border-radius:2px; overflow:hidden; margin-top:6px; }
     .stat-bar { height:100%; background:var(--accent); border-radius:2px; transition:width .5s; }
+    .startup-phases { display:flex; flex-direction:column; gap:6px; width:100%; max-height:132px; overflow:auto; padding-right:2px; }
+    .startup-phase { display:grid; grid-template-columns:1fr auto; gap:8px; align-items:center; font-size:11px; color:var(--text-dim); padding:6px 8px; border:1px solid rgba(255,255,255,.05); border-radius:7px; background:rgba(255,255,255,.025); animation:contentRise var(--motion-normal) var(--ease-out) both; }
+    .startup-phase strong { color:var(--text); font-size:11px; font-weight:700; }
+    .startup-phase span { color:var(--accent); font-family:'Share Tech Mono', monospace; }
 
     /* AGENTS */
     .agents-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; padding-right: 45px; }
     .agent-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:14px; }
-    .agent-card-grid { background:var(--bg-panel); border:1px solid var(--border); border-radius:var(--radius); padding:18px; cursor:pointer; transition:all .2s; position:relative; display:flex; flex-direction:column; gap:10px; }
-    .agent-card-grid:hover { border-color:var(--border-accent); box-shadow:0 0 20px rgba(139,92,246,.08); }
+    .agent-card-grid { background:var(--bg-panel); border:1px solid var(--border); border-radius:var(--radius); padding:18px; cursor:pointer; transition:transform var(--motion-normal) var(--ease-out), border-color var(--motion-normal), box-shadow var(--motion-normal), background var(--motion-normal); position:relative; display:flex; flex-direction:column; gap:10px; }
+    .agent-card-grid:hover { border-color:var(--border-accent); box-shadow:0 12px 28px rgba(139,92,246,.10); transform:translateY(-3px); }
     .agent-card-grid.active-agent { border-color:var(--accent); background:var(--accent-subtle); }
     .ac-header { display:flex; align-items:center; gap:12px; }
     .ac-avatar { width:40px; height:40px; border-radius:8px; background:linear-gradient(135deg,var(--accent),#06b6d4); display:flex; align-items:center; justify-content:center; font-size:18px; font-weight:700; }
@@ -222,7 +312,17 @@
 
     /* MODES */
     .modes-layout { display:flex; flex-direction:column; gap:20px; max-width:800px; }
-    .mode-card { background:var(--bg-panel); border:1px solid var(--border); border-radius:var(--radius); padding:20px; }
+    .mode-card { background:var(--bg-panel); border:1px solid var(--border); border-radius:var(--radius); padding:20px; transition:transform var(--motion-normal) var(--ease-out), border-color var(--motion-normal), box-shadow var(--motion-normal); }
+    .mode-card:hover { transform:translateY(-2px); border-color:rgba(139,92,246,.22); box-shadow:0 12px 30px rgba(0,0,0,.20); }
+    .nexus-theme-tool { margin-top:16px; padding:14px; border:1px solid var(--border); border-radius:8px; background:var(--surface); display:grid; gap:12px; }
+    .nexus-theme-row { display:grid; grid-template-columns:1fr 1fr auto; gap:10px; align-items:end; }
+    .nexus-theme-generate { display:grid; grid-template-columns:1fr auto; gap:10px; align-items:start; }
+    .nexus-theme-preview { min-height:34px; padding:10px 12px; border:1px solid var(--border); border-radius:8px; background:rgba(0,0,0,0.16); color:var(--text-dim); font-size:12px; line-height:1.45; }
+    .nexus-theme-swatches { display:flex; flex-wrap:wrap; gap:6px; }
+    .nexus-theme-swatch { width:22px; height:22px; border-radius:6px; border:1px solid rgba(255,255,255,0.2); box-shadow:0 0 14px rgba(0,0,0,0.25); }
+    @media (max-width: 860px) {
+      .nexus-theme-row, .nexus-theme-generate { grid-template-columns:1fr; }
+    }
     .checkbox-list { display:flex; flex-direction:column; gap:8px; max-height:200px; overflow-y:auto; background:var(--bg); padding:10px; border-radius:8px; border:1px solid var(--border); }
     .checkbox-list label { display:flex; align-items:center; gap:8px; margin:0; color:var(--text); font-size:13px; cursor:pointer; text-transform:none; letter-spacing:0; font-weight:400; }
 
@@ -271,12 +371,68 @@
     .log-line.warn { color:#fbbf24; }
 
     .subtitle-text.error-subtitle { border-color:rgba(220,38,38,.4); background:rgba(220,38,38,.1); color:#fca5a5; }
+
+    /* Confirmação crítica (painel) */
+    #criticalConfirmModal {
+      position: fixed;
+      inset: 0;
+      z-index: 10001;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0, 0, 0, 0.72);
+      backdrop-filter: blur(4px);
+    }
+    #criticalConfirmModal .cc-card {
+      width: min(420px, 92vw);
+      background: var(--bg-panel);
+      border: 1px solid var(--border-accent);
+      border-radius: var(--radius);
+      padding: 22px;
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6);
+    }
+    #criticalConfirmModal .cc-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--warning);
+      margin-bottom: 10px;
+    }
+    #criticalConfirmModal .cc-detail {
+      font-size: 13px;
+      color: var(--text);
+      line-height: 1.45;
+      margin-bottom: 6px;
+    }
+    #criticalConfirmModal .cc-tool {
+      font-size: 11px;
+      color: var(--text-dim);
+      font-family: 'Share Tech Mono', monospace;
+      margin-bottom: 18px;
+    }
+    #criticalConfirmModal .cc-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+    }
   </style>
 </head>
 
 <body>
   <!-- Toast Container -->
   <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Confirmação de ação crítica (WhatsApp, arquivos, etc.) -->
+  <div id="criticalConfirmModal" role="dialog" aria-modal="true">
+    <div class="cc-card">
+      <div class="cc-title">Confirmação de segurança</div>
+      <div class="cc-detail" id="ccDetail"></div>
+      <div class="cc-tool" id="ccTool"></div>
+      <div class="cc-actions">
+        <button type="button" class="btn-secondary" id="ccBtnNo">Cancelar</button>
+        <button type="button" class="btn-primary" id="ccBtnYes" style="background: var(--success);">Confirmar</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Main App Wrapper for Rounded Corners & Glow -->
   <div id="app-wrapper">
@@ -288,6 +444,8 @@
       <button class="nav-btn" data-tab="chat">💬 Histórico de Chat</button>
       <button class="nav-btn" data-tab="logs">📋 Logs do Sistema</button>
       <button class="nav-btn" data-tab="modes">⚔️ Modos de Conversa</button>
+      <button class="nav-btn" data-tab="reference">📖 Referência</button>
+      <button class="nav-btn" data-tab="diagnostics">🩺 Diagnóstico</button>
       <button class="nav-btn" data-tab="config">⚙️ Configurações</button>
       <div style="flex:1"></div>
       <button class="nav-btn" data-tab="trash" style="color: var(--danger)">🗑️ Lixeira</button>
@@ -295,8 +453,17 @@
 
     <div class="content-area">
       
-      <!-- Close Button -->
-      <button onclick="if(window.pywebview) pywebview.api.close_panel();" style="position:absolute; top:20px; right:25px; z-index:999; background:var(--bg-panel); border:1px solid var(--border-accent); color:var(--text); width:32px; height:32px; border-radius:8px; cursor:pointer; font-weight:bold; transition:all 0.2s; box-shadow:0 4px 12px rgba(0,0,0,0.5);" onmouseover="this.style.background='var(--danger)'; this.style.color='#fff'; this.style.borderColor='var(--danger)';" onmouseout="this.style.background='var(--bg-panel)'; this.style.color='var(--text)'; this.style.borderColor='var(--border-accent)';">✕</button>
+      <!-- Header with Active Indicator and Close Button -->
+      <div style="position:absolute; top:0; left:0; right:0; height:60px; background:linear-gradient(180deg, rgba(139,92,246,0.1) 0%, transparent 100%); border-bottom:1px solid rgba(139,92,246,0.2); display:flex; align-items:center; justify-content:space-between; padding:0 25px; z-index:998;">
+        <div style="display:flex; align-items:center; gap:8px; color:var(--accent); font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:1px;">
+          <span style="width:6px; height:6px; background:var(--accent); border-radius:50%; animation:pulseActive 1.5s infinite;"></span>
+          PAINEL ATIVO
+        </div>
+        <button onclick="if(window.pywebview) pywebview.api.close_panel(); else window.close();" style="background:rgba(139,92,246,0.15); border:1px solid var(--border-accent); color:var(--accent); width:32px; height:32px; border-radius:8px; cursor:pointer; font-weight:bold; font-size:16px; transition:all 0.3s cubic-bezier(0.34,1.56,0.64,1); display:flex; align-items:center; justify-content:center; box-shadow:0 4px 12px rgba(0,0,0,0.5);" onmouseover="this.style.background='var(--danger)'; this.style.color='#fff'; this.style.borderColor='var(--danger)'; this.style.boxShadow='0 8px 24px rgba(239,68,68,0.4)'; this.style.transform='scale(1.05)';" onmouseout="this.style.background='rgba(139,92,246,0.15)'; this.style.color='var(--accent)'; this.style.borderColor='var(--border-accent)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.5)'; this.style.transform='scale(1)';" title="Fechar painel (Win+Shift+A para alternar)">✕</button>
+      </div>
+
+      <!-- Spacer for content area -->
+      <div style="height:60px;"></div>
 
       <!-- INICIO -->
     <div id="page-home" class="page active">
@@ -312,6 +479,7 @@
             <button class="btn-secondary" id="btnUploadFile" title="Processar Arquivo"
               style="padding: 10px;">📎</button>
             <button class="btn-primary" id="sendBtn">Enviar</button>
+            <button type="button" class="btn-secondary" id="btnOpenNexus" title="Abrir Nexus">Nexus</button>
           </div>
           <div id="chatFeedback" style="color: var(--success); font-size:13px; opacity:0; transition: opacity 0.3s;">✓
             Enviado</div>
@@ -359,6 +527,27 @@
             <div class="stat-item">
               <span class="stat-label">Tokens P/ Min (Estimado)</span>
               <span class="stat-value" id="statTokens" style="color:var(--accent)">0</span>
+            </div>
+
+            <div class="stat-item" style="flex-direction:column; align-items:flex-start; gap:6px; margin-top:8px; padding-top:12px; border-top:1px solid var(--border);">
+              <span class="stat-label" style="width:100%;">Assistente (tempo real)</span>
+              <div style="font-size:12px; color:var(--text-dim); line-height:1.5; width:100%;" id="runtimeStatusBlock">
+                <div>Mic: <span id="rtMic">—</span></div>
+                <div>Processando: <span id="rtProc">—</span></div>
+                <div>Fila (aprox.): <span id="rtQueue">—</span></div>
+                <div>LLM: <span id="rtLlm">—</span></div>
+                <div style="color:var(--danger); max-height:3em; overflow:hidden;" id="rtErr"></div>
+              </div>
+            </div>
+            <div class="stat-item" style="flex-direction:column; align-items:flex-start; gap:4px;">
+              <span class="stat-label">Últimas ferramentas</span>
+              <pre id="rtTools" style="font-size:11px; color:var(--text-dim); white-space:pre-wrap; max-height:120px; overflow:auto; width:100%; margin:0;">—</pre>
+            </div>
+            <div class="stat-item" style="flex-direction:column; align-items:flex-start; gap:6px;">
+              <span class="stat-label">Inicializacao</span>
+              <div class="startup-phases" id="startupPhases">
+                <div class="startup-phase"><strong>Aguardando status</strong><span>0ms</span></div>
+              </div>
             </div>
           </div>
         </div>
@@ -427,8 +616,13 @@
           <div class="form-group">
             <label>Provedor TTS</label>
             <select id="fTtsProvider">
+              <option value="styletts2">StyleTTS2 (Clone local)</option>
+              <option value="xtts">XTTS v2 (Clone local)</option>
               <option value="edge">Edge TTS (Nuvem)</option>
+              <option value="piper">Piper JARVIS (PC local)</option>
               <option value="kokoro">Kokoro (Local)</option>
+              <option value="rvc">RVC + Edge base</option>
+              <option value="fish">Fish Audio (API)</option>
             </select>
           </div>
           <div class="form-group">
@@ -514,6 +708,46 @@
     </div>
   </div>
 
+  <!-- REFERENCIA -->
+  <div id="page-reference" class="page">
+    <h1>Referência de ferramentas</h1>
+    <p style="color:var(--text-dim); max-width:800px; font-size:13px;">Marcadores e lista de segurança. O atalho global do painel vem de <code>PANEL_HOTKEY</code> no .env (reinicie o app após alterar).</p>
+    <div class="mode-card" style="max-width:900px;">
+      <h2>Segurança e confirmação</h2>
+      <pre id="refSecurity" style="font-size:12px; color:var(--text); white-space:pre-wrap; max-height:200px; overflow:auto;"></pre>
+      <h2 style="margin-top:20px;">Marcadores (modo texto)</h2>
+      <pre id="refMarkers" style="font-size:12px; color:var(--text-dim); white-space:pre-wrap; max-height:280px; overflow:auto;"></pre>
+      <h2 style="margin-top:20px;">Function calling (trecho)</h2>
+      <pre id="refFc" style="font-size:12px; color:var(--text-dim); white-space:pre-wrap; max-height:320px; overflow:auto;"></pre>
+    </div>
+  </div>
+
+  <!-- DIAGNOSTICO -->
+  <div id="page-diagnostics" class="page">
+    <h1>Diagnóstico</h1>
+    <div class="mode-card" style="max-width:700px;">
+      <button class="btn-secondary" id="btnDiagAudio">Áudio / microfone</button>
+      <button class="btn-secondary" id="btnDiagTts">Teste TTS</button>
+      <button class="btn-secondary" id="btnDiagLlm">Ping LLM</button>
+      <pre id="diagResult" style="margin-top:12px; font-size:12px; color:var(--text); white-space:pre-wrap;"></pre>
+    </div>
+    <h2 style="margin-top:24px;">Telemetria local (últimas linhas)</h2>
+    <button class="btn-secondary" id="btnTelemetryRefresh">Atualizar eventos</button>
+    <pre id="telemetryTail" style="font-size:11px; color:var(--text-dim); max-height:200px; overflow:auto; background:var(--surface); padding:10px; border-radius:8px;"></pre>
+    <h2 style="margin-top:24px;">Memória estruturada</h2>
+    <button class="btn-secondary" id="btnStructMemRefresh">Recarregar</button>
+    <pre id="structMemView" style="font-size:11px; color:var(--text-dim); max-height:240px; overflow:auto; background:var(--surface); padding:10px; border-radius:8px;"></pre>
+    <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap;">
+      <input type="text" id="structCat" placeholder="categoria (ex: notes)" style="flex:1; min-width:120px; padding:8px; border-radius:6px; border:1px solid var(--border); background:var(--bg-panel); color:var(--text);">
+      <input type="text" id="structKey" placeholder="chave" style="flex:1; min-width:120px; padding:8px; border-radius:6px; border:1px solid var(--border); background:var(--bg-panel); color:var(--text);">
+      <button class="btn-danger" id="btnStructDel">Apagar entrada</button>
+    </div>
+    <h2 style="margin-top:24px;">Preferências (export / import)</h2>
+    <p style="font-size:12px; color:var(--text-dim);">Exporta JSON sem segredos (.env nunca incluído).</p>
+    <button class="btn-secondary" id="btnPrefExport">Exportar</button>
+    <button class="btn-secondary" id="btnPrefImport">Importar</button>
+  </div>
+
   <!-- CONFIGURACOES -->
   <div id="page-config" class="page">
     <h1>Configurações do Sistema</h1>
@@ -534,10 +768,159 @@
           Habilitar Borda Neon Dinâmica (Glow Rotativo)
         </label>
       </div>
+      <div class="form-group">
+        <label>Nivel de movimento</label>
+        <select id="cfgMotionLevel">
+          <option value="balanced">Balanceado</option>
+          <option value="expressive">Expressivo</option>
+          <option value="reduced">Reduzido</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Densidade visual</label>
+        <select id="cfgUiDensity">
+          <option value="comfortable">Confortavel</option>
+          <option value="compact">Compacta</option>
+        </select>
+      </div>
+      <button class="btn-secondary" id="btnSaveUiConfig" style="width:100%;">Aplicar aparencia</button>
       <div class="form-group" style="margin-top: 15px; display:flex; align-items:center; gap:10px;">
         <label style="margin:0;">Cor do Neon / Acento:</label>
         <input type="color" id="neonColorPicker" value="#8b5cf6" style="width:50px; height:30px; padding:0; border:none; border-radius:4px; cursor:pointer; background:transparent;">
       </div>
+
+      <h2 style="margin-top:30px;">Segurança</h2>
+      <div class="form-group">
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+          <input type="checkbox" id="criticalConfirmToggle" style="width:auto; height:16px;">
+          Confirmação crítica (WhatsApp, excluir/mover arquivos, automação sensível)
+        </label>
+      </div>
+      <div style="font-size:12px; color:var(--text-dim); margin-top:6px; line-height:1.45; max-width:560px;">
+        Ligada: pede confirmação antes de ações críticas — use o painel ou diga <strong>confirmar</strong> / <strong>cancelar</strong> no microfone.
+        Desligada: essas ações executam sem perguntar.
+      </div>
+      <div class="form-group" style="margin-top:12px;">
+        <label>Atalho global do painel (definido no .env: PANEL_HOTKEY)</label>
+        <input type="text" id="cfgHotkey" value="—" disabled style="opacity:0.9;">
+      </div>
+      <p style="font-size:11px; color:var(--text-muted);">Altere <code>PANEL_HOTKEY</code> e reinicie o assistente para aplicar.</p>
+
+      <h2 style="margin-top:30px;">Voz e STT</h2>
+      <div class="form-group">
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+          <input type="checkbox" id="cfgUseMic" style="width:auto; height:16px;">
+          Microfone continuo ativo
+        </label>
+      </div>
+      <div class="form-group">
+        <label>Idioma STT</label>
+        <input type="text" id="cfgSttLanguage" placeholder="pt-BR">
+      </div>
+      <div class="form-group">
+        <label>Sensibilidade do microfone: <span class="slider-val" id="cfgSttEnergyVal">1100</span></label>
+        <input type="range" id="cfgSttEnergyThreshold" min="150" max="8000" step="50" value="1100">
+      </div>
+      <div class="form-group">
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+          <input type="checkbox" id="cfgSttDynamicEnergy" style="width:auto; height:16px;">
+          Ajustar sensibilidade automaticamente ao ruido ambiente
+        </label>
+      </div>
+      <div class="form-group">
+        <label>Pausa para encerrar fala: <span class="slider-val" id="cfgSttPauseVal">0.8s</span></label>
+        <input type="range" id="cfgSttPauseThreshold" min="0.25" max="3" step="0.05" value="0.8">
+      </div>
+      <div class="form-group">
+        <label>Silencio antes/depois da fala: <span class="slider-val" id="cfgSttNonSpeakingVal">0.35s</span></label>
+        <input type="range" id="cfgSttNonSpeakingDuration" min="0.1" max="2" step="0.05" value="0.35">
+      </div>
+      <div class="form-group">
+        <label>Duracao minima de audio: <span class="slider-val" id="cfgSttMinAudioVal">0.35s</span></label>
+        <input type="range" id="cfgSttMinAudioSeconds" min="0.05" max="3" step="0.05" value="0.35">
+      </div>
+      <div class="form-group">
+        <label>Tempo de calibracao: <span class="slider-val" id="cfgSttCalibrationVal">0.8s</span></label>
+        <input type="range" id="cfgSttCalibrationSeconds" min="0.1" max="5" step="0.1" value="0.8">
+      </div>
+      <button class="btn-primary" id="btnSaveSttConfig" style="width:100%;">Aplicar STT em tempo real</button>
+
+      <h2 style="margin-top:30px;">Inicializacao e Performance</h2>
+      <div class="form-group">
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+          <input type="checkbox" id="cfgStartVisionTracker" style="width:auto; height:16px;">
+          Iniciar rastreador de gestos/face
+        </label>
+      </div>
+      <div class="form-group">
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+          <input type="checkbox" id="cfgStartHeartbeat" style="width:auto; height:16px;">
+          Iniciar heartbeat de memoria
+        </label>
+      </div>
+      <div class="form-group">
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+          <input type="checkbox" id="cfgStartProactiveAgent" style="width:auto; height:16px;">
+          Iniciar agente proativo em segundo plano
+        </label>
+      </div>
+      <div class="form-group">
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+          <input type="checkbox" id="cfgEnableClapTrigger" style="width:auto; height:16px;">
+          Ativar gatilho por duas palmas
+        </label>
+        <label style="display:block; margin-top:10px;">Sensibilidade das palmas</label>
+        <input type="number" id="cfgClapThreshold" min="0.03" max="1" step="0.01" value="0.15" title="Sensibilidade das palmas">
+        <label style="display:block; margin-top:10px;">Janela entre palmas (s)</label>
+        <input type="number" id="cfgClapMaxGap" min="0.2" max="4" step="0.1" value="1.2" title="Janela entre palmas">
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; margin-top:10px;">
+          <input type="checkbox" id="cfgXttsPreload" style="width:auto; height:16px;">
+          Pre-carregar XTTS ao iniciar
+        </label>
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; margin-top:10px;">
+          <input type="checkbox" id="cfgStyleTts2PreloadStartup" style="width:auto; height:16px;">
+          Pre-carregar StyleTTS2 ao iniciar
+        </label>
+        <button class="btn-secondary" id="btnSaveStartupConfig" style="width:100%; margin-top:10px;">Salvar inicializacao</button>
+      </div>
+
+      <h2 style="margin-top:30px;">Nexus Life OS (janelas desktop)</h2>
+      <p style="font-size:12px; color:var(--text-dim); max-width:560px; line-height:1.45;">
+        Cada módulo abre numa janela à parte no mesmo processo do assistente. Ao abrir um módulo novo, o anterior fecha automaticamente.
+        Os dados são os mesmos que a IA altera via <code>nexus_command</code> / REST (<code>data/nexus.db</code>).
+      </p>
+	      <div class="nexus-theme-tool" id="nexusWindowThemeTool">
+	        <div class="nexus-theme-row">
+	          <div class="form-group" style="margin:0;">
+	            <label>Janela Nexus</label>
+	            <select id="nexusThemeModule"></select>
+	          </div>
+	          <div class="form-group" style="margin:0;">
+	            <label>Preset visual</label>
+	            <select id="nexusThemePreset"></select>
+	          </div>
+	          <button type="button" class="btn-secondary" id="btnApplyNexusTheme">Aplicar</button>
+	        </div>
+	        <div class="nexus-theme-generate">
+	          <textarea id="nexusThemePrompt" rows="2" placeholder="Ex.: tema neon verde financeiro, glassmorphism premium, contraste alto"></textarea>
+	          <button type="button" class="btn-secondary" id="btnGenerateNexusTheme">Gerar e aplicar</button>
+	        </div>
+	        <div class="nexus-theme-preview" id="nexusThemeStatus">Carregando temas por janela...</div>
+	        <div class="nexus-theme-swatches" id="nexusThemeSwatches"></div>
+	      </div>
+	      <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:12px;">
+        <button type="button" class="btn-secondary" data-nexus-mod="overview">Visão geral</button>
+        <button type="button" class="btn-secondary" data-nexus-mod="habits">Hábitos</button>
+        <button type="button" class="btn-secondary" data-nexus-mod="finance">Finanças</button>
+        <button type="button" class="btn-secondary" data-nexus-mod="notes">Notas</button>
+        <button type="button" class="btn-secondary" data-nexus-mod="study">SRS</button>
+        <button type="button" class="btn-secondary" data-nexus-mod="tasks">Tarefas</button>
+        <button type="button" class="btn-secondary" data-nexus-mod="progress">Progresso</button>
+	        <button type="button" class="btn-secondary" data-nexus-mod="goals">Metas / recompensas</button>
+	        <button type="button" class="btn-secondary" data-nexus-mod="quiz">Quiz</button>
+	        <button type="button" class="btn-secondary" data-nexus-mod="news">Noticias</button>
+	      </div>
+      <p style="font-size:11px; color:var(--text-muted); margin-top:10px;">HUD web legado: <code>http://localhost:5123/nexus/</code> (se o visualizador estiver ligado).</p>
 
       <h2 style="margin-top:30px;">Chaves e Provedores</h2>
       <div class="form-group">
@@ -554,10 +937,49 @@
       </div>
       <div class="form-group">
         <label>Provedor TTS</label>
-        <input type="text" id="cfgTts" value="Carregando..." disabled>
+        <select id="cfgTts">
+          <option value="styletts2">StyleTTS2 (Clone local)</option>
+          <option value="edge">Edge TTS (API rápida)</option>
+          <option value="kokoro">Kokoro (local)</option>
+          <option value="rvc">RVC + Edge base</option>
+          <option value="piper">Piper (local)</option>
+          <option value="xtts">XTTS v2 (clone local)</option>
+          <option value="openai">OpenAI TTS</option>
+          <option value="elevenlabs">ElevenLabs</option>
+          <option value="murf">Murf</option>
+          <option value="fish">Fish Audio</option>
+          <option value="local">Sistema local</option>
+        </select>
       </div>
+      <div class="form-group">
+        <label>Fallback TTS (ordem, separado por vÃ­rgulas)</label>
+        <input type="text" id="cfgTtsFallbackOrder" placeholder="edge,kokoro,rvc,piper,local">
+      </div>
+      <div class="form-group">
+        <label>Python StyleTTS2 isolado</label>
+        <input type="text" id="cfgStyleTts2Python" placeholder="C:/.../.venv_styletts2/Scripts/python.exe">
+      </div>
+      <div class="form-group">
+        <label>ReferÃªncia StyleTTS2</label>
+        <input type="text" id="cfgStyleTts2Reference" placeholder="data/voice_samples/jarvis_xtts_fast/jarvis_fast_ref_01.wav">
+      </div>
+      <div class="form-group">
+        <label>Diffusion steps: <span class="slider-val" id="cfgStyleTts2DiffusionVal">3</span></label>
+        <input type="range" id="cfgStyleTts2DiffusionSteps" min="1" max="10" step="1" value="3">
+      </div>
+      <div class="form-group">
+        <label>EmoÃ§Ã£o / embedding scale: <span class="slider-val" id="cfgStyleTts2EmbeddingVal">1.0</span></label>
+        <input type="range" id="cfgStyleTts2EmbeddingScale" min="0.5" max="3.0" step="0.1" value="1.0">
+      </div>
+      <div class="form-group">
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+          <input type="checkbox" id="cfgTtsPrefetchChunks" style="width:auto; height:16px;">
+          Gerar prÃ³ximo trecho enquanto o atual toca
+        </label>
+      </div>
+      <button class="btn-primary" id="btnSaveTtsConfig" style="width:100%;">Aplicar TTS agora</button>
       <div style="font-size:12px; color:var(--text-dim); margin-top:10px;">
-        Nota: Para alterar provedores nativos, edite o arquivo .env e reinicie o servidor.
+        A troca de TTS global aplica no serviÃ§o em execuÃ§Ã£o. A voz por agente fica em Meus Agentes e tambÃ©m muda na prÃ³xima fala.
       </div>
     </div>
   </div>
@@ -659,6 +1081,29 @@
       });
     }
 
+    function applyUiPreferences(motion, density) {
+      const safeMotion = ['reduced', 'balanced', 'expressive'].includes(motion) ? motion : 'balanced';
+      const safeDensity = ['comfortable', 'compact'].includes(density) ? density : 'comfortable';
+      document.body.dataset.motion = safeMotion;
+      document.body.dataset.density = safeDensity;
+      if (appWrapper) {
+        appWrapper.dataset.motion = safeMotion;
+        appWrapper.dataset.density = safeDensity;
+      }
+      const motionSelect = document.getElementById('cfgMotionLevel');
+      const densitySelect = document.getElementById('cfgUiDensity');
+      if (motionSelect) motionSelect.value = safeMotion;
+      if (densitySelect) densitySelect.value = safeDensity;
+      try {
+        localStorage.setItem('panelMotionLevel', safeMotion);
+        localStorage.setItem('panelUiDensity', safeDensity);
+      } catch (_) {}
+    }
+    applyUiPreferences(
+      localStorage.getItem('panelMotionLevel') || 'balanced',
+      localStorage.getItem('panelUiDensity') || 'comfortable'
+    );
+
     // SIDEBAR NAV
     document.querySelectorAll('.nav-btn').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -670,6 +1115,8 @@
         if (btn.dataset.tab === 'agents') loadAgentsGrid();
         if (btn.dataset.tab === 'modes') loadModesTab();
         if (btn.dataset.tab === 'trash') { loadTrashAgents(); loadTrashMemories(); }
+        if (btn.dataset.tab === 'reference') loadReferenceTab();
+        if (btn.dataset.tab === 'diagnostics') { loadStructMemView(); refreshTelemetry(); }
       });
     });
 
@@ -693,6 +1140,136 @@
       if (!window.pywebview || !window.pywebview.api) return null;
       try { return await window.pywebview.api[method](...args); }
       catch (e) { console.error('API error:', method, e); return null; }
+    }
+
+    let nexusThemeState = { modules: [], presets: [], assignments: {} };
+
+    function renderNexusThemeSwatches(preset) {
+      const target = document.getElementById('nexusThemeSwatches');
+      if (!target) return;
+      const tokens = (preset && preset.tokens) || {};
+      const colors = ['--accent', '--bg', '--bg-panel', '--surface', '--border-accent']
+        .map(k => tokens[k])
+        .filter(Boolean);
+      target.innerHTML = colors.map(c => '<span class="nexus-theme-swatch" style="background:' + c + '"></span>').join('');
+    }
+
+    function syncNexusThemeStatus() {
+      const modSelect = document.getElementById('nexusThemeModule');
+      const presetSelect = document.getElementById('nexusThemePreset');
+      const status = document.getElementById('nexusThemeStatus');
+      if (!modSelect || !presetSelect || !status) return;
+      const mod = nexusThemeState.modules.find(m => m.id === modSelect.value);
+      const preset = nexusThemeState.presets.find(p => p.id === presetSelect.value);
+      renderNexusThemeSwatches(preset);
+      if (!mod || !preset) {
+        status.textContent = 'Selecione uma janela e um preset para personalizar.';
+        return;
+      }
+      status.textContent = mod.label + ' usa ' + preset.name + ' · ' + (preset.description || 'preset local');
+    }
+
+    async function loadNexusThemes() {
+      const data = await apiCall('nexus_theme_list');
+      const modSelect = document.getElementById('nexusThemeModule');
+      const presetSelect = document.getElementById('nexusThemePreset');
+      if (!data || !modSelect || !presetSelect) return;
+      nexusThemeState = data;
+      modSelect.innerHTML = (data.modules || []).map(m => '<option value="' + m.id + '">' + m.label + '</option>').join('');
+      presetSelect.innerHTML = (data.presets || []).map(p => '<option value="' + p.id + '">' + p.name + (p.custom ? ' · custom' : '') + '</option>').join('');
+      const activeModule = data.modules && data.modules[0];
+      if (activeModule) {
+        modSelect.value = activeModule.id;
+        presetSelect.value = activeModule.preset_id;
+      }
+      syncNexusThemeStatus();
+    }
+
+    async function applyNexusWindowTheme() {
+      const mod = document.getElementById('nexusThemeModule')?.value || 'overview';
+      const preset = document.getElementById('nexusThemePreset')?.value || 'dark-neon';
+      const result = await apiCall('nexus_theme_apply', mod, preset);
+      if (result && result.ok) {
+        showToast(result.message || 'Tema aplicado.', 'success');
+        await loadNexusThemes();
+      } else {
+        showToast((result && result.error) || 'Nao foi possivel aplicar o tema.', 'error');
+      }
+    }
+
+    async function generateNexusThemePreset() {
+      const mod = document.getElementById('nexusThemeModule')?.value || 'overview';
+      const prompt = (document.getElementById('nexusThemePrompt')?.value || '').trim();
+      if (!prompt) return showToast('Descreva o estilo do preset.', 'error');
+      const result = await apiCall('nexus_theme_generate', mod, prompt, '');
+      if (result && result.ok) {
+        showToast(result.message || 'Tema gerado.', 'success');
+        await loadNexusThemes();
+        const presetSelect = document.getElementById('nexusThemePreset');
+        if (presetSelect && result.preset) presetSelect.value = result.preset.id;
+        syncNexusThemeStatus();
+      } else {
+        showToast((result && result.error) || 'Nao foi possivel gerar o tema.', 'error');
+      }
+    }
+
+    async function pollRuntimeStatus() {
+      if (!window.pywebview || !window.pywebview.api) return;
+      const st = await apiCall('get_status');
+      if (!st) return;
+      const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+      set('rtMic', st.mic_listening ? 'ligado' : 'desligado');
+      set('rtProc', st.is_processing ? 'sim' : 'não');
+      set('rtQueue', String(st.queue_approx));
+      const llm = (st.llm_last_provider || '') + (st.llm_last_model ? ' / ' + st.llm_last_model : '');
+      set('rtLlm', llm || '—');
+      const err = (st.llm_last_error_time ? '[' + st.llm_last_error_time + '] ' : '') + (st.llm_last_error || '');
+      set('rtErr', err);
+      const status = document.getElementById('statusLabel');
+      if (status) {
+        status.classList.remove('is-idle', 'is-listening', 'is-processing');
+        if (st.is_processing) {
+          status.textContent = 'PROCESSANDO';
+          status.classList.add('is-processing');
+        } else if (st.mic_listening) {
+          status.textContent = 'OUVINDO';
+          status.classList.add('is-listening');
+        } else {
+          status.textContent = 'EM ESPERA';
+          status.classList.add('is-idle');
+        }
+      }
+      const startupEl = document.getElementById('startupPhases');
+      if (startupEl && Array.isArray(st.startup_phases)) {
+        const phases = st.startup_phases.slice(-6).reverse();
+        startupEl.innerHTML = phases.length ? phases.map(p => '<div class="startup-phase"><strong>' + p.name + (p.detail ? ' - ' + p.detail : '') + '</strong><span>' + p.elapsed_ms + 'ms</span></div>').join('') : '<div class="startup-phase"><strong>Sem fases registradas</strong><span>0ms</span></div>';
+      }
+      const toolsEl = document.getElementById('rtTools');
+      if (toolsEl && Array.isArray(st.recent_tools)) {
+        toolsEl.textContent = st.recent_tools.length ? st.recent_tools.map(t => (t.tool + ' ' + (t.ok ? 'OK' : 'FALHOU') + ' ' + t.ms + 'ms')).join('\n') : '—';
+      }
+    }
+    async function loadReferenceTab() {
+      const sec = await apiCall('get_critical_actions_reference');
+      const ref = await apiCall('get_tools_reference');
+      const rs = document.getElementById('refSecurity');
+      const rm = document.getElementById('refMarkers');
+      const rf = document.getElementById('refFc');
+      if (rs) rs.textContent = JSON.stringify(sec, null, 2);
+      if (rm) rm.textContent = (ref && ref.markers_block) ? ref.markers_block : '—';
+      if (rf) rf.textContent = (ref && ref.function_calling_intro) ? ref.function_calling_intro : '—';
+    }
+
+    async function refreshTelemetry() {
+      const tail = await apiCall('get_telemetry_tail', 40);
+      const el = document.getElementById('telemetryTail');
+      if (el) el.textContent = tail ? JSON.stringify(tail, null, 2) : '—';
+    }
+
+    async function loadStructMemView() {
+      const m = await apiCall('get_structured_memory');
+      const el = document.getElementById('structMemView');
+      if (el) el.textContent = m ? JSON.stringify(m, null, 2) : '—';
     }
 
     // CHAT
@@ -789,7 +1366,7 @@
         document.getElementById('fId').value = '';
         document.getElementById('fName').value = '';
         document.getElementById('fPersona').value = '';
-        document.getElementById('fTtsProvider').value = 'edge';
+        document.getElementById('fTtsProvider').value = (document.getElementById('cfgTts') && document.getElementById('cfgTts').value) || 'edge';
         document.getElementById('fTtsVoice').value = 'pt-BR-FranciscaNeural';
         document.getElementById('fKokoroVoice').value = 'pf_dora';
         fSpeed.value = 1.0; fSpeedVal.textContent = '1.0x';
@@ -804,7 +1381,7 @@
         document.getElementById('fId').value = a.id;
         document.getElementById('fName').value = a.name;
         document.getElementById('fPersona').value = a.persona;
-        document.getElementById('fTtsProvider').value = a.tts_provider || 'edge';
+        document.getElementById('fTtsProvider').value = a.tts_provider || 'xtts';
         document.getElementById('fTtsVoice').value = a.tts_voice || 'pt-BR-FranciscaNeural';
         document.getElementById('fKokoroVoice').value = a.kokoro_voice || 'pf_dora';
         fSpeed.value = a.tts_speed || 1.0;
@@ -1065,13 +1642,94 @@
     }
 
     document.getElementById('sendBtn').addEventListener('click', sendChat);
-    document.getElementById('chatInput').addEventListener('keydown', (e) => {
+    const nexusBtn = document.getElementById('btnOpenNexus');
+    if (nexusBtn) {
+      nexusBtn.addEventListener('click', async () => {
+        const ok = await apiCall('open_nexus_hud');
+        if (ok) showToast('Abrindo Nexus (janelas desktop)…', 'success');
+        else showToast('Não foi possível abrir o Nexus', 'error');
+      });
+    }
+    document.querySelectorAll('[data-nexus-mod]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const mod = btn.getAttribute('data-nexus-mod');
+        const ok = await apiCall('open_nexus_module', mod, '{}');
+        if (ok) showToast('Abrindo ' + mod + '…', 'success');
+        else showToast('Não foi possível abrir o módulo Nexus', 'error');
+      });
+    });
+	    const nexusThemeModule = document.getElementById('nexusThemeModule');
+	    const nexusThemePreset = document.getElementById('nexusThemePreset');
+	    const btnApplyNexusTheme = document.getElementById('btnApplyNexusTheme');
+	    const btnGenerateNexusTheme = document.getElementById('btnGenerateNexusTheme');
+	    if (nexusThemeModule) {
+	      nexusThemeModule.addEventListener('change', () => {
+	        const mod = nexusThemeState.modules.find(m => m.id === nexusThemeModule.value);
+	        if (mod && nexusThemePreset) nexusThemePreset.value = mod.preset_id;
+	        syncNexusThemeStatus();
+	      });
+	    }
+	    if (nexusThemePreset) nexusThemePreset.addEventListener('change', syncNexusThemeStatus);
+	    if (btnApplyNexusTheme) btnApplyNexusTheme.addEventListener('click', applyNexusWindowTheme);
+	    if (btnGenerateNexusTheme) btnGenerateNexusTheme.addEventListener('click', generateNexusThemePreset);
+	    document.getElementById('chatInput').addEventListener('keydown', (e) => {
       if (e.key === 'Enter') sendChat();
     });
 
-    window.addEventListener('pywebviewready', async () => {
-      loadAgentsGrid();
-      loadAgentSelector();
+	    window.addEventListener('pywebviewready', async () => {
+	      loadAgentsGrid();
+	      loadAgentSelector();
+	      loadNexusThemes();
+
+	      let ccShownId = null;
+      const ccModal = document.getElementById('criticalConfirmModal');
+      const ccDetail = document.getElementById('ccDetail');
+      const ccTool = document.getElementById('ccTool');
+
+      async function pollCriticalConfirm() {
+        if (!window.pywebview || !window.pywebview.api || !ccModal) return;
+        if (ccModal.style.display === 'flex' && ccShownId) return;
+        const p = await apiCall('get_critical_confirm_pending');
+        if (!(p && p.id)) {
+          if (ccModal.style.display === 'flex') {
+            ccModal.style.display = 'none';
+            ccShownId = null;
+          }
+          return;
+        }
+        if (ccShownId === p.id) return;
+        ccShownId = p.id;
+        ccDetail.textContent = p.detail || 'Confirme esta ação na interface.';
+        ccTool.textContent = 'Ferramenta: ' + (p.tool_name || '—');
+        ccModal.style.display = 'flex';
+      }
+
+      function resolveCriticalConfirm(approved) {
+        if (!ccShownId) return;
+        const id = ccShownId;
+        apiCall('resolve_critical_confirm', id, approved).then(() => {
+          if (ccModal) ccModal.style.display = 'none';
+          ccShownId = null;
+        });
+      }
+
+      const ccBtnYes = document.getElementById('ccBtnYes');
+      const ccBtnNo = document.getElementById('ccBtnNo');
+      if (ccBtnYes) ccBtnYes.addEventListener('click', () => resolveCriticalConfirm(true));
+      if (ccBtnNo) ccBtnNo.addEventListener('click', () => resolveCriticalConfirm(false));
+
+      const criticalToggle = document.getElementById('criticalConfirmToggle');
+      if (criticalToggle) {
+        criticalToggle.addEventListener('change', async (e) => {
+          const ok = await apiCall('set_critical_confirm_enabled', e.target.checked);
+          if (ok) {
+            showToast(e.target.checked ? 'Confirmação crítica ativada.' : 'Confirmação crítica desativada.', 'success');
+          } else {
+            showToast('Não foi possível salvar.', 'error');
+            e.target.checked = !e.target.checked;
+          }
+        });
+      }
 
       // Carregar configs reais
       try {
@@ -1081,13 +1739,208 @@
           document.getElementById('cfgGemini').value = cfg.gemini_model || '';
           document.getElementById('cfgGroq').value = cfg.groq_model || '';
           document.getElementById('cfgTts').value = cfg.tts_provider || '';
+          const fo = document.getElementById('cfgTtsFallbackOrder');
+          if (fo) fo.value = cfg.tts_provider_order || '';
+          const stp = document.getElementById('cfgStyleTts2Python');
+          if (stp) stp.value = cfg.styletts2_python || '';
+          const str = document.getElementById('cfgStyleTts2Reference');
+          if (str) str.value = cfg.styletts2_reference_wav || '';
+          const std = document.getElementById('cfgStyleTts2DiffusionSteps');
+          const stdv = document.getElementById('cfgStyleTts2DiffusionVal');
+          if (std) {
+            std.value = cfg.styletts2_diffusion_steps || 3;
+            if (stdv) stdv.textContent = String(std.value);
+          }
+          const ste = document.getElementById('cfgStyleTts2EmbeddingScale');
+          const stev = document.getElementById('cfgStyleTts2EmbeddingVal');
+          if (ste) {
+            ste.value = cfg.styletts2_embedding_scale || 1.0;
+            if (stev) stev.textContent = parseFloat(ste.value).toFixed(1);
+          }
+          const tcp = document.getElementById('cfgTtsPrefetchChunks');
+          if (tcp) tcp.checked = cfg.tts_prefetch_chunks !== false;
+          const cct = document.getElementById('criticalConfirmToggle');
+          if (cct && typeof cfg.critical_confirm_enabled === 'boolean') {
+            cct.checked = cfg.critical_confirm_enabled;
+          }
+          const hk = document.getElementById('cfgHotkey');
+          if (hk) hk.value = cfg.panel_hotkey || 'win+shift+a';
+          const setChecked = (id, val) => { const el = document.getElementById(id); if (el) el.checked = !!val; };
+          const setValue = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
+          setChecked('cfgUseMic', cfg.use_mic !== false);
+          setValue('cfgSttLanguage', cfg.stt_language || 'pt-BR');
+          setValue('cfgSttEnergyThreshold', cfg.stt_energy_threshold || 1100);
+          setValue('cfgSttPauseThreshold', cfg.stt_pause_threshold || 0.8);
+          setValue('cfgSttNonSpeakingDuration', cfg.stt_non_speaking_duration || 0.35);
+          setValue('cfgSttMinAudioSeconds', cfg.stt_min_audio_seconds || 0.35);
+          setValue('cfgSttCalibrationSeconds', cfg.stt_calibration_seconds || 0.8);
+          setChecked('cfgSttDynamicEnergy', cfg.stt_dynamic_energy !== false);
+          setChecked('cfgStartVisionTracker', cfg.start_vision_tracker === true);
+          setChecked('cfgStartHeartbeat', cfg.start_heartbeat !== false);
+          setChecked('cfgStartProactiveAgent', cfg.start_proactive_agent === true);
+          setChecked('cfgEnableClapTrigger', cfg.enable_clap_trigger !== false);
+          setValue('cfgClapThreshold', cfg.clap_threshold || 0.15);
+          setValue('cfgClapMaxGap', cfg.clap_max_gap || 1.2);
+          setChecked('cfgXttsPreload', cfg.xtts_preload !== false);
+          setChecked('cfgStyleTts2PreloadStartup', cfg.styletts2_preload === true);
+          applyUiPreferences(cfg.ui_motion_level || 'balanced', cfg.ui_density || 'comfortable');
         }
       } catch (e) {
         console.error("Erro ao carregar config:", e);
       }
 
+      setInterval(pollRuntimeStatus, 1000);
+      pollRuntimeStatus();
+
+      const bda = document.getElementById('btnDiagAudio');
+      if (bda) bda.addEventListener('click', async () => {
+        const r = await apiCall('diagnostics_audio');
+        const el = document.getElementById('diagResult');
+        if (el) el.textContent = JSON.stringify(r, null, 2);
+      });
+      const bdt = document.getElementById('btnDiagTts');
+      if (bdt) bdt.addEventListener('click', async () => {
+        await apiCall('diagnostics_tts');
+        setTimeout(async () => {
+          const s = await apiCall('get_status');
+          const el = document.getElementById('diagResult');
+          if (el) el.textContent = JSON.stringify((s && s.diagnostics) ? s.diagnostics : {}, null, 2);
+        }, 3500);
+      });
+      const bdl = document.getElementById('btnDiagLlm');
+      if (bdl) bdl.addEventListener('click', async () => {
+        await apiCall('diagnostics_llm');
+        setTimeout(async () => {
+          const s = await apiCall('get_status');
+          const el = document.getElementById('diagResult');
+          if (el) el.textContent = JSON.stringify((s && s.diagnostics) ? s.diagnostics : {}, null, 2);
+        }, 8000);
+      });
+      const btr = document.getElementById('btnTelemetryRefresh');
+      if (btr) btr.addEventListener('click', refreshTelemetry);
+      const bsm = document.getElementById('btnStructMemRefresh');
+      if (bsm) bsm.addEventListener('click', loadStructMemView);
+      const bsd = document.getElementById('btnStructDel');
+      if (bsd) bsd.addEventListener('click', async () => {
+        const cat = (document.getElementById('structCat') || {}).value || 'notes';
+        const key = (document.getElementById('structKey') || {}).value || '';
+        if (!key) { showToast('Informe a chave', 'error'); return; }
+        const r = await apiCall('delete_structured_memory_entry', cat, key);
+        showToast(String(r), 'info');
+        loadStructMemView();
+      });
+      const bpe = document.getElementById('btnPrefExport');
+      if (bpe) bpe.addEventListener('click', async () => {
+        const ok = await apiCall('export_preferences_bundle');
+        showToast(ok ? 'Exportado.' : 'Cancelado ou falhou.', ok ? 'success' : 'error');
+      });
+      const bpi = document.getElementById('btnPrefImport');
+      if (bpi) bpi.addEventListener('click', async () => {
+        const ok = await apiCall('import_preferences_bundle');
+        showToast(ok ? 'Importado. Reinicie se necessário.' : 'Cancelado ou falhou.', ok ? 'success' : 'error');
+      });
+
+      const std = document.getElementById('cfgStyleTts2DiffusionSteps');
+      const stdv = document.getElementById('cfgStyleTts2DiffusionVal');
+      if (std && stdv) {
+        std.addEventListener('input', () => { stdv.textContent = String(std.value); });
+      }
+      const ste = document.getElementById('cfgStyleTts2EmbeddingScale');
+      const stev = document.getElementById('cfgStyleTts2EmbeddingVal');
+      if (ste && stev) {
+        ste.addEventListener('input', () => { stev.textContent = parseFloat(ste.value).toFixed(1); });
+      }
+      const bst = document.getElementById('btnSaveTtsConfig');
+      if (bst) bst.addEventListener('click', async () => {
+        const payload = {
+          tts_provider: document.getElementById('cfgTts').value,
+          tts_provider_order: document.getElementById('cfgTtsFallbackOrder').value.trim(),
+          styletts2_python: document.getElementById('cfgStyleTts2Python').value.trim(),
+          styletts2_reference_wav: document.getElementById('cfgStyleTts2Reference').value.trim(),
+          styletts2_diffusion_steps: parseInt(document.getElementById('cfgStyleTts2DiffusionSteps').value, 10) || 3,
+          styletts2_embedding_scale: parseFloat(document.getElementById('cfgStyleTts2EmbeddingScale').value) || 1.0,
+          tts_prefetch_chunks: document.getElementById('cfgTtsPrefetchChunks').checked
+        };
+        const result = await apiCall('update_tts_config', payload);
+        if (result && result.ok) showToast('TTS aplicado em tempo real.', 'success');
+        else showToast((result && result.error) ? result.error : 'Falha ao aplicar TTS.', 'error');
+      });
+
+      const bindRangeLabel = (inputId, labelId, format) => {
+        const input = document.getElementById(inputId);
+        const label = document.getElementById(labelId);
+        if (!input || !label) return;
+        const sync = () => { label.textContent = format ? format(input.value) : String(input.value); };
+        input.addEventListener('input', sync);
+        sync();
+      };
+      bindRangeLabel('cfgSttEnergyThreshold', 'cfgSttEnergyVal');
+      bindRangeLabel('cfgSttPauseThreshold', 'cfgSttPauseVal', v => `${parseFloat(v).toFixed(2)}s`);
+      bindRangeLabel('cfgSttNonSpeakingDuration', 'cfgSttNonSpeakingVal', v => `${parseFloat(v).toFixed(2)}s`);
+      bindRangeLabel('cfgSttMinAudioSeconds', 'cfgSttMinAudioVal', v => `${parseFloat(v).toFixed(2)}s`);
+      bindRangeLabel('cfgSttCalibrationSeconds', 'cfgSttCalibrationVal', v => `${parseFloat(v).toFixed(1)}s`);
+      bindRangeLabel('cfgClapThreshold', 'cfgClapThresholdVal', v => parseFloat(v).toFixed(2));
+      bindRangeLabel('cfgClapMaxGap', 'cfgClapMaxGapVal', v => `${parseFloat(v).toFixed(1)}s`);
+
+      const bss = document.getElementById('btnSaveSttConfig');
+      if (bss) bss.addEventListener('click', async () => {
+        const payload = {
+          use_mic: !!(document.getElementById('cfgUseMic') || {}).checked,
+          stt_language: ((document.getElementById('cfgSttLanguage') || {}).value || 'pt-BR').trim(),
+          stt_energy_threshold: parseInt((document.getElementById('cfgSttEnergyThreshold') || {}).value || '1100', 10),
+          stt_dynamic_energy: !!(document.getElementById('cfgSttDynamicEnergy') || {}).checked,
+          stt_pause_threshold: parseFloat((document.getElementById('cfgSttPauseThreshold') || {}).value || '0.8'),
+          stt_non_speaking_duration: parseFloat((document.getElementById('cfgSttNonSpeakingDuration') || {}).value || '0.35'),
+          stt_min_audio_seconds: parseFloat((document.getElementById('cfgSttMinAudioSeconds') || {}).value || '0.35'),
+          stt_calibration_seconds: parseFloat((document.getElementById('cfgSttCalibrationSeconds') || {}).value || '0.8'),
+          recalibrate: true
+        };
+        const result = await apiCall('update_stt_config', payload);
+        if (result && result.ok) showToast('STT aplicado em tempo real.', 'success');
+        else showToast((result && result.error) ? result.error : 'Falha ao aplicar STT.', 'error');
+      });
+
+      const bstartup = document.getElementById('btnSaveStartupConfig');
+      if (bstartup) bstartup.addEventListener('click', async () => {
+        const optionalChecked = (id, fallback) => {
+          const el = document.getElementById(id);
+          return el ? !!el.checked : fallback;
+        };
+        const optionalValue = (id, fallback) => {
+          const el = document.getElementById(id);
+          return el ? el.value : fallback;
+        };
+        const payload = {
+          start_vision_tracker: optionalChecked('cfgStartVisionTracker', false),
+          start_heartbeat: optionalChecked('cfgStartHeartbeat', true),
+          start_proactive_agent: optionalChecked('cfgStartProactiveAgent', false),
+          enable_clap_trigger: optionalChecked('cfgEnableClapTrigger', true),
+          clap_threshold: parseFloat(optionalValue('cfgClapThreshold', '0.15')),
+          clap_max_gap: parseFloat(optionalValue('cfgClapMaxGap', '1.2')),
+          xtts_preload: optionalChecked('cfgXttsPreload', true),
+          styletts2_preload: optionalChecked('cfgStyleTts2PreloadStartup', false)
+        };
+        const result = await apiCall('update_startup_config', payload);
+        if (result && result.ok) showToast('Inicializacao salva. Reinicie para aplicar servicos de fundo.', 'success');
+        else showToast((result && result.error) ? result.error : 'Falha ao salvar inicializacao.', 'error');
+      });
+
+      const bui = document.getElementById('btnSaveUiConfig');
+      if (bui) bui.addEventListener('click', async () => {
+        const motion = (document.getElementById('cfgMotionLevel') || {}).value || 'balanced';
+        const density = (document.getElementById('cfgUiDensity') || {}).value || 'comfortable';
+        applyUiPreferences(motion, density);
+        const result = await apiCall('update_ui_config', {
+          ui_motion_level: motion,
+          ui_density: density
+        });
+        if (result && result.ok) showToast('Aparencia aplicada.', 'success');
+        else showToast((result && result.error) ? result.error : 'Falha ao salvar aparencia.', 'error');
+      });
+
       // Setup polling para Chat e Logs
       setInterval(pollChatAndLogs, 1000);
+      setInterval(pollCriticalConfirm, 400);
     });
 
     // Polling System
@@ -1171,6 +2024,35 @@
 
   </script>
   </div> <!-- Fim app-wrapper -->
+  <script>
+    const nxFullscreenObserver = new ResizeObserver(() => {
+      const isMaximized = window.innerWidth >= window.screen.availWidth - 10 && window.innerHeight >= window.screen.availHeight - 10;
+      if (isMaximized) {
+        document.documentElement.style.setProperty('background-color', 'var(--bg)', 'important');
+        document.body.style.setProperty('padding', '0', 'important');
+        document.body.style.setProperty('margin', '0', 'important');
+        const wrapper = document.getElementById("app-wrapper");
+        if (wrapper) {
+          wrapper.style.setProperty('border-radius', '0', 'important');
+          wrapper.style.setProperty('border', 'none', 'important');
+          wrapper.style.setProperty('box-shadow', 'none', 'important');
+          wrapper.style.setProperty('margin', '0', 'important');
+        }
+      } else {
+        document.documentElement.style.setProperty('background-color', 'transparent', 'important');
+        document.body.style.removeProperty('padding');
+        document.body.style.removeProperty('margin');
+        const wrapper = document.getElementById("app-wrapper");
+        if (wrapper) {
+          wrapper.style.removeProperty('border-radius');
+          wrapper.style.removeProperty('border');
+          wrapper.style.removeProperty('box-shadow');
+          wrapper.style.removeProperty('margin');
+        }
+      }
+    });
+    nxFullscreenObserver.observe(document.body);
+  </script>
 </body>
 
 </html>

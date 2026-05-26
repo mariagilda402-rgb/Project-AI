@@ -7,6 +7,11 @@ import threading
 import mimetypes
 from pathlib import Path
 
+# Garante imports `src.*` quando o subprocesso é `python .../visualizer_app.py`
+_proj_root = Path(__file__).resolve().parents[2]
+if str(_proj_root) not in sys.path:
+    sys.path.insert(0, str(_proj_root))
+
 # --- State file ---
 STATE_FILE = sys.argv[1] if len(sys.argv) > 1 else "data/visualizer_state.json"
 _state = {"status": "idle", "subtitle": "", "emotion": "neutral", "position": "top_left", "display_mode": "auto"}
@@ -60,13 +65,13 @@ def state_poll_loop():
 
 def main():
     try:
-        from flask import Flask, send_from_directory, jsonify, request, make_response, send_file
+        from flask import Flask, send_from_directory, jsonify, request, make_response, send_file, redirect
         from flask_sock import Sock
     except ImportError:
         print("[Visualizer] Instalando dependencias (flask, flask-sock)...")
         import subprocess
         subprocess.check_call([sys.executable, "-m", "pip", "install", "flask", "flask-sock", "--quiet"])
-        from flask import Flask, send_from_directory, jsonify, request, make_response, send_file
+        from flask import Flask, send_from_directory, jsonify, request, make_response, send_file, redirect
         from flask_sock import Sock
 
     # Diretorio dos arquivos estaticos (orb.js, index.html)
@@ -74,6 +79,13 @@ def main():
     
     app = Flask(__name__, static_folder=str(static_dir))
     sock = Sock(app)
+
+    try:
+        from src.services.nexus_api import register_nexus_routes
+
+        register_nexus_routes(app)
+    except Exception as e:
+        print(f"[Visualizer] Nexus API nao carregada: {e}")
 
     @app.after_request
     def add_cors_headers(response):
@@ -83,26 +95,49 @@ def main():
         response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
         return response
 
+    nexus_dir = Path(__file__).resolve().parent.parent / "nexus_hud" / "dist"
+
+    def _nexus_missing_response():
+        """503 HTML quando dist/ não existe (evita 404 genérico sem explicação)."""
+        body = (
+            "<!doctype html><html><head><meta charset=\"utf-8\"/><title>Nexus HUD</title></head><body>"
+            "<h1>Nexus HUD — build em falta</h1>"
+            "<p>O servidor não encontrou <code>src/nexus_hud/dist/index.html</code>.</p>"
+            "<p>Na raiz do projeto corre:</p><pre>cd src/nexus_hud\nnpm ci\nnpm run build</pre>"
+            "<p>Reinicia a aplicação para o visualizador recarregar os ficheiros.</p>"
+            f"<p>Caminho esperado: {nexus_dir}</p>"
+            "</body></html>"
+        )
+        r = make_response(body, 503)
+        r.headers["Content-Type"] = "text/html; charset=utf-8"
+        return r
+
+    def _send_nexus_index():
+        if not (nexus_dir / "index.html").is_file():
+            return _nexus_missing_response()
+        return send_from_directory(str(nexus_dir), "index.html")
+
+    def _send_nexus_file(rel: str):
+        if not (nexus_dir / "index.html").is_file():
+            return _nexus_missing_response()
+        return send_from_directory(str(nexus_dir), rel)
+
     @app.route("/")
     def index():
         return send_from_directory(str(static_dir), "index.html")
 
-    @app.route("/<path:filename>")
-    def serve_static(filename):
-        """Serve qualquer arquivo da pasta visualizer_web (orb.js, CSS, etc)."""
-        response = send_from_directory(str(static_dir), filename)
-        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
-        return response
-
     @app.route("/nexus")
+    def nexus_redirect_slash():
+        """Barra final: URLs relativas do Vite (base /nexus/) resolvem bem."""
+        return redirect("/nexus/", code=302)
+
+    @app.route("/nexus/")
     def nexus_dashboard():
-        nexus_dir = Path(__file__).resolve().parent.parent / "nexus_hud" / "dist"
-        return send_from_directory(str(nexus_dir), "index.html")
+        return _send_nexus_index()
 
     @app.route("/nexus/<path:path>")
     def nexus_assets(path):
-        nexus_dir = Path(__file__).resolve().parent.parent / "nexus_hud" / "dist"
-        return send_from_directory(str(nexus_dir), path)
+        return _send_nexus_file(path)
 
     @app.route("/api/state")
     def api_state():
@@ -212,6 +247,23 @@ def main():
         broadcast_state({"type": "nexus_update", "payload": data})
         return "", 200
 
+    @app.route("/<path:filename>")
+    def serve_static(filename):
+        """Serve ficheiros do orb (visualizer_web). Por último.
+
+        O catch-all pode capturar /nexus/ nalguns casos; tratar aqui evita 404 no HUD.
+        """
+        if filename == "nexus" or filename.startswith("nexus/"):
+            if filename == "nexus":
+                return redirect("/nexus/", code=302)
+            sub = filename.removeprefix("nexus/")
+            if not sub:
+                return _send_nexus_index()
+            return _send_nexus_file(sub)
+        response = send_from_directory(str(static_dir), filename)
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        return response
+
     @sock.route("/ws")
     def ws_handler(ws):
         with _ws_lock:
@@ -242,7 +294,11 @@ def main():
 
     port = int(os.environ.get("VISUALIZER_PORT", "5123"))
     print(f"[Visualizer] Servidor Web iniciado em http://localhost:{port}")
-    
+    if not (nexus_dir / "index.html").is_file():
+        print(f"[Visualizer] AVISO: Nexus HUD sem build em {nexus_dir} — cd src/nexus_hud && npm ci && npm run build")
+    else:
+        print(f"[Visualizer] Nexus HUD: http://localhost:{port}/nexus/")
+
     # Abre o navegador automaticamente
     # import webbrowser
     # threading.Timer(1.5, lambda: webbrowser.open(f"http://localhost:{port}")).start()

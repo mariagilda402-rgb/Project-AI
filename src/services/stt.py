@@ -16,17 +16,33 @@ class STTService:
     treinados so para um idioma (ex.: VosK PT).
     """
 
-    def __init__(self, use_mic: bool = False, language: str = "pt-BR", groq_api_key: str = "") -> None:
+    def __init__(
+        self,
+        use_mic: bool = False,
+        language: str = "pt-BR",
+        groq_api_key: str = "",
+        energy_threshold: int = 1100,
+        dynamic_energy_threshold: bool = True,
+        pause_threshold: float = 0.8,
+        non_speaking_duration: float = 0.35,
+        min_audio_seconds: float = 0.35,
+    ) -> None:
         self.use_mic = use_mic
         self.language = language.strip() or "pt-BR"
         self.recognizer = sr.Recognizer()
         
-        # Ajustes de sensibilidade para evitar inputs fantasma
-        self.recognizer.energy_threshold = 2500  # Aumentado para 2500 para ignorar respiração
-        self.recognizer.dynamic_energy_threshold = False # Desativado para manter fixo
+        self.energy_threshold = max(150, min(8000, int(energy_threshold or 1100)))
+        self.dynamic_energy_threshold = bool(dynamic_energy_threshold)
+        self.pause_threshold = max(0.25, min(3.0, float(pause_threshold or 0.8)))
+        self.non_speaking_duration = max(0.1, min(2.0, float(non_speaking_duration or 0.35)))
+        self.min_audio_seconds = max(0.05, min(3.0, float(min_audio_seconds or 0.35)))
+
+        # Ajustes configuraveis: o painel pode priorizar sensibilidade ou rejeicao de ruido.
+        self.recognizer.energy_threshold = self.energy_threshold
+        self.recognizer.dynamic_energy_threshold = self.dynamic_energy_threshold
         self.recognizer.dynamic_energy_adjustment_damping = 0.15
-        self.recognizer.pause_threshold = 1.0
-        self.recognizer.non_speaking_duration = 0.5
+        self.recognizer.pause_threshold = self.pause_threshold
+        self.recognizer.non_speaking_duration = self.non_speaking_duration
         
         self.groq_client = None
         if groq_api_key and Groq:
@@ -40,17 +56,50 @@ class STTService:
         # Calibração inicial
         self.calibrated = False
 
-    def calibrate(self, duration: float = 2.0):
-        """Ajusta o reconhecedor ao ruído ambiente com um piso mínimo de segurança."""
+    def configure(
+        self,
+        *,
+        use_mic: bool | None = None,
+        language: str | None = None,
+        energy_threshold: int | None = None,
+        dynamic_energy_threshold: bool | None = None,
+        pause_threshold: float | None = None,
+        non_speaking_duration: float | None = None,
+        min_audio_seconds: float | None = None,
+    ) -> None:
+        if use_mic is not None:
+            self.use_mic = bool(use_mic)
+        if language is not None:
+            self.language = str(language).strip() or "pt-BR"
+        if energy_threshold is not None:
+            self.energy_threshold = max(150, min(8000, int(energy_threshold or 1100)))
+        if dynamic_energy_threshold is not None:
+            self.dynamic_energy_threshold = bool(dynamic_energy_threshold)
+        if pause_threshold is not None:
+            self.pause_threshold = max(0.25, min(3.0, float(pause_threshold or 0.8)))
+        if non_speaking_duration is not None:
+            self.non_speaking_duration = max(
+                0.1, min(2.0, float(non_speaking_duration or 0.35))
+            )
+        if min_audio_seconds is not None:
+            self.min_audio_seconds = max(0.05, min(3.0, float(min_audio_seconds or 0.35)))
+
+        self.recognizer.energy_threshold = self.energy_threshold
+        self.recognizer.dynamic_energy_threshold = self.dynamic_energy_threshold
+        self.recognizer.pause_threshold = self.pause_threshold
+        self.recognizer.non_speaking_duration = self.non_speaking_duration
+
+    def _apply_energy_floor(self) -> None:
+        if self.recognizer.energy_threshold < self.energy_threshold:
+            self.recognizer.energy_threshold = self.energy_threshold
+
+    def calibrate(self, duration: float = 0.8):
+        """Ajusta o reconhecedor ao ruido ambiente respeitando o piso configurado."""
         try:
             with sr.Microphone() as source:
                 print(f"[STT] Calibrando ruído ambiente ({duration}s)...")
-                # Reduzimos um pouco a sensibilidade do ajuste automático
                 self.recognizer.adjust_for_ambient_noise(source, duration=duration)
-                
-                # PISO DE SEGURANÇA MÁXIMO
-                if self.recognizer.energy_threshold < 2500:
-                    self.recognizer.energy_threshold = 2500
+                self._apply_energy_floor()
                 
                 self.calibrated = True
                 print(f"[STT] Calibração concluída. Threshold final: {self.recognizer.energy_threshold}")
@@ -66,9 +115,9 @@ class STTService:
             pass
 
     def _transcribe(self, audio: sr.AudioData) -> str:
-        # Filtro de duração: se o som durar menos de 0.6 segundos, ignoramos (provável tosse ou clique)
+        # Filtro de duracao configuravel: evita cliques/tosses sem engolir falas curtas.
         duration = len(audio.get_raw_data()) / (audio.sample_rate * audio.sample_width)
-        if duration < 0.6:
+        if duration < self.min_audio_seconds:
             return ""
 
         text = ""
@@ -249,6 +298,7 @@ class STTService:
             source = sr.Microphone()
             with source as s:
                 recognizer.adjust_for_ambient_noise(s, duration=0.5)
+                stt_self._apply_energy_floor()
                 # Wrappea o stream APÓS aberto — dentro do with
                 s.stream = _MonitoredStream(s.stream, s.SAMPLE_WIDTH)
 
@@ -293,7 +343,7 @@ class STTService:
         import winsound
         try:
             winsound.Beep(1500, 100)
-        except:
+        except Exception:
             pass
 
         # Estado: LISTENING
@@ -310,7 +360,7 @@ class STTService:
 
         try:
             winsound.Beep(1000, 100)
-        except:
+        except Exception:
             pass
             
         stream.stop_stream()

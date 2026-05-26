@@ -16,7 +16,7 @@ def load_dynamic_skills() -> List[BaseTool]:
         return skills
         
     for py_file in skills_dir.glob("*.py"):
-        if py_file.name == "__init__.py":
+        if py_file.name in ("__init__.py", "change_voice.py", "system_exit.py"):
             continue
             
         try:
