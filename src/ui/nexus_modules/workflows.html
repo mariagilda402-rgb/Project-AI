@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Nexus · Workflows</title>
+  <style>
+    @keyframes slideIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+    #nx-app-wrapper .nx-chrome-inner > header { padding:14px 24px !important; }
+    #nx-app-wrapper .nx-chrome-inner > header h1 { font-size:18px !important; font-weight:700 !important; }
+    #nx-app-wrapper .nx-chrome-inner > main { padding:20px 24px 40px !important; }
+
+    .fab-btn { position:fixed; bottom:24px; right:24px; width:56px; height:56px; border-radius:28px; background:linear-gradient(135deg,#10b981,#059669); color:#fff; font-size:28px; display:flex; align-items:center; justify-content:center; cursor:pointer; border:none; box-shadow:0 4px 14px rgba(16,185,129,0.4); transition:all 0.2s; z-index:100; font-weight:300; }
+    .fab-btn:hover { transform:scale(1.05); box-shadow:0 6px 20px rgba(16,185,129,0.5); }
+    .fab-btn:active { transform:scale(0.95); }
+
+    .modal-backdrop { position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); z-index:200; display:flex; align-items:center; justify-content:center; opacity:0; pointer-events:none; transition:opacity 0.2s ease; }
+    .modal-backdrop.active { opacity:1; pointer-events:auto; }
+
+    .wf-modal { background:var(--bg-panel); border:1px solid var(--border); border-radius:16px; padding:24px; width:100%; max-width:360px; transform:translateY(20px) scale(0.95); transition:all 0.2s ease; box-shadow:0 10px 30px rgba(0,0,0,0.3); }
+    .modal-backdrop.active .wf-modal { transform:translateY(0) scale(1); }
+    .wf-modal h3 { margin:0 0 8px; font-size:16px; color:var(--text); font-weight:600; }
+    .wf-modal p.sub { font-size:12px; color:var(--text-dim); margin-bottom:16px; }
+
+    .form-field { margin-bottom:16px; }
+    .form-field label { display:block; font-size:11px; color:var(--text-dim); text-transform:uppercase; letter-spacing:1px; font-weight:600; margin-bottom:6px; }
+    #nx-app-wrapper .wf-modal input { font-size:14px !important; padding:12px 14px !important; width:100%; border-radius:8px; background:rgba(0,0,0,0.2); border:1px solid var(--border); color:var(--text); box-sizing:border-box; }
+
+    .modal-actions { display:flex; gap:12px; margin-top:24px; justify-content:flex-end; }
+    .btn-cancel { padding:10px 16px; border:1px solid var(--border); border-radius:8px; background:transparent; color:var(--text); font-size:13px; font-weight:600; cursor:pointer; transition:all 0.2s; }
+    .btn-cancel:hover { background:rgba(255,255,255,0.05); }
+    .btn-save { padding:10px 20px; border:none; border-radius:8px; background:linear-gradient(135deg,#10b981,#059669); color:#fff; font-size:13px; font-weight:700; cursor:pointer; transition:all 0.2s; }
+    .btn-save:hover { filter:brightness(1.1); box-shadow:0 2px 10px rgba(16,185,129,0.4); }
+
+    .wf-item {
+      display:flex; align-items:center; justify-content:space-between; padding:16px;
+      border-radius:12px; background:var(--bg-panel); border:1px solid var(--border);
+      margin-bottom:10px; animation:slideIn 0.25s ease; transition:all 0.2s;
+    }
+    .wf-item:hover { border-color:rgba(16,185,129,0.3); box-shadow:0 4px 12px rgba(0,0,0,0.1); }
+    .wf-info { flex:1; }
+    .wf-title { font-size:15px; font-weight:600; color:var(--text); display:flex; align-items:center; gap:8px; }
+    .wf-meta { font-size:12px; color:var(--text-dim); margin-top:4px; line-height:1.4; }
+    .wf-badge { background:rgba(16,185,129,0.1); color:#10b981; padding:2px 6px; border-radius:4px; font-size:10px; font-weight:700; border:1px solid rgba(16,185,129,0.2); }
+    
+    .wf-actions { display:flex; gap:8px; align-items:center; }
+    .btn-run { background:linear-gradient(135deg,#10b981,#059669); color:#fff; padding:6px 14px; border-radius:6px; font-size:12px; font-weight:600; border:none; cursor:pointer; transition:0.2s; }
+    .btn-run:hover { filter:brightness(1.1); transform:scale(1.05); }
+    .btn-del { width:32px; height:32px; border-radius:6px; border:1px solid var(--border); background:transparent; color:var(--text-dim); cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all 0.2s; font-size:14px; }
+    .btn-del:hover { background:rgba(239,68,68,0.1); border-color:rgba(239,68,68,0.3); color:#ef4444; }
+
+    .empty-state { text-align:center; padding:40px; color:var(--text-dim); font-size:13px; }
+  </style>
+</head>
+<body>
+  <header>
+    <div><h1>⚡ Workflows</h1><span>Capture e execute contextos de trabalho instantaneamente</span></div>
+    <div style="display:flex; gap:8px; align-items:center;">
+      <button type="button" class="btn btn-ghost" onclick="pywebview.api.jump('overview','{}')">Visão geral</button>
+    </div>
+  </header>
+  <main>
+    <div id="list"></div>
+    <button class="fab-btn" id="fabBtn" title="Gravar novo Workflow">+</button>
+
+    <div class="modal-backdrop" id="wfModalBackdrop">
+      <div class="wf-modal" onclick="event.stopPropagation()">
+        <h3>Gravar Novo Workflow</h3>
+        <p class="sub">A Inteligência Artificial irá capturar suas janelas ativas e criar um modo para ser executado mais tarde.</p>
+        <div class="form-field">
+          <label>Nome do Modo (ex: Modo Estudo)</label>
+          <input id="wn" type="text" placeholder="Modo..." />
+        </div>
+        <div class="form-field">
+          <label>Descrição</label>
+          <input id="wd" type="text" placeholder="Para que serve este modo?" />
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-cancel" id="btnCancel">Cancelar</button>
+          <button type="button" class="btn-save" id="btnSave">Gravar</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="nexus_boot.js"></script>
+  <script>
+    const boot = readBoot();
+
+    async function loadWorkflows() {
+      const list = document.getElementById('list');
+      const r = await nxBridge('workflows_list', {});
+      if (!r.ok) { list.innerHTML = '<div class="empty-state">' + (r.error||'Erro ao carregar workflows') + '</div>'; return; }
+      
+      const wfs = r.data || [];
+      if (!wfs.length) {
+        list.innerHTML = `
+          <div class="empty-state">
+            <div style="font-size:32px; margin-bottom:12px;">💻</div>
+            <div style="font-weight:600; font-size:15px; color:var(--text); margin-bottom:8px;">Nenhum Workflow salvo</div>
+            Você pode gravar seu ambiente atual (janelas, sites) como um Workflow e pedir para a IA restaurar tudo com um clique depois.
+          </div>
+        `;
+        return;
+      }
+
+      list.innerHTML = wfs.map(w => {
+        let appsCount = 0;
+        try {
+          appsCount = JSON.parse(w.steps_json).length;
+        } catch(e) {}
+        
+        const lastExec = w.last_executed ? new Date(w.last_executed).toLocaleString('pt-BR') : 'Nunca';
+        
+        return `
+          <div class="wf-item" data-id="${w.id}">
+            <div class="wf-info">
+              <div class="wf-title">${w.name} <span class="wf-badge">${appsCount} passos</span></div>
+              <div class="wf-meta">${w.description || 'Sem descrição'} <br/> Última execução: ${lastExec}</div>
+            </div>
+            <div class="wf-actions">
+              <button class="btn-run" onclick="runWorkflow('${w.name}')">▶ Rodar</button>
+              <button class="btn-del" onclick="deleteWorkflow(${w.id})">✕</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function runWorkflow(name) {
+      if(window.pywebview && window.pywebview.api) {
+          // Pede para o agente rodar o workflow pelo nome
+          window.pywebview.api.agent_chat('run|' + name);
+          // Opcional: mostrar um toast
+      }
+    }
+
+    async function deleteWorkflow(id) {
+      if(!confirm('Tem certeza que deseja remover este Workflow?')) return;
+      await nxBridge('workflow_delete', { workflow_id: id });
+      loadWorkflows();
+    }
+
+    // Modal
+    const backdrop = document.getElementById('wfModalBackdrop');
+    document.getElementById('fabBtn').onclick = () => {
+      backdrop.classList.add('active');
+      document.getElementById('wn').focus();
+    };
+    
+    function closeModal() {
+      backdrop.classList.remove('active');
+    }
+    
+    document.getElementById('btnCancel').onclick = closeModal;
+    backdrop.onclick = closeModal;
+
+    document.getElementById('btnSave').onclick = async () => {
+      const name = document.getElementById('wn').value.trim();
+      const desc = document.getElementById('wd').value.trim();
+      if (!name) return;
+      
+      // Enviamos a instrução para o Jarvis, e ele cuida de capturar as janelas e salvar.
+      if(window.pywebview && window.pywebview.api) {
+          window.pywebview.api.agent_chat('save|' + name + '|' + desc);
+      }
+      
+      closeModal();
+      document.getElementById('wn').value = '';
+      document.getElementById('wd').value = '';
+      
+      // Opcional: reload visual
+      setTimeout(loadWorkflows, 2000); // Dá um tempinho pro sqlite salvar via agent
+    };
+
+    loadWorkflows();
+    window.addEventListener('message', (e) => {
+      if (e.data === 'nexus-tab-focus') {
+        loadWorkflows();
+      }
+    });
+  </script>
+</body>
+</html>

@@ -104,6 +104,43 @@ def nexus_bridge_call(method: str, args_json: str = "{}") -> str:
             )
             return ok({"message": msg, "habits": svc.db.get_habits(), "presets": svc.list_lifestyle_presets()})
 
+        if m == "workflows_list":
+            return ok(svc.db.list_workflows())
+
+        if m == "workflow_add":
+            wid = svc.db.add_workflow(
+                (args.get("name") or "").strip(),
+                (args.get("description") or "").strip(),
+                args.get("steps_json") or "[]"
+            )
+            broadcast_nexus_state(svc)
+            return ok({"id": wid})
+
+        if m == "workflow_delete":
+            svc.db.delete_workflow(int(args["workflow_id"]))
+            broadcast_nexus_state(svc)
+            return ok({})
+
+        if m == "workflow_run":
+            wid = int(args["workflow_id"])
+            wf = svc.db.get_workflow(wid)
+            if wf:
+                svc.db.record_workflow_execution(wid)
+                return ok({"workflow": wf})
+            return err("Workflow não encontrado")
+
+        if m == "health_workouts_list":
+            return ok(svc.db.list_fitness_workouts())
+
+        if m == "health_metrics_get":
+            return ok({"latest": svc.db.get_latest_fitness_metrics(), "history": svc.db.list_fitness_metrics()})
+
+        if m == "journal_entries_list":
+            return ok(svc.db.list_journal_entries())
+
+        if m == "mood_logs_list":
+            return ok(svc.db.list_mood_logs())
+
         if m == "finance_snapshot":
             y = int(args.get("year") or __import__("datetime").date.today().year)
             mo = int(args.get("month") or __import__("datetime").date.today().month)

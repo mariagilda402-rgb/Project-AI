@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Nexus · Diário & AI Psychologist</title>
+  <style>
+    @keyframes slideIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+    
+    #nx-app-wrapper .nx-chrome-inner > header {
+      padding:14px 24px !important;
+      background: linear-gradient(90deg, rgba(167,139,250,0.15), rgba(124,58,237,0.08)), var(--bg-panel) !important;
+    }
+    #nx-app-wrapper .nx-chrome-inner > header h1 { font-size:18px !important; font-weight:800 !important; color:#a78bfa !important; }
+    #nx-app-wrapper .nx-chrome-inner > main { padding:20px 24px 40px !important; }
+
+    .journal-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:20px; }
+    
+    .card { background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:12px; padding:16px; transition:transform 0.2s cubic-bezier(0.2,0.8,0.2,1); backdrop-filter:blur(10px); display:flex; flex-direction:column; }
+    .card:hover { transform:translateY(-2px); border-color:rgba(167,139,250,0.3); box-shadow:0 10px 25px rgba(0,0,0,0.2); }
+    .card-title { font-size:12px; font-weight:800; color:var(--text-dim); text-transform:uppercase; letter-spacing:1px; margin-bottom:12px; display:flex; justify-content:space-between; }
+    
+    .entry-box { background:rgba(0,0,0,0.2); border:1px solid var(--border); border-radius:8px; padding:12px; margin-bottom:10px; animation:slideIn 0.3s ease; }
+    .entry-date { font-size:10px; color:var(--text-dim); margin-bottom:4px; text-transform:uppercase; font-weight:700; }
+    .entry-content { font-size:13px; color:var(--text); line-height:1.5; margin-bottom:8px; }
+    
+    .psycho-box { margin-top:8px; padding:10px; border-radius:8px; background:rgba(167,139,250,0.1); border:1px solid rgba(167,139,250,0.2); border-left:3px solid #a78bfa; }
+    .psycho-title { font-size:10px; color:#a78bfa; font-weight:800; margin-bottom:4px; text-transform:uppercase; }
+    .psycho-text { font-size:12px; color:var(--text); line-height:1.5; }
+
+    .btn-record { width:100%; padding:10px; background:linear-gradient(135deg, #8b5cf6, #7c3aed); color:#fff; border:none; border-radius:8px; font-weight:700; font-size:13px; cursor:pointer; margin-top:auto; transition:all 0.2s; box-shadow:0 4px 14px rgba(139,92,246,0.3); }
+    .btn-record:hover { filter:brightness(1.1); transform:translateY(-1px); }
+
+    .mood-row { display:flex; align-items:center; gap:10px; padding:10px; background:rgba(0,0,0,0.2); border:1px solid var(--border); border-radius:8px; margin-bottom:8px; }
+    .mood-score { font-size:18px; font-weight:900; width:40px; text-align:center; }
+    .mood-notes { font-size:12px; color:var(--text-dim); flex:1; }
+
+    @media (max-width: 760px) { .journal-grid { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+  <header>
+    <div><h1>🧠 Diário & Psicólogo IA</h1><span>Análise de sentimento e anotações pessoais</span></div>
+    <div style="display:flex; gap:8px; align-items:center;">
+      <button type="button" class="btn btn-ghost" onclick="pywebview.api.jump('overview','{}')">Voltar</button>
+    </div>
+  </header>
+  <main>
+    <div class="journal-grid">
+      <div class="card" style="grid-column: span 1;">
+        <div class="card-title">Últimas Entradas (Diário)</div>
+        <div id="journalList" style="flex:1; overflow-y:auto; max-height:400px; padding-right:4px;">
+          <div style="padding:20px; text-align:center; color:var(--text-dim); font-size:12px;">Carregando...</div>
+        </div>
+        <button class="btn-record" style="margin-top:16px;" onclick="askAgent('Escreva no meu diário: ')">Nova Entrada c/ IA</button>
+      </div>
+
+      <div class="card" style="grid-column: span 1;">
+        <div class="card-title">Mood Tracker (Humor)</div>
+        <div id="moodList" style="flex:1; overflow-y:auto; max-height:400px; padding-right:4px;">
+          <div style="padding:20px; text-align:center; color:var(--text-dim); font-size:12px;">Carregando...</div>
+        </div>
+        <button class="btn-record" style="margin-top:16px; background:linear-gradient(135deg, #06b6d4, #3b82f6); box-shadow:0 4px 14px rgba(6,182,212,0.3);" onclick="askAgent('Como você está se sentindo hoje? De 1 a 10?')">Registrar Humor c/ IA</button>
+      </div>
+    </div>
+  </main>
+
+  <script src="nexus_boot.js"></script>
+  <script>
+    const boot = readBoot();
+
+    async function loadData() {
+      const [j, m] = await Promise.all([
+        nxBridge('journal_entries_list', {}),
+        nxBridge('mood_logs_list', {})
+      ]);
+
+      if (j.ok) {
+        const list = document.getElementById('journalList');
+        if (!j.data || j.data.length === 0) {
+          list.innerHTML = '<div style="padding:20px; text-align:center; color:var(--text-dim); font-size:12px;">Seu diário está vazio. Diga ao Jarvis como foi seu dia.</div>';
+        } else {
+          list.innerHTML = j.data.slice(0, 10).map(entry => {
+            let psychoHtml = '';
+            if (entry.psychologist_feedback) {
+              psychoHtml = `
+                <div class="psycho-box">
+                  <div class="psycho-title">Dr. Jarvis (Psicólogo)</div>
+                  <div class="psycho-text">${entry.psychologist_feedback.replace(/\n/g, '<br/>')}</div>
+                </div>
+              `;
+            }
+            return `
+              <div class="entry-box">
+                <div class="entry-date">${entry.date} - ${entry.created_at.slice(11,16)}</div>
+                <div class="entry-content">${entry.content.replace(/\n/g, '<br/>')}</div>
+                ${psychoHtml}
+              </div>
+            `;
+          }).join('');
+        }
+      }
+
+      if (m.ok) {
+        const list = document.getElementById('moodList');
+        if (!m.data || m.data.length === 0) {
+          list.innerHTML = '<div style="padding:20px; text-align:center; color:var(--text-dim); font-size:12px;">Nenhum registro de humor.</div>';
+        } else {
+          list.innerHTML = m.data.slice(0, 10).map(log => {
+            let color = '#22c55e';
+            if(log.mood_score < 4) color = '#ef4444';
+            else if(log.mood_score < 7) color = '#f59e0b';
+            
+            return `
+              <div class="mood-row">
+                <div class="mood-score" style="color:${color}">${log.mood_score}</div>
+                <div class="mood-notes">
+                  <div style="font-size:10px; font-weight:700;">${log.date}</div>
+                  ${log.notes || 'Sem anotações'}
+                </div>
+              </div>
+            `;
+          }).join('');
+        }
+      }
+    }
+
+    function askAgent(cmd) {
+      if(window.pywebview && window.pywebview.api) {
+          // Apenas coloca no input do chat ou manda direto
+          window.pywebview.api.agent_chat(cmd);
+          showToastBanner({type:'info', msg: 'Interagindo com a IA...'});
+      }
+    }
+
+    loadData();
+    window.addEventListener('message', (e) => {
+      if (e.data === 'nexus-tab-focus') loadData();
+    });
+  </script>
+</body>
+</html>

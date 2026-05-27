@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "lens": {
+      "source": "smithery.ai",
+      "sourceType": "well-known",
+      "computedHash": "89f7783521db981441ba50872aea6fa54816983116247d3d59df36440ebb1792"
+    }
+  }
+}

@@ -1,8 +1,20 @@
 {
   "identity": {
     "name": {
-      "value": "Astrid",
-      "updated": "2026-05-10"
+      "value": "Jamil",
+      "updated": "2026-05-17"
+    },
+    "age": {
+      "value": "18",
+      "updated": "2026-05-12"
+    },
+    "city": {
+      "value": "sertaozinho",
+      "updated": "2026-05-12"
+    },
+    "Name": {
+      "value": "Jean",
+      "updated": "2026-05-20"
     }
   },
   "preferences": {
@@ -13,10 +25,70 @@
     "Música": {
       "value": "não especificada, mas solicitou abrir o Spotify várias vezes",
       "updated": "2026-05-10"
+    },
+    "music_streaming_service": {
+      "value": "Spotify",
+      "updated": "2026-05-13"
+    },
+    "content_interests": {
+      "value": "['poemas', 'notícias e manchetes']",
+      "updated": "2026-05-13"
+    },
+    "applications_used": {
+      "value": "['YouTube', 'Bloco de Notas', 'Quadro de Metas', 'Aplicativo de Anotações']",
+      "updated": "2026-05-13"
+    },
+    "Applications Used": {
+      "value": "['YouTube', 'Bloco de Notas', 'Quadro de Metas', 'Aplicativo de Anotações', 'Janela de Hábitos']",
+      "updated": "2026-05-20"
     }
   },
-  "projects": {},
-  "relationships": {},
-  "wishes": {},
-  "notes": {}
+  "projects": {
+    "current_ai_project_name": {
+      "value": "Projeto AI (Workspace) - Antigravity - main.py",
+      "updated": "2026-05-13"
+    },
+    "current_ai_project_path": {
+      "value": "c:/Users/jamil/Documents/Projeto AI/src/main.py",
+      "updated": "2026-05-13"
+    },
+    "projeto_ia": {
+      "value": "Projeto Antigravity",
+      "updated": "2026-05-17"
+    },
+    "ai_project": {
+      "value": "Desenvolvendo um projeto de IA",
+      "updated": "2026-05-20"
+    },
+    "Ai Project Interpreter Path": {
+      "value": "c:/Users/jamil/Documents/Projeto AI/.venv/Scripts/python.exe",
+      "updated": "2026-05-20"
+    },
+    "projeto_ai": {
+      "value": "Projeto AI",
+      "updated": "2026-05-21"
+    }
+  },
+  "relationships": {
+    "ai_alias_used_by_user": {
+      "value": "Jarvis",
+      "updated": "2026-05-13"
+    },
+    "user_honorific_used_by_ai": {
+      "value": "Sir",
+      "updated": "2026-05-13"
+    }
+  },
+  "wishes": {
+    "Habits": {
+      "value": "['testes']",
+      "updated": "2026-05-20"
+    }
+  },
+  "notes": {
+    "saved_note_titles": {
+      "value": "['list']",
+      "updated": "2026-05-13"
+    }
+  }
 }

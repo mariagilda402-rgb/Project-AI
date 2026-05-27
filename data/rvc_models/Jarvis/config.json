@@ -1,8 +1,10 @@
 {
   "voice": "pt-BR-AntonioNeural",
   "base_voice": "pt-BR-AntonioNeural",
-  "pitch": -2,
-  "index_rate": 0.8,
+  "pitch": -8,
+  "index_rate": 0.40,
+  "protect": 0.33,
+  "f0_method": "rmvpe",
   "volume": "+0%",
   "rate": "+0%"
 }

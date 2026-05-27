@@ -170,6 +170,178 @@ from src.tools.habit_tracker import HabitTrackerTool
 from src.tools.code_helper import CodeHelperTool
 from src.tools.browser_agent import BrowserAgentTool
 from src.tools.persona_manager import PersonaManagerTool
+import sys
+import os
+import logging
+import threading
+import time
+import json
+from pathlib import Path
+import queue
+import atexit
+import signal
+
+# ══════════════════════════════════════════════════════════════════════════════
+# GUARDA ANTI-ZUMBI: Mata instâncias anteriores do Jarvis antes de qualquer
+# import pesado. Resolve o problema de 100+ processos acumulados.
+# ══════════════════════════════════════════════════════════════════════════════
+
+_PID_FILE = Path(__file__).resolve().parent.parent / "data" / "jarvis.pid"
+
+
+def _kill_previous_instances():
+    """Mata qualquer processo Python anterior que esteja rodando main.py."""
+    my_pid = os.getpid()
+    my_ancestors = set()
+    try:
+        import psutil
+        curr = psutil.Process(my_pid).parent()
+        while curr:
+            my_ancestors.add(curr.pid)
+            curr = curr.parent()
+    except Exception:
+        pass
+
+    # 1. Tenta ler o PID do lockfile anterior
+    if _PID_FILE.exists():
+        try:
+            old_pid = int(_PID_FILE.read_text().strip())
+            if old_pid != my_pid and old_pid not in my_ancestors:
+                try:
+                    import psutil
+                    proc = psutil.Process(old_pid)
+                    if "python" in proc.name().lower():
+                        print(f"[Guarda] Encerrando instância anterior (PID {old_pid})...")
+                        # Mata toda a árvore de processos filhos
+                        children = proc.children(recursive=True)
+                        for child in children:
+                            if child.pid == my_pid or child.pid in my_ancestors:
+                                continue
+                            try:
+                                child.kill()
+                            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                                pass
+                        proc.kill()
+                        proc.wait(timeout=5)
+                        print(f"[Guarda] PID {old_pid} encerrado com sucesso.")
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    pass  # Já morreu
+                except ImportError:
+                    # Fallback sem psutil: tenta taskkill no Windows
+                    try:
+                        os.system(f'taskkill /PID {old_pid} /F /T >nul 2>&1')
+                    except Exception:
+                        pass
+                except Exception as e:
+                    print(f"[Guarda] Erro ao matar PID {old_pid}: {e}")
+        except (ValueError, OSError):
+            pass
+
+    # 2. Varredura geral: mata qualquer python.exe rodando main.py (exceto eu e meus pais)
+    try:
+        import psutil
+        for proc in psutil.process_iter(["pid", "name", "cmdline"]):
+            try:
+                if proc.info["pid"] == my_pid or proc.info["pid"] in my_ancestors:
+                    continue
+                if "python" not in (proc.info["name"] or "").lower():
+                    continue
+                cmdline = proc.info.get("cmdline") or []
+                cmd_str = " ".join(cmdline).lower()
+                if "src\\main.py" in cmd_str or "src/main.py" in cmd_str:
+                    print(f"[Guarda] Matando processo zumbi: PID {proc.info['pid']}")
+                    children = proc.children(recursive=True)
+                    for child in children:
+                        if child.pid == my_pid or child.pid in my_ancestors:
+                            continue
+                        try:
+                            child.kill()
+                        except (psutil.NoSuchProcess, psutil.AccessDenied):
+                            pass
+                    proc.kill()
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                pass
+    except ImportError:
+        pass  # Sem psutil, a limpeza por PID file já cobre o caso principal
+
+    # 3. Grava o PID atual no lockfile
+    try:
+        _PID_FILE.parent.mkdir(parents=True, exist_ok=True)
+        _PID_FILE.write_text(str(my_pid))
+    except OSError:
+        pass
+
+
+def _cleanup_on_exit():
+    """Remove o PID file ao sair normalmente."""
+    try:
+        if _PID_FILE.exists() and _PID_FILE.read_text().strip() == str(os.getpid()):
+            _PID_FILE.unlink(missing_ok=True)
+    except Exception:
+        pass
+
+
+# Executa a guarda IMEDIATAMENTE, antes de qualquer import pesado
+_kill_previous_instances()
+atexit.register(_cleanup_on_exit)
+
+# Captura SIGTERM/SIGINT para garantir limpeza
+def _signal_handler(signum, frame):
+    _cleanup_on_exit()
+    os._exit(0)
+
+signal.signal(signal.SIGTERM, _signal_handler)
+try:
+    signal.signal(signal.SIGINT, _signal_handler)
+except (OSError, ValueError):
+    pass  # Pode falhar em threads secundárias
+
+# Agora importa o keyboard (que tem side effects)
+import keyboard
+
+# Global Queue for tasks
+task_queue = queue.Queue()
+
+# Adiciona a pasta raiz ao sys.path para permitir imports do tipo 'from src...'
+root_dir = Path(__file__).resolve().parent.parent
+if str(root_dir) not in sys.path:
+    sys.path.append(str(root_dir))
+from src.agent.orchestrator import AgentOrchestrator
+from src.config import load_settings
+from src.integrations.super_productivity import SuperProductivityConnector
+from src.memory.store import MemoryStore
+from src.services.llm import LLMService
+from src.services.stt import STTService
+from src.services.tts import TTSService
+from src.services.vision import VisionService
+from src.tools.clipboard import ClipboardTool
+from src.tools.desktop import DesktopAutomationTool
+from src.tools.finance import FinanceTool
+from src.tools.media_control import MediaControlTool
+from src.tools.memory_manager import MemoryManagerTool
+
+from src.tools.productivity import ProductivityTool
+from src.tools.registry import ToolRegistry
+from src.tools.critical_confirm import (
+    CriticalConfirmationBus,
+    load_critical_confirm_enabled,
+    try_voice_resolve_confirmation,
+)
+from src.tools.system_info import SystemInfoTool
+from src.tools.timer import TimerTool
+from src.tools.web_search import WebSearchTool
+from src.tools.whatsapp import WhatsAppTool
+from src.tools.visualizer_control import VisualizerControlTool
+from src.tools.spotify import SpotifyTool
+from src.tools.file_manager import FileManagerTool
+from src.tools.app_manager import AppManagerTool
+from src.tools.image_generator import GenerateImageTool, ShowImageTool, ListImagesTool
+from src.tools.hacker_mode import HackerModeTool
+from src.tools.nexus import NexusTool
+from src.tools.habit_tracker import HabitTrackerTool
+from src.tools.code_helper import CodeHelperTool
+from src.tools.browser_agent import BrowserAgentTool
+from src.tools.persona_manager import PersonaManagerTool
 from src.tools.dev_agent import DevAgentTool
 from src.tools.cmd_control import CmdControlTool
 from src.tools.settings_manager import SettingsManagerTool
@@ -177,6 +349,8 @@ from src.tools.file_processor import FileProcessorTool
 from src.tools.system_control import SystemControlTool
 from src.tools.toggle_live import ToggleLiveTool
 from src.tools.news import NewsTool
+from src.tools.workflow import WorkflowTool
+from src.tools.health_journal import HealthJournalTool
 from src.skills.system_exit import SystemExitTool
 from src.skills.change_voice import ChangeVoiceSkill
 from src.tools.skill_manager import load_dynamic_skills
@@ -334,6 +508,8 @@ def main() -> None:
             SystemControlTool(),
             ToggleLiveTool(),
             NewsTool(),
+            WorkflowTool(),
+            HealthJournalTool(),
             ChangeVoiceSkill(tts_instance=tts),
             SystemExitTool()
         ] + load_dynamic_skills(),

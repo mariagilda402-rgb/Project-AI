@@ -148,6 +148,49 @@ class NexusDatabase:
                     progress INTEGER DEFAULT 0, -- 0 a 100
                     status TEXT DEFAULT 'active' -- active, achieved, failed
                 )
+            # 9. HEALTH & FITNESS
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS fitness_workouts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    date DATE DEFAULT (date('now', 'localtime')),
+                    type TEXT NOT NULL,
+                    duration_minutes INTEGER,
+                    calories_burned INTEGER,
+                    notes TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS fitness_metrics (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    date DATE DEFAULT (date('now', 'localtime')),
+                    weight REAL,
+                    body_fat_percentage REAL,
+                    calories_consumed INTEGER,
+                    protein_grams INTEGER,
+                    notes TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+
+            # 10. JOURNAL & MOOD
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS journal_entries (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    date DATE DEFAULT (date('now', 'localtime')),
+                    content TEXT NOT NULL,
+                    psychologist_feedback TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS mood_logs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    date DATE DEFAULT (date('now', 'localtime')),
+                    mood_score INTEGER, -- 1 to 10
+                    notes TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
             """)
 
             conn.commit()
@@ -271,6 +314,23 @@ class NexusDatabase:
                 cur.execute("ALTER TABLE quiz_questions ADD COLUMN skill TEXT")
             if "difficulty" not in c:
                 cur.execute("ALTER TABLE quiz_questions ADD COLUMN difficulty TEXT")
+
+        cur.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='workflows'"
+        )
+        if not cur.fetchone():
+            cur.execute("""
+                CREATE TABLE workflows (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    description TEXT,
+                    steps_json TEXT NOT NULL,
+                    tags TEXT,
+                    risk_level TEXT DEFAULT 'low',
+                    last_executed DATETIME,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
 
         conn.commit()
 
@@ -1262,7 +1322,7 @@ class NexusDatabase:
                 ).fetchall()
             return [dict(r) for r in rows]
 
-    _VALID_RESET_SECTIONS = ('finance', 'habits', 'study', 'tasks', 'all')
+    _VALID_RESET_SECTIONS = ('finance', 'habits', 'study', 'tasks', 'workflows', 'all')
 
     def reset_data(self, section: str):
         """Limpa dados de uma sessão específica ou todos."""
@@ -1283,6 +1343,8 @@ class NexusDatabase:
                 conn.execute("DELETE FROM study_stats")
             if section in ('tasks', 'all'):
                 conn.execute("DELETE FROM tasks")
+            if section in ('workflows', 'all'):
+                conn.execute("DELETE FROM workflows")
             if section == 'all':
                 conn.execute("DELETE FROM nexus_goals")
                 conn.execute("DELETE FROM nexus_rewards")
@@ -1290,3 +1352,146 @@ class NexusDatabase:
                 conn.execute("UPDATE nexus_user SET xp=0, level=1, points=0 WHERE id=1")
             conn.commit()
         return True
+
+    # --- Workflows ---
+
+    def list_workflows(self):
+        with self._get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute("SELECT * FROM workflows ORDER BY created_at DESC").fetchall()
+            return [dict(r) for r in rows]
+
+    def add_workflow(self, name: str, description: str, steps_json: str, tags: str = None, risk_level: str = 'low'):
+        with self._get_connection() as conn:
+            cur = conn.execute(
+                "INSERT INTO workflows (name, description, steps_json, tags, risk_level) VALUES (?, ?, ?, ?, ?)",
+                (name, description, steps_json, tags, risk_level),
+            )
+            conn.commit()
+            return cur.lastrowid
+
+    def get_workflow(self, workflow_id: int):
+        with self._get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute("SELECT * FROM workflows WHERE id = ?", (workflow_id,)).fetchone()
+            return dict(row) if row else None
+
+    def update_workflow(self, workflow_id: int, name=None, description=None, steps_json=None, tags=None, risk_level=None):
+        fields = []
+        vals = []
+        if name is not None:
+            fields.append("name = ?")
+            vals.append(str(name))
+        if description is not None:
+            fields.append("description = ?")
+            vals.append(str(description))
+        if steps_json is not None:
+            fields.append("steps_json = ?")
+            vals.append(str(steps_json))
+        if tags is not None:
+            fields.append("tags = ?")
+            vals.append(str(tags))
+        if risk_level is not None:
+            fields.append("risk_level = ?")
+            vals.append(str(risk_level))
+
+        if not fields:
+            return self.get_workflow(workflow_id)
+
+        vals.append(workflow_id)
+        with self._get_connection() as conn:
+            conn.execute(f"UPDATE workflows SET {', '.join(fields)} WHERE id = ?", vals)
+            conn.commit()
+        return self.get_workflow(workflow_id)
+
+    def delete_workflow(self, workflow_id: int):
+        with self._get_connection() as conn:
+            conn.execute("DELETE FROM workflows WHERE id = ?", (workflow_id,))
+            conn.commit()
+
+    def record_workflow_execution(self, workflow_id: int):
+        with self._get_connection() as conn:
+            conn.execute(
+                "UPDATE workflows SET last_executed = CURRENT_TIMESTAMP WHERE id = ?",
+                (workflow_id,)
+            )
+            conn.commit()
+
+    # ==========================================
+    # HEALTH & FITNESS API
+    # ==========================================
+    def add_fitness_workout(self, w_type: str, duration: int, calories: int, notes: str = ""):
+        with self._get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                INSERT INTO fitness_workouts (type, duration_minutes, calories_burned, notes)
+                VALUES (?, ?, ?, ?)
+            """, (w_type, duration, calories, notes))
+            conn.commit()
+            return cur.lastrowid
+
+    def list_fitness_workouts(self, limit: int = 50):
+        with self._get_connection() as conn:
+            conn.row_factory = dict_factory
+            return conn.execute("""
+                SELECT * FROM fitness_workouts ORDER BY date DESC, id DESC LIMIT ?
+            """, (limit,)).fetchall()
+
+    def add_fitness_metrics(self, weight: float, bf: float, calories: int, protein: int, notes: str = ""):
+        with self._get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                INSERT INTO fitness_metrics (weight, body_fat_percentage, calories_consumed, protein_grams, notes)
+                VALUES (?, ?, ?, ?, ?)
+            """, (weight, bf, calories, protein, notes))
+            conn.commit()
+            return cur.lastrowid
+
+    def get_latest_fitness_metrics(self):
+        with self._get_connection() as conn:
+            conn.row_factory = dict_factory
+            return conn.execute("SELECT * FROM fitness_metrics ORDER BY date DESC, id DESC LIMIT 1").fetchone()
+            
+    def list_fitness_metrics(self, limit: int = 30):
+        with self._get_connection() as conn:
+            conn.row_factory = dict_factory
+            return conn.execute("SELECT * FROM fitness_metrics ORDER BY date DESC, id DESC LIMIT ?", (limit,)).fetchall()
+
+    # ==========================================
+    # JOURNAL & MOOD API
+    # ==========================================
+    def add_journal_entry(self, content: str, psycho_feedback: str = ""):
+        with self._get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                INSERT INTO journal_entries (content, psychologist_feedback)
+                VALUES (?, ?)
+            """, (content, psycho_feedback))
+            conn.commit()
+            return cur.lastrowid
+
+    def update_journal_feedback(self, entry_id: int, feedback: str):
+        with self._get_connection() as conn:
+            conn.execute("UPDATE journal_entries SET psychologist_feedback = ? WHERE id = ?", (feedback, entry_id))
+            conn.commit()
+
+    def list_journal_entries(self, limit: int = 20):
+        with self._get_connection() as conn:
+            conn.row_factory = dict_factory
+            return conn.execute("SELECT * FROM journal_entries ORDER BY date DESC, id DESC LIMIT ?", (limit,)).fetchall()
+
+    def add_mood_log(self, score: int, notes: str = ""):
+        with self._get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                INSERT INTO mood_logs (mood_score, notes)
+                VALUES (?, ?)
+            """, (score, notes))
+            conn.commit()
+            return cur.lastrowid
+            
+    def list_mood_logs(self, limit: int = 30):
+        with self._get_connection() as conn:
+            conn.row_factory = dict_factory
+            return conn.execute("SELECT * FROM mood_logs ORDER BY date DESC, id DESC LIMIT ?", (limit,)).fetchall()
+

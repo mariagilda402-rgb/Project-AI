@@ -181,6 +181,7 @@ class ToolRegistry:
             "file": "file_manager",
             "fs": "file_manager",
             "apps": "app_manager",
+            "wf": "workflow",
         }
         if kind_l in compact_map:
             kind_l = compact_map[kind_l]
@@ -315,6 +316,12 @@ class ToolRegistry:
             if not nx: return ToolResult(False, "Nexus indisponivel.")
             return nx.run(arg or user_line)
 
+        # ── Workflow ──
+        if kind_l == "workflow":
+            wf = self._find_tool("workflow")
+            if not wf: return ToolResult(False, "Workflow indisponivel.")
+            return wf.run(arg or user_line)
+
         return ToolResult(False, f"Ferramenta desconhecida: {kind}.")
 
 
@@ -434,6 +441,32 @@ class ToolRegistry:
                     "fecha o ",
                     "traga o ",
                     "escreva no bloco",
+                ]
+            )
+        if tool_name == "workflow":
+            return any(
+                x in lowered
+                for x in [
+                    "workflow",
+                    "modo de ",
+                    "meu modo",
+                ]
+            )
+        if tool_name == "health_journal":
+            return any(
+                x in lowered
+                for x in [
+                    "treino",
+                    "academia",
+                    "peso",
+                    "caloria",
+                    "proteina",
+                    "diario",
+                    "diário",
+                    "psicologo",
+                    "psicólogo",
+                    "humor",
+                    "sentindo",
                 ]
             )
         if tool_name == "nexus":

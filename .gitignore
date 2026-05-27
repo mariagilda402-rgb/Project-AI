@@ -65,3 +65,6 @@ skills_catalog.md
 *.pt
 *.pth
 *.index
+
+# RVC Voice Models
+data/rvc_models/
