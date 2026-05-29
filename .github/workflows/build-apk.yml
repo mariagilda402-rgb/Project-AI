@@ -2,7 +2,7 @@ name: Build Android APK
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "codex/nexus-command-orchestrator" ]
     paths:
       - 'mobile-apk/**'
       - '.github/workflows/build-apk.yml'
