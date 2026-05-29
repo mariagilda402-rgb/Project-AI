@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Nexus" parent="android:Theme.Material.NoActionBar">
+        <item name="android:colorPrimary">#8b5cf6</item>
+        <item name="android:colorPrimaryDark">#0d0d12</item>
+        <item name="android:colorAccent">#06b6d4</item>
+        <item name="android:windowBackground">#0d0d12</item>
+        <item name="android:navigationBarColor">#0d0d12</item>
+        <item name="android:statusBarColor">#0d0d12</item>
+        <item name="android:windowFullscreen">true</item>
+    </style>
+</resources>
