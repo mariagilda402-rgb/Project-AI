@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Nexus Mobile</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#0d0d12">
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Supabase JS Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <!-- Top Header -->
+    <header class="app-header">
+        <div class="user-profile">
+            <div class="avatar-ring">
+                <img src="https://ui-avatars.com/api/?name=User&background=6c5ce7&color=fff" alt="User Avatar" class="avatar">
+            </div>
+            <div class="user-info">
+                <h1 class="greeting">Olá, <span id="user-name">Comandante</span></h1>
+                <div class="level-badge"><i class="fa-solid fa-star"></i> Nv. <span id="user-level">--</span></div>
+            </div>
+        </div>
+        <div class="top-actions">
+            <button class="icon-btn" aria-label="Atualizar App" onclick="forceOTAUpdate()" title="Puxar atualização do servidor"><i class="fa-solid fa-rotate"></i></button>
+            <button class="icon-btn" aria-label="Notificações"><i class="fa-regular fa-bell"></i></button>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="app-content" id="main-content">
+        <!-- Dashboard View (Home) -->
+        <div id="view-home" class="view active-view">
+            <!-- Stats Cards -->
+            <section class="stats-grid">
+                <div class="stat-card glass">
+                    <div class="stat-icon xp"><i class="fa-solid fa-bolt"></i></div>
+                    <div class="stat-details">
+                        <span class="stat-label">Experiência</span>
+                        <h2 class="stat-value" id="val-xp">--</h2>
+                    </div>
+                </div>
+                <div class="stat-card glass">
+                    <div class="stat-icon points"><i class="fa-solid fa-gem"></i></div>
+                    <div class="stat-details">
+                        <span class="stat-label">Aether Points</span>
+                        <h2 class="stat-value" id="val-points">--</h2>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Quick Action Area -->
+            <section class="quick-actions">
+                <h3 class="section-title">Ações Rápidas</h3>
+                <div class="actions-scroll">
+                    <button class="action-bubble"><i class="fa-solid fa-plus"></i><br>Hábito</button>
+                    <button class="action-bubble"><i class="fa-solid fa-wallet"></i><br>Despesa</button>
+                    <button class="action-bubble"><i class="fa-solid fa-pen"></i><br>Nota</button>
+                    <button class="action-bubble"><i class="fa-solid fa-brain"></i><br>Flashcard</button>
+                </div>
+            </section>
+        </div>
+
+        <!-- Habits View -->
+        <div id="view-habits" class="view">
+            <h2 class="page-title">Meus Hábitos</h2>
+            <div class="list-container" id="habits-list">
+                <div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> Carregando...</div>
+            </div>
+        </div>
+
+        <!-- Finances View -->
+        <div id="view-finance" class="view">
+            <h2 class="page-title">Finanças</h2>
+            <div class="list-container" id="finance-list">
+                <div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> Carregando...</div>
+            </div>
+        </div>
+
+        <!-- Tasks View -->
+        <div id="view-tasks" class="view">
+            <h2 class="page-title">Tarefas</h2>
+            <div class="list-container" id="tasks-list">
+                <div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> Carregando...</div>
+            </div>
+        </div>
+
+        <!-- Videos View -->
+        <div id="view-videos" class="view">
+            <h2 class="page-title">Watch to Earn</h2>
+            <div class="list-container" id="videos-list">
+                <div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> Carregando...</div>
+            </div>
+        </div>
+
+        <!-- Shop View -->
+        <div id="view-shop" class="view">
+            <h2 class="page-title">Loja de Recompensas</h2>
+            <div class="list-container" id="shop-list">
+                <div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> Carregando...</div>
+            </div>
+        </div>
+
+        <!-- IoT View -->
+        <div id="view-iot" class="view">
+            <h2 class="page-title">Casa Inteligente</h2>
+            <div class="actions-scroll" style="margin-bottom: 15px;">
+                <button class="action-bubble" onclick="discoverIoT()"><i class="fa-solid fa-search"></i><br>Buscar</button>
+            </div>
+            <div class="list-container" id="iot-list">
+                <div class="empty-state" style="text-align:center; padding: 20px; color: #888;">Clique em Buscar para localizar dispositivos.</div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Bottom Navigation -->
+    <nav class="bottom-nav">
+        <a href="#" class="nav-item active" data-target="view-home">
+            <i class="fa-solid fa-house"></i>
+            <span>Início</span>
+        </a>
+        <a href="#" class="nav-item" data-target="view-habits">
+            <i class="fa-solid fa-check-double"></i>
+            <span>Hábitos</span>
+        </a>
+        <a href="#" class="nav-item" data-target="view-finance">
+            <i class="fa-solid fa-chart-pie"></i>
+            <span>Finanças</span>
+        </a>
+        <a href="#" class="nav-item" data-target="view-tasks">
+            <i class="fa-solid fa-list-check"></i>
+            <span>Tarefas</span>
+        </a>
+        <a href="#" class="nav-item" data-target="view-videos">
+            <i class="fa-solid fa-play"></i>
+            <span>Vídeos</span>
+        </a>
+        <a href="#" class="nav-item" data-target="view-shop">
+            <i class="fa-solid fa-store"></i>
+            <span>Loja</span>
+        </a>
+        <a href="#" class="nav-item" data-target="view-iot">
+            <i class="fa-solid fa-lightbulb"></i>
+            <span>Casa</span>
+        </a>
+    </nav>
+
+    <script src="app.js"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(registration => console.log('SW Registered', registration.scope))
+                    .catch(err => console.log('SW failed', err));
+            });
+        }
+        
+        function forceOTAUpdate() {
+            if ('caches' in window) {
+                caches.keys().then(function(names) {
+                    for (let name of names) caches.delete(name);
+                }).then(() => {
+                    if ('serviceWorker' in navigator) {
+                        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                            for (let registration of registrations) {
+                                registration.unregister();
+                            }
+                            alert("App atualizado com sucesso!");
+                            window.location.reload(true);
+                        });
+                    } else {
+                        alert("App atualizado com sucesso!");
+                        window.location.reload(true);
+                    }
+                });
+            } else {
+                window.location.reload(true);
+            }
+        }
+    </script>
+</body>
+</html>
