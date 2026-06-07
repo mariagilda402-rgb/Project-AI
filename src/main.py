@@ -168,6 +168,7 @@ from src.tools.hacker_mode import HackerModeTool
 from src.tools.nexus import NexusTool
 from src.tools.habit_tracker import HabitTrackerTool
 from src.tools.code_helper import CodeHelperTool
+from src.tools.user_manager import UserManagerTool
 from src.tools.browser_agent import BrowserAgentTool
 from src.tools.persona_manager import PersonaManagerTool
 import sys
@@ -498,6 +499,8 @@ def main() -> None:
             HackerModeTool(),
             NexusTool(),
             HabitTrackerTool(),
+            HealthJournalTool(),
+            UserManagerTool(),
             CodeHelperTool(),
             BrowserAgentTool(),
             PersonaManagerTool(),
@@ -629,6 +632,21 @@ def main() -> None:
         if not text: return
         tag = f" ({source})" if source else ""
 
+        # Parse speaker from source (e.g. "Voz:Admin:100" or "Texto")
+        speaker_name = "Desconhecido"
+        access_level = 0
+        if source.startswith("Voz:"):
+            parts = source.split(":")
+            if len(parts) >= 2:
+                speaker_name = parts[1]
+            if len(parts) >= 3:
+                try: access_level = int(parts[2])
+                except: pass
+        elif source == "Texto":
+            # Para input via terminal, assumimos admin local para simplificar ou extraimos depois
+            speaker_name = "Admin"
+            access_level = 100
+
         # Fase 3.2.3 — Chamada por Nome: detecta agente no início da frase
         called_agent_id, cleaned_text = _detect_agent_by_name(text)
         original_agent_id = agent.agent_manager._active_agent_id
@@ -644,8 +662,8 @@ def main() -> None:
             runtime_status.set_processing(True)
             try:
                 _viz_set("set_thinking")
-                _add_chat("user", "Você", text)
-                response_gen = agent.handle_user_message(text)
+                _add_chat("user", speaker_name, text)
+                response_gen = agent.handle_user_message(text, speaker_name=speaker_name, access_level=access_level)
 
                 active_ag = agent.agent_manager.get_active_agent()
 
@@ -982,7 +1000,7 @@ def main() -> None:
     threading.Thread(target=interaction_worker, daemon=True).start()
 
     # Callback para quando a voz for detectada em background
-    def on_voice_recognized(text: str):
+    def on_voice_recognized(text: str, audio=None):
         nonlocal is_processing
         if not text.strip(): return
 
@@ -990,7 +1008,27 @@ def main() -> None:
             print("\n[Confirmação] Resposta por voz aceita.", flush=True)
             return
 
-        print(f"\nVoce (Voz): {text}")
+        # ---- Autenticação Leve (Sem Biometria Neural) ----
+        speaker_name = "Desconhecido"
+        access_level = 0
+        try:
+            from src.services.nexus_service import get_nexus_service
+            from src.services.voice_auth_service import resolve_voice_identity
+
+            db_conn = get_nexus_service().db._get_connection()
+            identity = resolve_voice_identity(db_conn, text, audio_data=audio)
+            speaker_name = identity.name
+            access_level = identity.access_level
+            if identity.just_registered:
+                print("\n[Auth] Admin registrado com sucesso via palavra-chave e biometria de voz!")
+                tts.speak("Senha aceita. Sua voz foi registrada como administrador do sistema.")
+                return
+            elif identity.message:
+                print(f"\n[Auth] {identity.message}")
+        except Exception as e:
+            print(f"Erro na autenticação: {e}")
+
+        print(f"\n{speaker_name} (Nível {access_level}): {text}")
         if is_processing:
             print("[Interrupção!] Parando a IA para ouvir a nova instrução...")
             tts.stop() # Para a fala atual imediatamente
@@ -1003,7 +1041,13 @@ def main() -> None:
                 except queue.Empty:
                     break
 
-        task_queue.put((text, "Voz"))
+        try:
+            from src.services.voice_auth_service import VoiceIdentity, format_voice_source
+
+            source = format_voice_source(VoiceIdentity(speaker_name, access_level))
+        except Exception:
+            source = f"Voz:{speaker_name}:{access_level}"
+        task_queue.put((text, source))
 
     def _start_mic():
         nonlocal stop_listening_bg

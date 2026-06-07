@@ -165,6 +165,8 @@ def build_function_calling_system_prompt(
     study_professor_mode: bool = False,
     active_mode: str | None = None,
     allowed_tool_names: frozenset[str] | set[str] | None = None,
+    speaker_name: str = "Desconhecido",
+    access_level: int = 0,
 ) -> str:
     structured_mem = ""
     try:
@@ -179,6 +181,22 @@ def build_function_calling_system_prompt(
         STYLE_BREVITY_AND_LENGTH,
         build_persona_section(base_persona, evolution_notes),
     ]
+    
+    role_desc = "Usuário Desconhecido (permissões mínimas, acesso apenas a ferramentas básicas)"
+    if access_level >= 100:
+        role_desc = "Administrador Master (acesso total a todos os comandos, ferramentas e memórias do sistema)"
+    elif access_level > 0:
+        role_desc = f"Usuário Nível {access_level} (permissões limitadas, acesso focado apenas em suas próprias memórias)"
+
+    parts.append(
+        "## Identidade do Usuário Atual\n"
+        f"Nome de quem está falando agora: {speaker_name}\n"
+        f"Nível de Acesso: {access_level}\n"
+        f"Cargo: {role_desc}\n"
+        "Regra de Privacidade: Se o usuário NÃO for Administrador (Nível 100), você JAMAIS deve revelar ou confirmar fatos da memória sobre outras pessoas (especialmente o Admin). "
+        "Mantenha as respostas limitadas ao conhecimento geral ou às informações do próprio usuário atual."
+    )
+
     if active_mode or allowed_tool_names is not None:
         tool_list = ", ".join(sorted(allowed_tool_names or [])) or "nenhuma ferramenta de acao"
         parts.append(

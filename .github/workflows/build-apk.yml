@@ -4,6 +4,7 @@ on:
   push:
     branches: [ "main", "codex/nexus-command-orchestrator" ]
     paths:
+      - 'mobile/**'
       - 'mobile-apk/**'
       - '.github/workflows/build-apk.yml'
   workflow_dispatch:
@@ -11,6 +12,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
     - uses: actions/checkout@v4
@@ -21,14 +24,19 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: Download and setup Gradle 8.6
-      run: |
-        wget -q https://services.gradle.org/distributions/gradle-8.6-bin.zip
-        unzip -q gradle-8.6-bin.zip -d /opt/gradle
-        echo "/opt/gradle/gradle-8.6/bin" >> $GITHUB_PATH
+    - name: Set up Android SDK
+      uses: android-actions/setup-android@v3
+
+    - name: Install Android platform and build tools
+      run: sdkmanager "platforms;android-34" "build-tools;34.0.0"
+
+    - name: Set up Gradle 8.6
+      uses: gradle/actions/setup-gradle@v4
+      with:
+        gradle-version: '8.6'
 
     - name: Build APK
-      run: gradle assembleDebug --no-daemon --stacktrace
+      run: gradle :app:assembleDebug --no-daemon --stacktrace --console=plain
       working-directory: mobile-apk
 
     - name: Upload APK
@@ -36,3 +44,13 @@ jobs:
       with:
         name: NexusMobile-APK
         path: mobile-apk/app/build/outputs/apk/debug/app-debug.apk
+
+    - name: Create or Update Latest Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: latest
+        name: Latest Nexus Build
+        files: mobile-apk/app/build/outputs/apk/debug/app-debug.apk
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

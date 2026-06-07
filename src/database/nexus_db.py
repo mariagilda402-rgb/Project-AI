@@ -10,7 +10,8 @@ class NexusDatabase:
         self._init_db()
 
     def _get_connection(self):
-        return sqlite3.connect(self.db_path, check_same_thread=False)
+        from src.database.pg_wrapper import get_connection
+        return get_connection(self.db_path)
 
     def _init_db(self):
         with self._get_connection() as conn:
@@ -148,6 +149,7 @@ class NexusDatabase:
                     progress INTEGER DEFAULT 0, -- 0 a 100
                     status TEXT DEFAULT 'active' -- active, achieved, failed
                 )
+            """)
             # 9. HEALTH & FITNESS
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS fitness_workouts (
@@ -193,16 +195,27 @@ class NexusDatabase:
                 )
             """)
 
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS voice_profiles (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    access_level INTEGER DEFAULT 1,
+                    voice_embedding TEXT, -- JSON array of floats
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+
             conn.commit()
             self._migrate_schema(conn)
 
     def _migrate_schema(self, conn):
-        """ALTER TABLE leves para colunas novas (idempotente)."""
-        cur = conn.cursor()
+        if getattr(conn, 'is_postgres', False):
+            return
 
         def cols(table):
             cur.execute(f"PRAGMA table_info({table})")
             return {row[1] for row in cur.fetchall()}
+        cur = conn.cursor()
 
         ft = "finance_transactions"
         if ft in [r[0] for r in cur.execute(
@@ -328,6 +341,20 @@ class NexusDatabase:
                     tags TEXT,
                     risk_level TEXT DEFAULT 'low',
                     last_executed DATETIME,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+
+        cur.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='voice_profiles'"
+        )
+        if not cur.fetchone():
+            cur.execute("""
+                CREATE TABLE voice_profiles (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    access_level INTEGER DEFAULT 1,
+                    voice_embedding TEXT, -- JSON array of floats
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
                 )
             """)
@@ -801,6 +828,39 @@ class NexusDatabase:
             ).fetchone()
             return int(r[0] or 0)
 
+    def get_shop_items(self):
+        with self._get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT id, name, cost, description FROM nexus_rewards")
+            return [dict(row) for row in cur.fetchall()]
+
+    def buy_reward(self, reward_id: int) -> bool:
+        """Tentativa de compra de um item. Retorna True se sucesso, False se saldo insuficiente."""
+        with self._get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT cost FROM nexus_rewards WHERE id = ?", (reward_id,))
+            reward = cur.fetchone()
+            if not reward:
+                return False
+            cost = reward["cost"]
+
+            cur.execute("SELECT points FROM nexus_user WHERE id = 1")
+            user = cur.fetchone()
+            if not user or user["points"] < cost:
+                return False
+            
+            # Deduct points
+            cur.execute("UPDATE nexus_user SET points = points - ? WHERE id = 1", (cost,))
+            
+            # Record redemption
+            from datetime import datetime
+            d = datetime.now().isoformat()
+            cur.execute(
+                "INSERT INTO reward_redemptions (redemption_date, reward_id) VALUES (?, ?)",
+                (d, reward_id),
+            )
+            return True
+
     def add_reward_redemption(self, reward_id: int, d: str):
         with self._get_connection() as conn:
             conn.execute(
@@ -928,6 +988,27 @@ class NexusDatabase:
         with self._get_connection() as conn:
             conn.execute("DELETE FROM flashcards WHERE note_id = ?", (note_id,))
             conn.execute("DELETE FROM study_notes WHERE id = ?", (note_id,))
+            conn.commit()
+
+    # --- Videos ---
+    def add_video(self, url: str, title: str = "", platform: str = "youtube", xp_reward: int = 50):
+        with self._get_connection() as conn:
+            cur = conn.execute(
+                "INSERT INTO nexus_videos (url, title, platform, xp_reward) VALUES (?, ?, ?, ?)",
+                (url, title, platform, xp_reward)
+            )
+            conn.commit()
+            return cur.lastrowid
+            
+    def list_videos(self):
+        with self._get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute("SELECT * FROM nexus_videos ORDER BY created_at DESC").fetchall()
+            return [dict(r) for r in rows]
+
+    def mark_video_watched(self, video_id: int):
+        with self._get_connection() as conn:
+            conn.execute("UPDATE nexus_videos SET is_watched = 1 WHERE id = ?", (video_id,))
             conn.commit()
 
     def list_flashcards_due(self, limit: int = 50):

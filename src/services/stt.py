@@ -287,7 +287,10 @@ class STTService:
                     if on_speech_end:
                         on_speech_end()
                 if text.strip():
-                    callback(text.strip())
+                    try:
+                        callback(text.strip(), audio)
+                    except TypeError:
+                        callback(text.strip())
             except Exception:
                 if _speech_active[0]:
                     _speech_active[0] = False

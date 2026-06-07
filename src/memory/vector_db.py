@@ -102,10 +102,11 @@ class SemanticMemory:
             logger.debug(traceback.format_exc())
             return False
 
-    def search_memories(self, query_embedding: list[float], top_k: int = 3, threshold: float = 1.3, collection_name: str | None = None) -> list[str]:
+    def search_memories(self, query_embedding: list[float], top_k: int = 3, threshold: float = 1.3, collection_name: str | None = None, filter_metadata: dict[str, Any] | None = None) -> list[str]:
         """
         Busca memórias relevantes usando um vetor de query.
         threshold: Distância máxima aceitável (menor = mais parecido).
+        filter_metadata: Filtros opcionais para o campo de metadata (ex: {"speaker_name": "Ana"})
         """
         target = self._get_or_create_collection(collection_name) if collection_name else self.collection
         
@@ -113,11 +114,15 @@ class SemanticMemory:
             return []
             
         try:
-            results = target.query(
-                query_embeddings=[query_embedding],
-                n_results=min(top_k, target.count()),
-                include=["documents", "distances"]
-            )
+            query_kwargs = {
+                "query_embeddings": [query_embedding],
+                "n_results": min(top_k, target.count()),
+                "include": ["documents", "distances"]
+            }
+            if filter_metadata:
+                query_kwargs["where"] = filter_metadata
+
+            results = target.query(**query_kwargs)
             
             memories = []
             if results["documents"] and results["distances"]:

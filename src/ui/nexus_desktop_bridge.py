@@ -592,6 +592,22 @@ def nexus_bridge_call(method: str, args_json: str = "{}") -> str:
             return ok(rows)
 
 
+        if m == "add_video":
+            url = args.get("url") or ""
+            title = args.get("title") or "Vídeo"
+            platform = "tiktok" if "tiktok" in url else "youtube"
+            vid = svc.db.add_video(url, title, platform, 50)
+            return ok({"id": vid})
+            
+        if m == "list_videos":
+            return ok(svc.db.list_videos())
+            
+        if m == "watch_video":
+            vid = int(args.get("video_id"))
+            svc.db.mark_video_watched(vid)
+            svc.add_xp(50)
+            return ok({"message": "XP resgatado com sucesso!"})
+
         return err(f"Método desconhecido: {m}")
     except Exception as e:
         return err(str(e))

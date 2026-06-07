@@ -1,6 +1,6 @@
 {
-  "status": "success",
-  "subtitle": "nexus: Abrindo Nexus (overview), Sir.",
+  "status": "idle",
+  "subtitle": "",
   "emotion": "neutral",
   "position": "bottom_right",
   "visible": true

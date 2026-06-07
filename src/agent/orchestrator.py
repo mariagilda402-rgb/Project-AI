@@ -94,7 +94,7 @@ class AgentOrchestrator:
         except Exception:
             return "user_memories"
 
-    def handle_user_message(self, text: str) -> str:
+    def handle_user_message(self, text: str, speaker_name: str = "Desconhecido", access_level: int = 0) -> str:
         # Contexto invisivel: data, hora, janela
         ctx = build_proactive_context()
 
@@ -104,9 +104,13 @@ class AgentOrchestrator:
         if self.semantic_memory.enabled and not _is_short_greeting(text):
             emb = self.llm.generate_embedding(text)
             if emb:
-                memories = self.semantic_memory.search_memories(emb, top_k=2, collection_name=agent_collection)
+                # Filtrar memórias por usuário, a menos que seja Admin (nível 100)
+                meta_filter = {"speaker_name": speaker_name} if access_level < 100 else None
+                memories = self.semantic_memory.search_memories(
+                    emb, top_k=2, collection_name=agent_collection, filter_metadata=meta_filter
+                )
                 if memories:
-                    rag_context = " [Fatos que você sabe sobre o usuário: " + " | ".join(memories) + "]"
+                    rag_context = " [Fatos relevantes da memória: " + " | ".join(memories) + "]"
 
         enriched_text = f"{ctx}{rag_context} {text}"
 
@@ -142,6 +146,8 @@ class AgentOrchestrator:
             study_professor_mode=_ls_fc().study_professor_mode,
             active_mode=runtime_resolution.mode.value,
             allowed_tool_names=allowed_tool_names,
+            speaker_name=speaker_name,
+            access_level=access_level,
         )
         prev_tool: str | None = None
 
@@ -189,14 +195,11 @@ class AgentOrchestrator:
                     buffer = buffer[idx + len("</thought>"):]
 
                 if not is_thinking and buffer:
-                    # Se tiver "<thought>", o while acima já teria pego,
-                    # então se sobrou "<" mas não é "<thought>", apenas envia para não prender o buffer
                     if "<thought" not in buffer:
                         final_accumulated += buffer
                         yield buffer
                         buffer = ""
                     else:
-                        # Pode ser um thought parcial, vamos segurar
                         pass
 
             if not is_thinking and buffer:
@@ -204,7 +207,7 @@ class AgentOrchestrator:
                 yield buffer
 
             # Dispara as acoes assincronas apos terminar o gerador (como o modo legado)
-            self._post_process_async(text, final_accumulated)
+            self._post_process_async(text, final_accumulated, speaker_name, access_level)
 
         if fc_gemini:
             # Substitui chamada por stream
@@ -277,11 +280,11 @@ class AgentOrchestrator:
         # Trata o final síncrono convertendo num fake generator
         def fake_gen():
             yield final
-            self._post_process_async(text, final)
+            self._post_process_async(text, final, speaker_name, access_level)
 
         return stream_parser(fake_gen())
 
-    def _post_process_async(self, text: str, final: str):
+    def _post_process_async(self, text: str, final: str, speaker_name: str = "Desconhecido", access_level: int = 0):
         """Metodos antigos que rodavam no final do handle_user_message"""
         final = self._clean_response(final)
         self.memory.add_short_term("assistant", final)
@@ -307,17 +310,17 @@ class AgentOrchestrator:
         def background_memory_worker():
             if self.semantic_memory.enabled:
                 agent_collection = self.agent_manager.get_active_agent().memory_collection
-                self._extract_semantic_memory(text, final, agent_collection)
+                self._extract_semantic_memory(text, final, agent_collection, speaker_name, access_level)
             self._extract_structured_memory_async(text, final)
 
         threading.Thread(target=background_memory_worker, daemon=True).start()
 
-    def _extract_semantic_memory(self, user_text: str, assistant_text: str, collection_name: str):
+    def _extract_semantic_memory(self, user_text: str, assistant_text: str, collection_name: str, speaker_name: str, access_level: int):
         """Thread em background que extrai fatos definitivos da conversa para o ChromaDB."""
         from src.agent.prompts import EXTRACT_MEMORY_PROMPT
 
         # Envia os dois lados da conversa e pede ao LLM para extrair
-        prompt = f"Usuário disse: {user_text}\nVocê respondeu: {assistant_text}"
+        prompt = f"Usuário ({speaker_name}) disse: {user_text}\nVocê respondeu: {assistant_text}"
 
         try:
             extracted = self.llm.chat(
@@ -330,9 +333,13 @@ class AgentOrchestrator:
                 for fact in lines:
                     emb = self.llm.generate_embedding(fact)
                     if emb:
-                        self.semantic_memory.save_memory(fact, emb, collection_name=collection_name)
+                        self.semantic_memory.save_memory(
+                            fact, emb, 
+                            metadata={"speaker_name": speaker_name, "access_level": access_level}, 
+                            collection_name=collection_name
+                        )
                         agent_name = self.agent_manager.get_active_agent().name
-                        print(f"[RAG {agent_name}] Novo fato aprendido: {fact}")
+                        print(f"[RAG {agent_name}] Novo fato aprendido sobre {speaker_name}: {fact}")
         except Exception as e:
             import traceback
             import logging

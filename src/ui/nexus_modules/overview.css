@@ -1,0 +1,438 @@
+@keyframes nxAppear { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes nxBar { from { background-position: 0% 50%; } to { background-position: 100% 50%; } }
+    @keyframes nxSignal { 0%, 100% { box-shadow: 0 0 0 rgba(6, 182, 212, 0); } 50% { box-shadow: 0 0 22px rgba(6, 182, 212, 0.18); } }
+
+    #nx-app-wrapper .nx-chrome-inner > header {
+      padding: 14px 22px !important;
+      background:
+        linear-gradient(90deg, rgba(124, 58, 237, 0.16), rgba(6, 182, 212, 0.08)),
+        var(--bg-panel) !important;
+    }
+
+    #nx-app-wrapper .nx-chrome-inner > header h1 {
+      font-size: 18px !important;
+      font-weight: 800 !important;
+      letter-spacing: 0 !important;
+    }
+
+    #nx-app-wrapper .nx-chrome-inner > header span {
+      font-size: 11px !important;
+      color: var(--text-dim) !important;
+    }
+
+    #nx-app-wrapper .nx-chrome-inner > main {
+      padding: 16px !important;
+      background:
+        linear-gradient(145deg, rgba(124, 58, 237, 0.08), transparent 28%),
+        linear-gradient(320deg, rgba(6, 182, 212, 0.07), transparent 32%),
+        var(--bg) !important;
+    }
+
+    #nx-app-wrapper .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    #nx-app-wrapper .mini-command {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 800;
+      padding: 8px 10px;
+      text-transform: uppercase;
+      transition: 0.2s ease;
+    }
+
+    #nx-app-wrapper .mini-command:hover {
+      border-color: var(--border-accent);
+      background: var(--accent-subtle);
+      color: var(--text);
+    }
+
+    #nx-app-wrapper .nexus-cockpit {
+      display: grid;
+      grid-template-columns: 184px minmax(0, 1fr);
+      gap: 14px;
+      min-height: 100%;
+    }
+
+    #nx-app-wrapper .command-sidebar {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background:
+        linear-gradient(180deg, rgba(124, 58, 237, 0.12), rgba(6, 182, 212, 0.06)),
+        var(--bg-panel);
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      min-height: 0;
+    }
+
+    #nx-app-wrapper .sidebar-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    #nx-app-wrapper .brand-mark {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--border-accent);
+      color: #67e8f9;
+      background: rgba(6, 182, 212, 0.1);
+      font: 800 12px "Share Tech Mono", monospace;
+    }
+
+    #nx-app-wrapper .sidebar-brand strong {
+      display: block;
+      color: var(--text);
+      font-size: 13px;
+    }
+
+    #nx-app-wrapper .sidebar-brand span:last-child {
+      display: block;
+      color: var(--text-dim);
+      font-size: 10px;
+      margin-top: 2px;
+    }
+
+    #nx-app-wrapper .nav-stack {
+      display: grid;
+      gap: 6px;
+    }
+
+    #nx-app-wrapper .nav-node {
+      width: 100%;
+      min-height: 34px;
+      border: 1px solid transparent;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--text-dim);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 11px;
+      font-weight: 800;
+      padding: 8px 9px;
+      text-transform: uppercase;
+      transition: 0.2s ease;
+    }
+
+    #nx-app-wrapper .nav-node span:first-child {
+      color: var(--text-muted);
+      font: 800 10px "Share Tech Mono", monospace;
+    }
+
+    #nx-app-wrapper .nav-node:hover {
+      border-color: var(--border-accent);
+      background: var(--accent-subtle);
+      color: var(--text);
+    }
+
+    #nx-app-wrapper .sidebar-status {
+      margin-top: auto;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px;
+      background: rgba(6, 182, 212, 0.06);
+      animation: nxSignal 3.4s ease-in-out infinite;
+    }
+
+    #nx-app-wrapper .sidebar-status span {
+      display: block;
+      color: var(--text-dim);
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    #nx-app-wrapper .sidebar-status strong {
+      display: block;
+      margin-top: 4px;
+      color: var(--text);
+      font-size: 13px;
+    }
+
+    #nx-app-wrapper .sidebar-status small {
+      display: block;
+      margin-top: 6px;
+      color: var(--text-dim);
+      font-size: 10px;
+      line-height: 1.35;
+    }
+
+    #nx-app-wrapper .cockpit-main {
+      display: grid;
+      gap: 14px;
+      min-width: 0;
+    }
+
+    #nx-app-wrapper .hero-panel,
+    #nx-app-wrapper .ops-panel,
+    #nx-app-wrapper .metric-card {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent),
+        var(--bg-panel);
+      animation: nxAppear 0.28s ease both;
+    }
+
+    #nx-app-wrapper .hero-panel {
+      display: grid;
+      grid-template-columns: minmax(0, 1.35fr) minmax(300px, 1fr);
+      gap: 14px;
+      padding: 16px;
+      overflow: hidden;
+    }
+
+    #nx-app-wrapper .hero-title {
+      color: var(--text);
+      font-size: 24px;
+      font-weight: 900;
+      line-height: 1.1;
+      margin: 0;
+    }
+
+    #nx-app-wrapper .hero-copy {
+      color: var(--text-dim);
+      font-size: 12px;
+      line-height: 1.55;
+      margin: 8px 0 14px;
+      max-width: 54ch;
+    }
+
+    #nx-app-wrapper .xp-line {
+      align-items: center;
+      display: flex;
+      gap: 10px;
+      max-width: 520px;
+    }
+
+    #nx-app-wrapper .level-chip {
+      border: 1px solid var(--border-accent);
+      border-radius: 8px;
+      color: #a78bfa;
+      flex: 0 0 auto;
+      font: 900 13px "Share Tech Mono", monospace;
+      padding: 7px 9px;
+      background: var(--accent-subtle);
+    }
+
+    #nx-app-wrapper .bar-shell {
+      flex: 1;
+      height: 8px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+    }
+
+    #nx-app-wrapper .bar-fill {
+      height: 100%;
+      width: 0;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #8b5cf6, #06b6d4, #22c55e);
+      background-size: 180% 100%;
+      animation: nxBar 4s linear infinite;
+      transition: width 0.4s ease;
+    }
+
+    #nx-app-wrapper .xp-text {
+      color: var(--text-dim);
+      font-size: 11px;
+      min-width: 96px;
+      text-align: right;
+    }
+
+    #nx-app-wrapper .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    #nx-app-wrapper .metric-card {
+      padding: 12px;
+    }
+
+    #nx-app-wrapper .metric-label,
+    #nx-app-wrapper .panel-kicker {
+      color: var(--text-dim);
+      font-size: 10px;
+      font-weight: 900;
+      letter-spacing: 0.7px;
+      text-transform: uppercase;
+    }
+
+    #nx-app-wrapper .metric-value {
+      color: var(--text);
+      font-size: 20px;
+      font-weight: 900;
+      margin-top: 4px;
+    }
+
+    #nx-app-wrapper .metric-value.good { color: #22c55e; }
+    #nx-app-wrapper .metric-value.warn { color: #f59e0b; }
+    #nx-app-wrapper .metric-value.info { color: #06b6d4; }
+    #nx-app-wrapper .metric-value.accent { color: #a78bfa; }
+    #nx-app-wrapper .metric-sub { color: var(--text-dim); font-size: 10px; margin-top: 4px; }
+
+    #nx-app-wrapper .panel-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    #nx-app-wrapper .ops-panel {
+      min-width: 0;
+      padding: 14px;
+    }
+
+    #nx-app-wrapper .panel-head {
+      align-items: center;
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    #nx-app-wrapper .panel-title {
+      color: var(--text);
+      font-size: 14px;
+      font-weight: 850;
+    }
+
+    #nx-app-wrapper .panel-action {
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      background: transparent;
+      color: var(--text-dim);
+      cursor: pointer;
+      font-size: 10px;
+      font-weight: 900;
+      padding: 6px 8px;
+      text-transform: uppercase;
+    }
+
+    #nx-app-wrapper .panel-action:hover {
+      border-color: var(--border-accent);
+      color: var(--text);
+    }
+
+    #nx-app-wrapper .row-list {
+      display: grid;
+      gap: 7px;
+    }
+
+    #nx-app-wrapper .data-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      min-height: 38px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      padding: 8px 10px;
+    }
+
+    #nx-app-wrapper .data-row strong {
+      color: var(--text);
+      display: block;
+      font-size: 12px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    #nx-app-wrapper .data-row span {
+      color: var(--text-dim);
+      display: block;
+      font-size: 10px;
+      margin-top: 2px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    #nx-app-wrapper .row-badge {
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      color: var(--text);
+      font: 800 10px "Share Tech Mono", monospace;
+      padding: 4px 7px;
+      white-space: nowrap;
+    }
+
+    #nx-app-wrapper .row-badge.good { color: #22c55e; border-color: rgba(34, 197, 94, 0.3); }
+    #nx-app-wrapper .row-badge.bad { color: #ef4444; border-color: rgba(239, 68, 68, 0.28); }
+    #nx-app-wrapper .row-badge.info { color: #06b6d4; border-color: rgba(6, 182, 212, 0.3); }
+
+    #nx-app-wrapper .split-mini {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    #nx-app-wrapper .mini-stat {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      padding: 9px;
+    }
+
+    #nx-app-wrapper .mini-stat span {
+      color: var(--text-dim);
+      display: block;
+      font-size: 9px;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+
+    #nx-app-wrapper .mini-stat strong {
+      color: var(--text);
+      display: block;
+      font-size: 13px;
+      margin-top: 3px;
+    }
+
+    #nx-app-wrapper .empty-mini {
+      border: 1px dashed var(--border);
+      border-radius: 8px;
+      color: var(--text-dim);
+      font-size: 12px;
+      padding: 14px;
+      text-align: center;
+    }
+
+    @media (max-width: 820px) {
+      #nx-app-wrapper .nexus-cockpit {
+        grid-template-columns: 1fr;
+      }
+
+      #nx-app-wrapper .command-sidebar {
+        min-height: auto;
+      }
+
+      #nx-app-wrapper .nav-stack {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+
+      #nx-app-wrapper .hero-panel,
+      #nx-app-wrapper .panel-grid {
+        grid-template-columns: 1fr;
+      }
+    }

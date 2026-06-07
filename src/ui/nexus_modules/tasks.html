@@ -44,8 +44,8 @@
     .fab-btn:hover { transform:scale(1.05); box-shadow:0 6px 20px rgba(139,92,246,0.5); }
     .fab-btn:active { transform:scale(0.95); }
 
-    .modal-backdrop { position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); z-index:200; display:flex; align-items:center; justify-content:center; opacity:0; pointer-events:none; transition:opacity 0.2s ease; }
-    .modal-backdrop.active { opacity:1; pointer-events:auto; }
+    .modal-backdrop { position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); z-index:200; display:none; align-items:center; justify-content:center; opacity:0; pointer-events:none; transition:opacity 0.2s ease; }
+    .modal-backdrop.active { display:flex; opacity:1; pointer-events:auto; }
 
     .task-modal { background:var(--bg-panel); border:1px solid var(--border); border-radius:16px; padding:24px; width:100%; max-width:360px; transform:translateY(20px) scale(0.95); transition:all 0.2s ease; box-shadow:0 10px 30px rgba(0,0,0,0.3); }
     .modal-backdrop.active .task-modal { transform:translateY(0) scale(1); }

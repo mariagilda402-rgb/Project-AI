@@ -29,5 +29,14 @@ android {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
+
+    sourceSets {
+        main {
+            assets.srcDirs += [rootProject.file("../mobile")]
+        }
+    }
 }
 
+dependencies {
+    implementation 'androidx.core:core:1.12.0'
+}

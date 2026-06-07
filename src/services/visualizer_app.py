@@ -139,6 +139,20 @@ def main():
     def nexus_assets(path):
         return _send_nexus_file(path)
 
+    mobile_dir = Path(__file__).resolve().parents[2] / "mobile"
+
+    @app.route("/mobile")
+    def mobile_redirect_slash():
+        return redirect("/mobile/", code=302)
+
+    @app.route("/mobile/")
+    def mobile_index():
+        return send_from_directory(str(mobile_dir), "index.html")
+
+    @app.route("/mobile/<path:path>")
+    def mobile_assets(path):
+        return send_from_directory(str(mobile_dir), path)
+
     @app.route("/api/state")
     def api_state():
         global _audio_ready, _audio_file

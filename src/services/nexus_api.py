@@ -143,6 +143,54 @@ def register_nexus_routes(app) -> None:
             r.pop("options_json", None)
         return jsonify({"questions": rows})
 
+    @app.route("/api/nexus/shop", methods=["GET"])
+    def nexus_shop_get():
+        return jsonify({"items": svc.db.get_shop_items()})
+
+    @app.route("/api/nexus/shop/buy", methods=["POST"])
+    def nexus_shop_buy():
+        data = request.get_json(silent=True) or {}
+        item_id = int(data.get("item_id", 0))
+        success = svc.db.buy_reward(item_id)
+        if success:
+            broadcast_nexus_state(svc)
+            return jsonify({"ok": True, "message": "Compra efetuada!"})
+        return jsonify({"ok": False, "message": "Saldo insuficiente ou item invalido"}), 400
+
+    @app.route("/api/nexus/iot/discover", methods=["GET"])
+    def nexus_iot_discover():
+        try:
+            from src.skills.smart_home_tool import SmartHomeTool
+            tool = SmartHomeTool()
+            result = tool.execute({"action": "discover"})
+            devices = []
+            for line in result.split("\n"):
+                if "- " in line and "(IP: " in line:
+                    try:
+                        name_ip, status = line.split(" | Status: ")
+                        name = name_ip.split(" (IP: ")[0].replace("- ", "").strip()
+                        ip = name_ip.split(" (IP: ")[1].replace(")", "").strip()
+                        devices.append({"name": name, "ip": ip, "status": status.strip()})
+                    except Exception:
+                        pass
+            return jsonify({"ok": True, "devices": devices})
+        except Exception as e:
+            return jsonify({"ok": False, "error": str(e)}), 500
+
+    @app.route("/api/nexus/iot/toggle", methods=["POST"])
+    def nexus_iot_toggle():
+        try:
+            data = request.get_json(silent=True) or {}
+            from src.skills.smart_home_tool import SmartHomeTool
+            tool = SmartHomeTool()
+            result = tool.execute({
+                "action": data.get("action"),
+                "target_ip": data.get("target_ip")
+            })
+            return jsonify({"ok": True, "result": result})
+        except Exception as e:
+            return jsonify({"ok": False, "error": str(e)}), 500
+
     @app.route("/api/nexus/active_note", methods=["GET", "POST"])
     def nexus_active_note():
         path = Path("data/nexus_active_note.json")

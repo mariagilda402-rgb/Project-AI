@@ -1,33 +1,64 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
+
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Nexus · Command Center</title>
   <style>
-    @keyframes nxAppear { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-    @keyframes nxBar { from { background-position: 0% 50%; } to { background-position: 100% 50%; } }
-    @keyframes nxSignal { 0%, 100% { box-shadow: 0 0 0 rgba(6, 182, 212, 0); } 50% { box-shadow: 0 0 22px rgba(6, 182, 212, 0.18); } }
+    @keyframes nxAppear {
+      from {
+        opacity: 0;
+        transform: translateY(8px);
+      }
 
-    #nx-app-wrapper .nx-chrome-inner > header {
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes nxBar {
+      from {
+        background-position: 0% 50%;
+      }
+
+      to {
+        background-position: 100% 50%;
+      }
+    }
+
+    @keyframes nxSignal {
+
+      0%,
+      100% {
+        box-shadow: 0 0 0 rgba(6, 182, 212, 0);
+      }
+
+      50% {
+        box-shadow: 0 0 22px rgba(6, 182, 212, 0.18);
+      }
+    }
+
+    #nx-app-wrapper .nx-chrome-inner>header {
       padding: 14px 22px !important;
       background:
         linear-gradient(90deg, rgba(124, 58, 237, 0.16), rgba(6, 182, 212, 0.08)),
         var(--bg-panel) !important;
     }
 
-    #nx-app-wrapper .nx-chrome-inner > header h1 {
+    #nx-app-wrapper .nx-chrome-inner>header h1 {
       font-size: 18px !important;
       font-weight: 800 !important;
       letter-spacing: 0 !important;
     }
 
-    #nx-app-wrapper .nx-chrome-inner > header span {
+    #nx-app-wrapper .nx-chrome-inner>header span {
       font-size: 11px !important;
       color: var(--text-dim) !important;
     }
 
-    #nx-app-wrapper .nx-chrome-inner > main {
+    #nx-app-wrapper .nx-chrome-inner>main {
       padding: 16px !important;
       background:
         linear-gradient(145deg, rgba(124, 58, 237, 0.08), transparent 28%),
@@ -290,11 +321,27 @@
       margin-top: 4px;
     }
 
-    #nx-app-wrapper .metric-value.good { color: #22c55e; }
-    #nx-app-wrapper .metric-value.warn { color: #f59e0b; }
-    #nx-app-wrapper .metric-value.info { color: #06b6d4; }
-    #nx-app-wrapper .metric-value.accent { color: #a78bfa; }
-    #nx-app-wrapper .metric-sub { color: var(--text-dim); font-size: 10px; margin-top: 4px; }
+    #nx-app-wrapper .metric-value.good {
+      color: #22c55e;
+    }
+
+    #nx-app-wrapper .metric-value.warn {
+      color: #f59e0b;
+    }
+
+    #nx-app-wrapper .metric-value.info {
+      color: #06b6d4;
+    }
+
+    #nx-app-wrapper .metric-value.accent {
+      color: #a78bfa;
+    }
+
+    #nx-app-wrapper .metric-sub {
+      color: var(--text-dim);
+      font-size: 10px;
+      margin-top: 4px;
+    }
 
     #nx-app-wrapper .panel-grid {
       display: grid;
@@ -383,9 +430,20 @@
       white-space: nowrap;
     }
 
-    #nx-app-wrapper .row-badge.good { color: #22c55e; border-color: rgba(34, 197, 94, 0.3); }
-    #nx-app-wrapper .row-badge.bad { color: #ef4444; border-color: rgba(239, 68, 68, 0.28); }
-    #nx-app-wrapper .row-badge.info { color: #06b6d4; border-color: rgba(6, 182, 212, 0.3); }
+    #nx-app-wrapper .row-badge.good {
+      color: #22c55e;
+      border-color: rgba(34, 197, 94, 0.3);
+    }
+
+    #nx-app-wrapper .row-badge.bad {
+      color: #ef4444;
+      border-color: rgba(239, 68, 68, 0.28);
+    }
+
+    #nx-app-wrapper .row-badge.info {
+      color: #06b6d4;
+      border-color: rgba(6, 182, 212, 0.3);
+    }
 
     #nx-app-wrapper .split-mini {
       display: grid;
@@ -443,8 +501,11 @@
         grid-template-columns: 1fr;
       }
     }
+    }
   </style>
-<base href="file:///C:/Users/jamil/Documents/Projeto%20AI/src/ui/nexus_modules/"><script>window.__NEXUS_BOOT__={"module": "overview", "theme": "dark", "theme_preset": "dark-neon", "theme_name": "Dark Neon", "theme_tokens": {"--accent": "#8b5cf6", "--accent-glow": "rgba(139,92,246,0.30)", "--accent-hover": "#7c3aed", "--accent-subtle": "rgba(139,92,246,0.08)", "--bg": "#0a0a0a", "--bg-panel": "#111111", "--border": "rgba(255,255,255,0.08)", "--border-accent": "rgba(139,92,246,0.35)", "--muted": "#71717a", "--shadow": "0 0 25px rgba(0,0,0,0.80)", "--sidebar": "#080808", "--surface": "rgba(255,255,255,0.04)", "--surface-hover": "rgba(255,255,255,0.08)", "--text": "#e4e4e7", "--text-dim": "#71717a", "--text-muted": "#52525b"}, "section": "overview"};</script><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"><link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet"><link rel="stylesheet" href="nexus_frame.css" /><style>html, body { background: transparent !important; }</style></head>
+  <link rel="stylesheet" href="nexus_theme.css?v=2" />
+<base href="file:///D:/Documentos/Projeto%20AI/src/ui/nexus_modules/"><script>window.__NEXUS_BOOT__={"module": "overview", "theme": "dark", "theme_preset": "dark-neon", "theme_name": "Dark Neon", "theme_tokens": {"--accent": "#8b5cf6", "--accent-glow": "rgba(139,92,246,0.30)", "--accent-hover": "#7c3aed", "--accent-subtle": "rgba(139,92,246,0.08)", "--bg": "#0a0a0a", "--bg-panel": "#111111", "--border": "rgba(255,255,255,0.08)", "--border-accent": "rgba(139,92,246,0.35)", "--muted": "#71717a", "--shadow": "0 0 25px rgba(0,0,0,0.80)", "--sidebar": "#080808", "--surface": "rgba(255,255,255,0.04)", "--surface-hover": "rgba(255,255,255,0.08)", "--text": "#e4e4e7", "--text-dim": "#71717a", "--text-muted": "#52525b"}, "section": "overview"};</script><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"><link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet"><link rel="stylesheet" href="nexus_frame.css" /><style>html, body { background: transparent !important; }</style></head>
+
 <body><div id="nx-app-wrapper" class="neon-enabled" data-theme="dark" data-theme-preset="dark-neon" style="--accent: #8b5cf6; --accent-glow: rgba(139,92,246,0.30); --accent-hover: #7c3aed; --accent-subtle: rgba(139,92,246,0.08); --bg: #0a0a0a; --bg-panel: #111111; --border: rgba(255,255,255,0.08); --border-accent: rgba(139,92,246,0.35); --muted: #71717a; --shadow: 0 0 25px rgba(0,0,0,0.80); --sidebar: #080808; --surface: rgba(255,255,255,0.04); --surface-hover: rgba(255,255,255,0.08); --text: #e4e4e7; --text-dim: #71717a; --text-muted: #52525b"><div class="nx-chrome-inner" style="border-radius: 0;">
   <header>
     <div>
@@ -474,12 +535,16 @@
           <button type="button" class="nav-node" onclick="jumpModule('habits')"><span>01</span>Hábitos</button>
           <button type="button" class="nav-node" onclick="jumpModule('finance')"><span>02</span>Finanças</button>
           <button type="button" class="nav-node" onclick="jumpModule('notes')"><span>03</span>Notas</button>
-          <button type="button" class="nav-node" onclick="jumpModule('memory_graph')"><span>04</span>Grafo Neural</button>
+          <button type="button" class="nav-node" onclick="jumpModule('memory_graph')"><span>04</span>Grafo
+            Neural</button>
           <button type="button" class="nav-node" onclick="jumpModule('study')"><span>05</span>SRS</button>
           <button type="button" class="nav-node" onclick="jumpModule('quiz')"><span>06</span>Quiz</button>
           <button type="button" class="nav-node" onclick="jumpModule('progress')"><span>07</span>Progresso</button>
           <button type="button" class="nav-node" onclick="jumpModule('goals')"><span>08</span>Loja</button>
           <button type="button" class="nav-node" onclick="jumpModule('tasks')"><span>09</span>Tarefas</button>
+          <button type="button" class="nav-node" onclick="jumpModule('workflows')"><span>10</span>Workflows</button>
+          <button type="button" class="nav-node" onclick="jumpModule('health')"><span>11</span>Saúde</button>
+          <button type="button" class="nav-node" onclick="jumpModule('journal')"><span>12</span>Diário</button>
         </nav>
 
         <div class="sidebar-status">
@@ -497,7 +562,9 @@
             <p class="hero-copy" id="dailyBrief">Carregando sinais do seu dia.</p>
             <div class="xp-line">
               <div class="level-chip" id="xLvl">LV1</div>
-              <div class="bar-shell"><div class="bar-fill" id="xBar"></div></div>
+              <div class="bar-shell">
+                <div class="bar-fill" id="xBar"></div>
+              </div>
               <div class="xp-text" id="xText">0 / 500 XP</div>
             </div>
           </div>
@@ -540,8 +607,12 @@
               <div class="mini-stat"><span>Total</span><strong id="habitTotal">0</strong></div>
               <div class="mini-stat"><span>Ritmo</span><strong id="habitRate">0%</strong></div>
             </div>
-            <div class="bar-shell" style="margin-bottom:10px;"><div class="bar-fill" id="habitBar"></div></div>
-            <div class="row-list" id="wHabits"><div class="empty-mini">Carregando hábitos...</div></div>
+            <div class="bar-shell" style="margin-bottom:10px;">
+              <div class="bar-fill" id="habitBar"></div>
+            </div>
+            <div class="row-list" id="wHabits">
+              <div class="empty-mini">Carregando hábitos...</div>
+            </div>
           </article>
 
           <article class="ops-panel">
@@ -557,7 +628,9 @@
               <div class="mini-stat"><span>Gastos</span><strong id="finExpense">R$ 0</strong></div>
               <div class="mini-stat"><span>Dívidas</span><strong id="finDebt">R$ 0</strong></div>
             </div>
-            <div class="row-list" id="wFinance"><div class="empty-mini">Carregando movimentos...</div></div>
+            <div class="row-list" id="wFinance">
+              <div class="empty-mini">Carregando movimentos...</div>
+            </div>
           </article>
 
           <article class="ops-panel">
@@ -573,7 +646,9 @@
               <div class="mini-stat"><span>Matérias</span><strong id="subjectCount">0</strong></div>
               <div class="mini-stat"><span>Acerto</span><strong id="studyAccuracy">0%</strong></div>
             </div>
-            <div class="row-list" id="studyQueue"><div class="empty-mini">Sem revisões pendentes.</div></div>
+            <div class="row-list" id="studyQueue">
+              <div class="empty-mini">Sem revisões pendentes.</div>
+            </div>
           </article>
 
           <article class="ops-panel">
@@ -584,9 +659,13 @@
               </div>
               <button type="button" class="panel-action" onclick="jumpModule('goals')">Abrir</button>
             </div>
-            <div class="row-list" id="goalsPanel"><div class="empty-mini">Carregando metas...</div></div>
+            <div class="row-list" id="goalsPanel">
+              <div class="empty-mini">Carregando metas...</div>
+            </div>
             <div style="height:10px"></div>
-            <div class="row-list" id="rewardsPanel"><div class="empty-mini">Carregando loja...</div></div>
+            <div class="row-list" id="rewardsPanel">
+              <div class="empty-mini">Carregando loja...</div>
+            </div>
           </article>
         </section>
 
@@ -599,6 +678,25 @@
             <button type="button" class="panel-action" onclick="refreshAll()">Atualizar</button>
           </div>
           <div class="row-list" id="signalFeed"></div>
+        </section>
+
+        <section class="ops-panel" style="margin-top: 14px;">
+          <div class="panel-head">
+            <div>
+              <div class="panel-kicker">Comunicação</div>
+              <div class="panel-title">Terminal Jarvis</div>
+            </div>
+          </div>
+          <div class="chat-container" style="height: 300px;">
+            <div class="chat-history" id="chatHistory">
+              <div class="chat-bubble ai">Olá, eu sou o Jarvis. Como posso ajudar com sua rotina hoje?</div>
+            </div>
+            <div class="chat-input-area">
+              <input type="text" id="chatInput" placeholder="Ex: Adicione R$ 50 em alimentação..."
+                onkeypress="handleChatKey(event)" autocomplete="off" />
+              <button type="button" onclick="sendChat()">Enviar</button>
+            </div>
+          </div>
         </section>
       </section>
     </div>
@@ -623,6 +721,36 @@
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;');
+    }
+
+    function handleChatKey(e) {
+      if (e.key === 'Enter') sendChat();
+    }
+
+    function sendChat() {
+      const input = document.getElementById('chatInput');
+      const text = input.value.trim();
+      if (!text) return;
+
+      const history = document.getElementById('chatHistory');
+      history.innerHTML += `<div class="chat-bubble user">${esc(text)}</div>`;
+      input.value = '';
+      history.scrollTop = history.scrollHeight;
+
+      if (window.pywebview && window.pywebview.api) {
+        // Send to python bridge
+        window.pywebview.api.send_chat_message(text);
+        // Add a temporary response
+        const bubbleId = 'msg-' + Date.now();
+        history.innerHTML += `<div class="chat-bubble ai" id="${bubbleId}">Comando enviado ao Jarvis...</div>`;
+        history.scrollTop = history.scrollHeight;
+
+        // Poll for completion or assume done (ideally done via SSE or callback)
+        setTimeout(() => {
+          const b = document.getElementById(bubbleId);
+          if (b) b.innerHTML = "Processado. Verifique os painéis se houver alterações.";
+        }, 3500);
+      }
     }
 
     function money(v) {
@@ -849,4 +977,5 @@
     });
   </script>
 </div></div></body>
+
 </html>

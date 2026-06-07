@@ -1194,6 +1194,36 @@ class DesktopApp:
         self._visualizer_last_position = ""
         self._visualizer_last_window_visible: bool | None = None
 
+        # --- Inicia o Sistema de Biometria e Reconhecimento de Voz ---
+        try:
+            from src.ai.voice_recognition import JarvisVoice
+            from src.database.nexus_db import NexusDatabase
+            self.db = NexusDatabase()
+            self.voice = JarvisVoice(self.db)
+            self.voice.start_listening(self._handle_voice_command)
+        except Exception as e:
+            import logging
+            logging.error(f"Erro ao inicializar JarvisVoice: {e}")
+
+    def _handle_voice_command(self, command, user, level):
+        import logging
+        logging.info(f"🗣️ Comando Recebido de {user} (Nv.{level}): {command}")
+        
+        # Simula lógica de biometria ao ouvir o usuário se apresentando
+        biometric_msg = self.voice.simulate_biometric_login(command)
+        if biometric_msg:
+            logging.info(f"🔒 {biometric_msg}")
+            return
+            
+        # Nível 1 não pode usar comandos, por exemplo
+        if level < 2 and "desligar" in command:
+            logging.warning(f"⚠️ Acesso negado para {user}. Nível insuficiente.")
+            return
+
+        # Envia o comando para o chat central
+        if self.task_queue:
+            self.task_queue.put({"type": "UI_CHAT_SEND", "message": command})
+
     def _on_panel_closing(self):
         """Intercepta o fechamento do painel: esconde em vez de destruir e mostra o ghost."""
         try:
