@@ -45,12 +45,21 @@ jobs:
         name: NexusMobile-APK
         path: mobile-apk/app/build/outputs/apk/debug/app-debug.apk
 
+    - name: Delete existing latest tag (if exists)
+      run: |
+        git tag -d latest || true
+        git push origin :refs/tags/latest || true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
     - name: Create or Update Latest Release
       uses: softprops/action-gh-release@v2
       with:
         tag_name: latest
-        name: Latest Nexus Build
+        name: "Latest Nexus Build"
+        body: "APK atualizado automaticamente. Baixe o arquivo abaixo para instalar no seu celular."
         files: mobile-apk/app/build/outputs/apk/debug/app-debug.apk
         prerelease: false
+        make_latest: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
