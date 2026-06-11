@@ -1,7 +1,89 @@
 // Supabase Configuration
-const supabaseUrl = 'https://hlzkuqbnuabcmnooszrl.supabase.co';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhsemt1cWJudWFiY21ub29zenJsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5MDc0NDksImV4cCI6MjA5NTQ4MzQ0OX0.MUcIs1NdagOJQJZRkrkdgqVP2rtTUzJk2qvu9JY5a5U';
+const supabaseUrl = 'https://oxwpwfhjyiiwdhcggtlt.supabase.co';
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im94d3B3ZmhqeWlpd2RoY2dndGx0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODExMzA3NjAsImV4cCI6MjA5NjcwNjc2MH0.mIOis8ugOlubw2P6Z8_TuNeLukvltsXAlPb-ttaaOpY';
 const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+// ----------------------------------------------------
+// Offline-First Database (LocalStorage)
+// ----------------------------------------------------
+class LocalDB {
+    static get(table) {
+        return JSON.parse(localStorage.getItem(`nexus_${table}`) || '[]');
+    }
+    static set(table, data) {
+        localStorage.setItem(`nexus_${table}`, JSON.stringify(data));
+    }
+    static getSingle(table, id) {
+        const rows = this.get(table);
+        return rows.find(r => r.id === id);
+    }
+    static upsert(table, record) {
+        const rows = this.get(table);
+        const idx = rows.findIndex(r => r.id === record.id);
+        record.updated_at = new Date().toISOString();
+        if (idx > -1) {
+            rows[idx] = { ...rows[idx], ...record };
+        } else {
+            if (!record.id) record.id = Date.now(); // pseudo-id for new local records
+            rows.push(record);
+        }
+        this.set(table, rows);
+        return record;
+    }
+}
+
+// ----------------------------------------------------
+// Sync Engine
+// ----------------------------------------------------
+async function backgroundSync() {
+    if (!navigator.onLine) return;
+    try {
+        const tables = ['nexus_user', 'habits', 'tasks', 'finance_transactions', 'nexus_rewards', 'study_notes', 'nexus_goals', 'fitness_workouts'];
+        let lastSync = localStorage.getItem('nexus_last_sync') || '1970-01-01T00:00:00Z';
+        let newSyncTime = lastSync;
+
+        for (let table of tables) {
+            // Pull
+            const { data: remoteData, error } = await supabase.from(table).select('*').gt('updated_at', lastSync).order('updated_at', { ascending: true });
+            if (remoteData && remoteData.length > 0) {
+                remoteData.forEach(remoteRow => {
+                    const localRow = LocalDB.getSingle(table, remoteRow.id);
+                    if (!localRow || remoteRow.updated_at > (localRow.updated_at || '')) {
+                        const rows = LocalDB.get(table);
+                        const idx = rows.findIndex(r => r.id === remoteRow.id);
+                        if (idx > -1) Object.assign(rows[idx], remoteRow);
+                        else rows.push(remoteRow);
+                        LocalDB.set(table, rows);
+                        if (remoteRow.updated_at > newSyncTime) newSyncTime = remoteRow.updated_at;
+                    }
+                });
+            }
+
+            // Push
+            const localData = LocalDB.get(table).filter(r => (r.updated_at || '') > lastSync);
+            for (let localRow of localData) {
+                // Remove UI-only fields if necessary
+                const { ...cleanRow } = localRow;
+                const { error: pushErr } = await supabase.from(table).upsert(cleanRow);
+                if (!pushErr) {
+                    if (localRow.updated_at > newSyncTime) newSyncTime = localRow.updated_at;
+                }
+            }
+        }
+        localStorage.setItem('nexus_last_sync', newSyncTime);
+        
+        // Refresh UI if necessary
+        const activeView = document.querySelector('.active-view');
+        if(activeView) {
+            if(activeView.id === 'view-habits') loadHabits();
+            if(activeView.id === 'view-finance') loadFinances();
+            if(activeView.id === 'view-tasks') loadTasks();
+        }
+        loadUserStats();
+    } catch (e) {
+        console.error("Sync error:", e);
+    }
+}
 
 // ----------------------------------------------------
 // UI Logic
@@ -23,6 +105,9 @@ document.querySelectorAll('.nav-item').forEach(item => {
         if(targetId === 'view-videos') loadVideos();
         if(targetId === 'view-shop') loadShop();
         if(targetId === 'view-iot') discoverIoT();
+        if(targetId === 'view-studies') loadStudies();
+        if(targetId === 'view-goals') loadGoals();
+        if(targetId === 'view-fitness') loadFitness();
     });
 });
 
@@ -51,64 +136,56 @@ function sendLocalNotification(title, body) {
 }
 
 // ----------------------------------------------------
-// Fetch Data & Realtime Sync
+// Offline-First Data Operations
 // ----------------------------------------------------
 
 async function loadUserStats() {
-    try {
-        const { data, error } = await supabase.from('nexus_user').select('xp, level, points').eq('id', 1).single();
-        if (data) {
-            document.getElementById('user-level').innerText = data.level;
-            document.getElementById('val-xp').innerText = data.xp;
-            document.getElementById('val-points').innerText = data.points;
-        }
-    } catch (err) { console.error(err); }
+    const user = LocalDB.getSingle('nexus_user', 1) || { xp: 0, level: 1, points: 0 };
+    document.getElementById('user-level').innerText = user.level;
+    document.getElementById('val-xp').innerText = user.xp;
+    document.getElementById('val-points').innerText = user.points;
 }
 
 async function loadVideos() {
     const container = document.getElementById('videos-list');
-    const { data, error } = await supabase.from('nexus_videos').select('*').order('created_at', { ascending: false });
-    
-    if (data) {
-        container.innerHTML = data.length ? '' : '<div style="text-align:center; color:var(--text-secondary); margin-top:20px;">Nenhum vídeo adicionado.</div>';
-        data.forEach(v => {
-            const el = document.createElement('div');
-            el.className = 'list-item glass';
-            const badgeClass = v.is_watched ? 'color: var(--accent-green);' : 'color: var(--accent-blue);';
-            const badgeText = v.is_watched ? 'Assistido' : `+${v.xp_reward} XP`;
-            
-            el.innerHTML = `
-                <div class="item-main" style="width: 100%;" onclick="window.open('${v.url}', '_blank')">
-                    <span class="item-title">${v.title}</span>
-                    <span class="item-subtitle" style="${badgeClass} font-weight:600;"><i class="fa-brands fa-${v.platform}"></i> ${badgeText}</span>
-                </div>
-            `;
-            container.appendChild(el);
-        });
-    }
+    const data = LocalDB.get('nexus_videos');
+    container.innerHTML = data.length ? '' : '<div style="text-align:center; color:var(--text-secondary); margin-top:20px;">Nenhum vídeo salvo offline.</div>';
+    data.forEach(v => {
+        const el = document.createElement('div');
+        el.className = 'list-item glass';
+        const badgeClass = v.is_watched ? 'color: var(--accent-green);' : 'color: var(--accent-blue);';
+        const badgeText = v.is_watched ? 'Assistido' : `+${v.xp_reward} XP`;
+        
+        el.innerHTML = `
+            <div class="item-main" style="width: 100%;" onclick="window.open('${v.url}', '_blank')">
+                <span class="item-title">${v.title}</span>
+                <span class="item-subtitle" style="${badgeClass} font-weight:600;"><i class="fa-brands fa-${v.platform}"></i> ${badgeText}</span>
+            </div>
+        `;
+        container.appendChild(el);
+    });
 }
 
 async function loadHabits() {
     const container = document.getElementById('habits-list');
-    const { data, error } = await supabase.from('habits').select('*').eq('active', 1).order('id', { ascending: true });
+    const data = LocalDB.get('habits').filter(h => h.active === 1 && !h.is_deleted);
     
-    if(data) {
-        container.innerHTML = data.length ? '' : '<div style="text-align:center; color:var(--text-secondary); margin-top:20px;">Nenhum hábito cadastrado.</div>';
-        data.forEach(habit => {
-            const el = document.createElement('div');
-            el.className = 'list-item glass';
-            el.innerHTML = `
-                <div class="item-main">
-                    <span class="item-title">${habit.name}</span>
-                    <span class="item-subtitle">Streak: 🔥 ${habit.current_streak}</span>
-                </div>
-                <button class="item-action" onclick="toggleHabit(${habit.id}, this)">
-                    <i class="fa-solid fa-check"></i>
-                </button>
-            `;
-            container.appendChild(el);
-        });
-    }
+    container.innerHTML = data.length ? '' : '<div style="text-align:center; color:var(--text-secondary); margin-top:20px;">Nenhum hábito cadastrado.</div>';
+    data.forEach(habit => {
+        const el = document.createElement('div');
+        el.className = 'list-item glass';
+        const isDone = false; // Need a better way to store daily completions offline
+        el.innerHTML = `
+            <div class="item-main">
+                <span class="item-title">${habit.name}</span>
+                <span class="item-subtitle">Streak: 🔥 ${habit.current_streak}</span>
+            </div>
+            <button class="item-action ${isDone ? 'done' : ''}" onclick="toggleHabit(${habit.id}, this)">
+                <i class="fa-solid fa-check"></i>
+            </button>
+        `;
+        container.appendChild(el);
+    });
 }
 
 window.toggleHabit = async (id, btn) => {
@@ -117,91 +194,157 @@ window.toggleHabit = async (id, btn) => {
     
     if (btn.classList.contains('done')) {
         sendLocalNotification('Hábito Concluído!', 'Você ganhou pontos de experiência!');
-        // Aqui enviaria o update para o Supabase
-        await loadUserStats(); // reload stats
+        
+        // Update user stats offline
+        const user = LocalDB.getSingle('nexus_user', 1) || { id: 1, xp: 0, points: 0, level: 1 };
+        user.xp += 25;
+        user.points += 25;
+        user.level = 1 + Math.floor(user.xp / 1000);
+        LocalDB.upsert('nexus_user', user);
+        
+        loadUserStats();
+        backgroundSync(); // trigger sync
     }
 };
 
 async function loadTasks() {
     const container = document.getElementById('tasks-list');
-    const { data, error } = await supabase.from('tasks').select('*').eq('completed', 0);
+    const data = LocalDB.get('tasks').filter(t => !t.done_at && !t.is_deleted);
     
-    if (data) {
-        container.innerHTML = data.length ? '' : '<div style="text-align:center; color:var(--text-secondary); margin-top:20px;">Sem tarefas ativas!</div>';
-        data.forEach(t => {
-            const el = document.createElement('div');
-            el.className = 'list-item glass';
-            el.innerHTML = `<div class="item-main"><span class="item-title">${t.title}</span><span class="item-subtitle">+${t.points_reward} XP</span></div>`;
-            container.appendChild(el);
-        });
-    }
+    container.innerHTML = data.length ? '' : '<div style="text-align:center; color:var(--text-secondary); margin-top:20px;">Sem tarefas ativas!</div>';
+    data.forEach(t => {
+        const el = document.createElement('div');
+        el.className = 'list-item glass';
+        el.innerHTML = `<div class="item-main"><span class="item-title">${t.title}</span><span class="item-subtitle">+${t.points_reward} XP</span></div>
+        <button class="item-action" onclick="completeTask(${t.id}, this)"><i class="fa-solid fa-check"></i></button>`;
+        container.appendChild(el);
+    });
 }
+
+window.completeTask = async (id, btn) => {
+    const task = LocalDB.getSingle('tasks', id);
+    if(task) {
+        task.done_at = new Date().toISOString();
+        LocalDB.upsert('tasks', task);
+        
+        const user = LocalDB.getSingle('nexus_user', 1);
+        if(user) {
+            user.xp += task.points_reward || 10;
+            user.points += task.points_reward || 10;
+            user.level = 1 + Math.floor(user.xp / 1000);
+            LocalDB.upsert('nexus_user', user);
+            loadUserStats();
+        }
+        loadTasks();
+        backgroundSync();
+    }
+};
 
 async function loadFinances() {
     const container = document.getElementById('finance-list');
-    const { data, error } = await supabase.from('finance_transactions').select('*').order('created_at', { ascending: false }).limit(10);
+    const data = LocalDB.get('finance_transactions').filter(t => !t.is_deleted).sort((a,b) => (b.occurred_at || b.created_at || '').localeCompare(a.occurred_at || a.created_at || ''));
     
-    if (data) {
-        container.innerHTML = data.length ? '' : '<div style="text-align:center; color:var(--text-secondary); margin-top:20px;">Sem transações.</div>';
-        data.forEach(t => {
-            const el = document.createElement('div');
-            el.className = 'list-item glass';
-            el.innerHTML = `<div class="item-main"><span class="item-title">${t.description || 'Transação'}</span><span class="item-subtitle" style="color:${t.type==='income'?'#00b894':'#fd79a8'}">${t.type==='income'?'+':'-'} $${t.amount}</span></div>`;
-            container.appendChild(el);
-        });
-    }
+    container.innerHTML = data.length ? '' : '<div style="text-align:center; color:var(--text-secondary); margin-top:20px;">Sem transações.</div>';
+    data.slice(0, 15).forEach(t => {
+        const el = document.createElement('div');
+        el.className = 'list-item glass';
+        el.innerHTML = `<div class="item-main"><span class="item-title">${t.description || 'Transação'}</span><span class="item-subtitle" style="color:${t.type==='income'?'#00b894':'#fd79a8'}">${t.type==='income'?'+':'-'} $${t.amount}</span></div>`;
+        container.appendChild(el);
+    });
 }
 
 // ----------------------------------------------------
-// Shop & IoT (Local Network API)
+// ----------------------------------------------------
+// New Offline Modules
 // ----------------------------------------------------
 
 async function loadShop() {
     const container = document.getElementById('shop-list');
-    try {
-        const res = await fetch('/api/nexus/shop');
-        const data = await res.json();
-        if (data && data.items) {
-            container.innerHTML = data.items.length ? '' : '<div style="text-align:center; color:var(--text-secondary); margin-top:20px;">Loja vazia.</div>';
-            data.items.forEach(item => {
-                const el = document.createElement('div');
-                el.className = 'list-item glass';
-                el.innerHTML = `
-                    <div class="item-main">
-                        <span class="item-title">${item.name}</span>
-                        <span class="item-subtitle">${item.description || ''}</span>
-                    </div>
-                    <button class="item-action" style="font-size:12px; width:auto; padding: 0 10px;" onclick="buyItem(${item.id}, '${item.name}', ${item.cost})">
-                        ${item.cost} pts
-                    </button>
-                `;
-                container.appendChild(el);
-            });
-        }
-    } catch (e) {
-        container.innerHTML = '<div style="text-align:center; color:red; margin-top:20px;">Erro ao carregar loja (Conecte na mesma rede do PC).</div>';
+    const data = LocalDB.get('nexus_rewards').filter(r => !r.is_deleted);
+    if(data.length) {
+        container.innerHTML = '';
+        data.forEach(item => {
+            const el = document.createElement('div');
+            el.className = 'list-item glass';
+            el.innerHTML = `
+                <div class="item-main">
+                    <span class="item-title">${item.name}</span>
+                    <span class="item-subtitle">${item.description || ''}</span>
+                </div>
+                <button class="item-action" style="font-size:12px; width:auto; padding: 0 10px;" onclick="buyItem(${item.id}, '${item.name}', ${item.cost})">
+                    ${item.cost} pts
+                </button>
+            `;
+            container.appendChild(el);
+        });
+    } else {
+        container.innerHTML = '<div style="text-align:center; color:var(--text-secondary); margin-top:20px;">Nenhuma recompensa offline. Sincronize para puxar itens.</div>';
     }
 }
 
 window.buyItem = async (id, name, cost) => {
-    if (!confirm(`Deseja resgatar ${name} por ${cost} pontos?`)) return;
-    try {
-        const res = await fetch('/api/nexus/shop/buy', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ item_id: id })
+    const user = LocalDB.getSingle('nexus_user', 1);
+    if (!user || user.points < cost) {
+        alert("Pontos insuficientes!");
+        return;
+    }
+    if (confirm(`Comprar '${name}' por ${cost} pontos?`)) {
+        user.points -= cost;
+        LocalDB.upsert('nexus_user', user);
+        
+        LocalDB.upsert('finance_transactions', {
+            id: Date.now(),
+            type: 'expense',
+            amount: cost,
+            category: 'Reward',
+            description: 'Compra: ' + name,
+            occurred_at: new Date().toISOString()
         });
-        const out = await res.json();
-        if (out.ok) {
-            alert('Compra efetuada com sucesso!');
-            loadUserStats(); // Update pts
-        } else {
-            alert(out.message || 'Erro ao comprar item.');
-        }
-    } catch (e) {
-        alert('Erro de conexão com o servidor local.');
+        
+        sendLocalNotification('Recompensa Comprada', `Aproveite seu(a) ${name}!`);
+        loadUserStats();
+        backgroundSync();
     }
 };
+
+async function loadStudies() {
+    const container = document.getElementById('studies-list');
+    if(!container) return;
+    const data = LocalDB.get('study_notes').filter(t => !t.is_deleted);
+    container.innerHTML = data.length ? '' : '<div style="text-align:center; color:var(--text-secondary); margin-top:20px;">Nenhuma nota de estudo.</div>';
+    data.forEach(t => {
+        const el = document.createElement('div');
+        el.className = 'list-item glass';
+        el.innerHTML = `<div class="item-main"><span class="item-title">${t.title}</span><span class="item-subtitle">${t.subject || 'Geral'}</span></div>`;
+        container.appendChild(el);
+    });
+}
+
+async function loadGoals() {
+    const container = document.getElementById('goals-list');
+    if(!container) return;
+    const data = LocalDB.get('nexus_goals').filter(t => !t.is_deleted && t.status !== 'achieved');
+    container.innerHTML = data.length ? '' : '<div style="text-align:center; color:var(--text-secondary); margin-top:20px;">Sem metas ativas.</div>';
+    data.forEach(t => {
+        const el = document.createElement('div');
+        el.className = 'list-item glass';
+        el.innerHTML = `<div class="item-main"><span class="item-title">${t.name}</span><span class="item-subtitle">Progresso: ${t.progress || 0}%</span></div>`;
+        container.appendChild(el);
+    });
+}
+
+async function loadFitness() {
+    const container = document.getElementById('fitness-list');
+    if(!container) return;
+    const data = LocalDB.get('fitness_workouts').filter(t => !t.is_deleted);
+    container.innerHTML = data.length ? '' : '<div style="text-align:center; color:var(--text-secondary); margin-top:20px;">Nenhum treino registrado.</div>';
+    data.slice(0,10).forEach(t => {
+        const el = document.createElement('div');
+        el.className = 'list-item glass';
+        el.innerHTML = `<div class="item-main"><span class="item-title">${t.type}</span><span class="item-subtitle">${t.duration_minutes || 0} min | ${t.calories_burned || 0} kcal</span></div>`;
+        container.appendChild(el);
+    });
+}
 
 window.discoverIoT = async () => {
     const container = document.getElementById('iot-list');
@@ -232,25 +375,6 @@ window.discoverIoT = async () => {
     }
 };
 
-window.toggleIoT = async (ip, turn_on) => {
-    try {
-        const res = await fetch('/api/nexus/iot/toggle', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: turn_on ? 'turn_on' : 'turn_off', target_ip: ip })
-        });
-        const out = await res.json();
-        if (out.ok) {
-            alert(out.result || 'Comando enviado.');
-            discoverIoT();
-        } else {
-            alert('Erro: ' + out.error);
-        }
-    } catch (e) {
-        alert('Erro de conexão com o servidor local.');
-    }
-};
-
 // ----------------------------------------------------
 // Realtime Subscription
 // ----------------------------------------------------
@@ -260,21 +384,236 @@ function setupRealtime() {
       'postgres_changes',
       { event: '*', schema: 'public', table: 'nexus_user' },
       (payload) => {
-        console.log('Nexus User Update received!', payload);
-        if (payload.new && payload.new.id === 1) {
-            document.getElementById('user-level').innerText = payload.new.level;
-            document.getElementById('val-xp').innerText = payload.new.xp;
-            document.getElementById('val-points').innerText = payload.new.points;
-            sendLocalNotification('XP Atualizado', `Você agora tem ${payload.new.xp} XP!`);
-        }
+          backgroundSync();
       }
+    ).on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'tasks' },
+      (payload) => { backgroundSync(); }
+    ).on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'habits' },
+      (payload) => { backgroundSync(); }
     )
     .subscribe();
 }
 
 // App Initialization
 document.addEventListener('DOMContentLoaded', () => {
+    // Initial UI load from LocalStorage
     loadUserStats();
+    loadHabits();
+    
+    // Background tasks
     setTimeout(requestNotificationPermission, 2000);
+    setTimeout(backgroundSync, 1000); // Initial sync on boot
     setupRealtime();
+    
+    // Poll sync every minute if online
+    setInterval(backgroundSync, 60000);
 });
+
+// ----------------------------------------------------
+// UI Preferences & Module Toggling
+// ----------------------------------------------------
+window.openSettingsModal = () => {
+    document.getElementById('settings-modal').classList.add('show');
+};
+
+window.closeSettingsModal = () => {
+    document.getElementById('settings-modal').classList.remove('show');
+};
+
+window.toggleModule = (moduleId) => {
+    const isChecked = document.getElementById('toggle-' + moduleId).checked;
+    const prefs = JSON.parse(localStorage.getItem('nexus_ui_prefs') || '{}');
+    prefs[moduleId] = isChecked;
+    localStorage.setItem('nexus_ui_prefs', JSON.stringify(prefs));
+    applyUiPrefs();
+};
+
+function applyUiPrefs() {
+    const prefs = JSON.parse(localStorage.getItem('nexus_ui_prefs') || '{}');
+    const modules = ['habits', 'finance', 'tasks', 'videos', 'shop', 'iot', 'studies', 'goals', 'fitness'];
+    
+    modules.forEach(mod => {
+        const isEnabled = prefs[mod] !== false; // Default true
+        
+        // Update checkbox
+        const cb = document.getElementById('toggle-' + mod);
+        if (cb) cb.checked = isEnabled;
+        
+        // Hide/show nav item
+        const navItem = document.querySelector(`.nav-item[data-target="view-${mod}"]`);
+        if (navItem) {
+            navItem.style.display = isEnabled ? 'flex' : 'none';
+        }
+    });
+}
+
+// Call applyUiPrefs on boot
+document.addEventListener('DOMContentLoaded', () => {
+    applyUiPrefs();
+});
+
+// ----------------------------------------------------
+// Quick Add Logic (FAB)
+// ----------------------------------------------------
+window.openCreateModal = () => {
+    document.getElementById('create-title').value = '';
+    document.getElementById('create-desc').value = '';
+    document.getElementById('create-time').value = '08:00';
+    document.getElementById('create-modal').classList.add('show');
+};
+
+window.closeCreateModal = () => {
+    document.getElementById('create-modal').classList.remove('show');
+};
+
+document.getElementById('create-type').addEventListener('change', (e) => {
+    const opts = document.getElementById('habit-options');
+    opts.style.display = e.target.value === 'habit' ? 'flex' : 'none';
+});
+
+window.saveQuickAdd = () => {
+    const type = document.getElementById('create-type').value;
+    const title = document.getElementById('create-title').value.trim();
+    if (!title) {
+        alert('O t�tulo � obrigat�rio.');
+        return;
+    }
+
+    if (type === 'task') {
+        const newTask = {
+            id: Date.now(),
+            title: title,
+            completed: 0,
+            points_reward: 10,
+            created_at: new Date().toISOString()
+        };
+        LocalDB.upsert('tasks', newTask);
+        loadTasks();
+        sendLocalNotification('Tarefa Criada', 'Sua nova tarefa foi salva offline.');
+    } else {
+        const time = document.getElementById('create-time').value;
+        const desc = document.getElementById('create-desc').value;
+        const newHabit = {
+            id: Date.now(),
+            name: title,
+            description: desc,
+            active: 1,
+            target_time: time,
+            current_streak: 0,
+            xp_reward: 50,
+            created_at: new Date().toISOString()
+        };
+        LocalDB.upsert('habits', newHabit);
+        loadHabits();
+        sendLocalNotification('H�bito Criado', 'Seu novo h�bito foi salvo offline.');
+    }
+
+    closeCreateModal();
+    backgroundSync();
+};
+
+// ----------------------------------------------------
+// Pomodoro Timer Logic
+// ----------------------------------------------------
+let pomoInterval = null;
+let pomoTimeLeft = 25 * 60; // 25 minutes in seconds
+let pomoActive = false;
+
+function formatPomoTime(secs) {
+    const m = Math.floor(secs / 60).toString().padStart(2, '0');
+    const s = (secs % 60).toString().padStart(2, '0');
+    return m + ":" + s;
+}
+
+window.startPomodoro = () => {
+    if (pomoActive) return;
+    pomoActive = true;
+    
+    // Play a tiny beep to acknowledge start
+    playBeep(400, 100);
+    
+    pomoInterval = setInterval(() => {
+        if (pomoTimeLeft > 0) {
+            pomoTimeLeft--;
+            document.getElementById('pomodoro-timer').innerText = formatPomoTime(pomoTimeLeft);
+        } else {
+            // Finished!
+            clearInterval(pomoInterval);
+            pomoActive = false;
+            
+            // Reward XP
+            const user = LocalDB.getSingle('nexus_user', 1) || { id: 1, xp: 0, points: 0, level: 1 };
+            user.xp += 50;
+            user.points += 50;
+            user.level = 1 + Math.floor(user.xp / 1000);
+            LocalDB.upsert('nexus_user', user);
+            
+            loadUserStats();
+            backgroundSync();
+            
+            sendLocalNotification('Foco Conclu�do!', 'Voc� ganhou +50 XP por 25 minutos de estudo.');
+            playBeep(800, 500); // Toca alarme final
+            
+            pomoTimeLeft = 25 * 60; // reset
+            document.getElementById('pomodoro-timer').innerText = formatPomoTime(pomoTimeLeft);
+        }
+    }, 1000);
+};
+
+window.pausePomodoro = () => {
+    pomoActive = false;
+    clearInterval(pomoInterval);
+};
+
+window.resetPomodoro = () => {
+    pomoActive = false;
+    clearInterval(pomoInterval);
+    pomoTimeLeft = 25 * 60;
+    document.getElementById('pomodoro-timer').innerText = formatPomoTime(pomoTimeLeft);
+};
+
+// ----------------------------------------------------
+// Habit Alarms (Local checks)
+// ----------------------------------------------------
+function playBeep(freq, duration) {
+    try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = audioCtx.createOscillator();
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        oscillator.connect(audioCtx.destination);
+        oscillator.start();
+        setTimeout(() => oscillator.stop(), duration);
+    } catch(e) { }
+}
+
+let lastCheckedMin = -1;
+function checkHabitAlarms() {
+    const now = new Date();
+    const currentMin = now.getMinutes();
+    
+    // Evita checar duas vezes no mesmo minuto
+    if (currentMin === lastCheckedMin) return;
+    lastCheckedMin = currentMin;
+    
+    const timeStr = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+    
+    const activeHabits = LocalDB.get('habits').filter(h => h.active === 1 && !h.is_deleted);
+    activeHabits.forEach(habit => {
+        if (habit.target_time && habit.target_time.substring(0, 5) === timeStr) {
+            // Verifica se j foi feito hoje (simplificado, precisaria de uma checkagem real nos logs)
+            sendLocalNotification('Hora do H�bito!', habit.name);
+            playBeep(600, 300);
+            setTimeout(() => playBeep(600, 300), 500);
+        }
+    });
+}
+
+// Add alarm checker to main loop
+setInterval(checkHabitAlarms, 30000); // checks every 30 seconds
+
+

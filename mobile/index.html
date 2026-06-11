@@ -27,7 +27,7 @@
         <div class="top-actions">
             <button class="icon-btn" aria-label="Atualizar Interface Web" onclick="forceOTAUpdate()" title="Puxar atualização da interface"><i class="fa-solid fa-rotate"></i></button>
             <button class="icon-btn" aria-label="Atualizar APK Completo" onclick="updateNativeApk()" title="Atualizar aplicativo Android"><i class="fa-brands fa-android"></i></button>
-            <button class="icon-btn" aria-label="Notificações"><i class="fa-regular fa-bell"></i></button>
+            <button class="icon-btn" aria-label="Configurações" onclick="openSettingsModal()"><i class="fa-solid fa-gear"></i></button>
         </div>
     </header>
 
@@ -115,6 +115,40 @@
                 <div class="empty-state" style="text-align:center; padding: 20px; color: #888;">Clique em Buscar para localizar dispositivos.</div>
             </div>
         </div>
+
+        <!-- Studies View -->
+        <div id="view-studies" class="view">
+            <h2 class="page-title">Estudos & Foco</h2>
+            
+            <div class="pomodoro-container glass" style="text-align:center; padding: 30px; margin-bottom: 20px;">
+                <div id="pomodoro-timer" style="font-size: 3.5rem; font-weight: 800; color: var(--accent-purple); font-variant-numeric: tabular-nums;">25:00</div>
+                <div style="color: var(--text-secondary); margin-bottom: 20px; font-weight: 600;">+50 XP ao concluir</div>
+                
+                <div style="display: flex; gap: 10px; justify-content: center;">
+                    <button class="item-action" style="width: 50px; height: 50px; background: var(--bg-surface);" onclick="startPomodoro()" id="btn-pomo-start"><i class="fa-solid fa-play"></i></button>
+                    <button class="item-action" style="width: 50px; height: 50px; background: var(--bg-surface);" onclick="pausePomodoro()" id="btn-pomo-pause"><i class="fa-solid fa-pause"></i></button>
+                    <button class="item-action" style="width: 50px; height: 50px; background: var(--bg-surface);" onclick="resetPomodoro()" id="btn-pomo-reset"><i class="fa-solid fa-rotate-right"></i></button>
+                </div>
+            </div>
+
+            <h3 class="section-title">Anotações</h3>
+            <div class="list-container" id="studies-list">
+            </div>
+        </div>
+
+        <!-- Goals View -->
+        <div id="view-goals" class="view">
+            <h2 class="page-title">Metas</h2>
+            <div class="list-container" id="goals-list">
+            </div>
+        </div>
+
+        <!-- Fitness View -->
+        <div id="view-fitness" class="view">
+            <h2 class="page-title">Saúde & Treino</h2>
+            <div class="list-container" id="fitness-list">
+            </div>
+        </div>
     </main>
 
     <!-- Bottom Navigation -->
@@ -143,11 +177,100 @@
             <i class="fa-solid fa-store"></i>
             <span>Loja</span>
         </a>
+        <a href="#" class="nav-item" data-target="view-studies">
+            <i class="fa-solid fa-book"></i>
+            <span>Estudos</span>
+        </a>
+        <a href="#" class="nav-item" data-target="view-goals">
+            <i class="fa-solid fa-bullseye"></i>
+            <span>Metas</span>
+        </a>
+        <a href="#" class="nav-item" data-target="view-fitness">
+            <i class="fa-solid fa-dumbbell"></i>
+            <span>Treino</span>
+        </a>
         <a href="#" class="nav-item" data-target="view-iot">
             <i class="fa-solid fa-lightbulb"></i>
             <span>Casa</span>
         </a>
     </nav>
+
+    <!-- FAB (Floating Action Button) -->
+    <button id="fab-add" class="fab" onclick="openCreateModal()">
+        <i class="fa-solid fa-plus"></i>
+    </button>
+
+    <!-- Create Modal (Quick Add) -->
+    <div id="create-modal" class="modal-overlay">
+        <div class="modal-content glass">
+            <div class="modal-header">
+                <h2 class="modal-title">Novo Registro</h2>
+                <button class="close-btn" onclick="closeCreateModal()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body" style="display: flex; flex-direction: column; gap: 15px;">
+                <select id="create-type" style="padding: 12px; border-radius: 8px; background: rgba(0,0,0,0.3); color: white; border: 1px solid var(--border-glass);">
+                    <option value="task">📝 Nova Tarefa</option>
+                    <option value="habit">🔄 Novo Hábito</option>
+                </select>
+                <input type="text" id="create-title" placeholder="Nome / Título" style="padding: 12px; border-radius: 8px; background: rgba(0,0,0,0.3); color: white; border: 1px solid var(--border-glass);">
+                
+                <div id="habit-options" style="display: none; flex-direction: column; gap: 15px;">
+                    <input type="time" id="create-time" style="padding: 12px; border-radius: 8px; background: rgba(0,0,0,0.3); color: white; border: 1px solid var(--border-glass);">
+                    <input type="text" id="create-desc" placeholder="Descrição (opcional)" style="padding: 12px; border-radius: 8px; background: rgba(0,0,0,0.3); color: white; border: 1px solid var(--border-glass);">
+                </div>
+
+                <button onclick="saveQuickAdd()" style="background: var(--accent-purple); color: white; padding: 14px; border: none; border-radius: 12px; font-weight: 800; font-size: 1.1rem; margin-top: 10px;">SALVAR</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal-overlay">
+        <div class="modal-content glass">
+            <div class="modal-header">
+                <h2 class="modal-title">Módulos do App</h2>
+                <button class="close-btn" onclick="closeSettingsModal()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="toggle-row">
+                    <span>Hábitos</span>
+                    <label class="switch"><input type="checkbox" id="toggle-habits" onchange="toggleModule('habits')" checked><span class="slider"></span></label>
+                </div>
+                <div class="toggle-row">
+                    <span>Finanças</span>
+                    <label class="switch"><input type="checkbox" id="toggle-finance" onchange="toggleModule('finance')" checked><span class="slider"></span></label>
+                </div>
+                <div class="toggle-row">
+                    <span>Tarefas</span>
+                    <label class="switch"><input type="checkbox" id="toggle-tasks" onchange="toggleModule('tasks')" checked><span class="slider"></span></label>
+                </div>
+                <div class="toggle-row">
+                    <span>Vídeos</span>
+                    <label class="switch"><input type="checkbox" id="toggle-videos" onchange="toggleModule('videos')" checked><span class="slider"></span></label>
+                </div>
+                <div class="toggle-row">
+                    <span>Loja</span>
+                    <label class="switch"><input type="checkbox" id="toggle-shop" onchange="toggleModule('shop')" checked><span class="slider"></span></label>
+                </div>
+                <div class="toggle-row">
+                    <span>Casa</span>
+                    <label class="switch"><input type="checkbox" id="toggle-iot" onchange="toggleModule('iot')" checked><span class="slider"></span></label>
+                </div>
+                <div class="toggle-row">
+                    <span>Estudos</span>
+                    <label class="switch"><input type="checkbox" id="toggle-studies" onchange="toggleModule('studies')" checked><span class="slider"></span></label>
+                </div>
+                <div class="toggle-row">
+                    <span>Metas</span>
+                    <label class="switch"><input type="checkbox" id="toggle-goals" onchange="toggleModule('goals')" checked><span class="slider"></span></label>
+                </div>
+                <div class="toggle-row">
+                    <span>Treinos</span>
+                    <label class="switch"><input type="checkbox" id="toggle-fitness" onchange="toggleModule('fitness')" checked><span class="slider"></span></label>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <script src="app.js"></script>
     <script>
@@ -200,3 +323,4 @@
     </script>
 </body>
 </html>
+
