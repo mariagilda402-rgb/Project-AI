@@ -1,3 +1,8 @@
+window.onerror = function(msg, url, line, col, error) {
+    alert("ERRO JS: " + msg + " na linha " + line);
+    return false;
+};
+
 // Supabase Configuration
 const supabaseUrl = 'https://oxwpwfhjyiiwdhcggtlt.supabase.co';
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im94d3B3ZmhqeWlpd2RoY2dndGx0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODExMzA3NjAsImV4cCI6MjA5NjcwNjc2MH0.mIOis8ugOlubw2P6Z8_TuNeLukvltsXAlPb-ttaaOpY';
@@ -13,7 +18,12 @@ if (window.supabase) {
 // ----------------------------------------------------
 class LocalDB {
     static get(table) {
-        return JSON.parse(localStorage.getItem(`nexus_${table}`) || '[]');
+        try {
+            const data = JSON.parse(localStorage.getItem(`nexus_${table}`) || '[]');
+            return Array.isArray(data) ? data : [];
+        } catch(e) {
+            return [];
+        }
     }
     static set(table, data) {
         localStorage.setItem(`nexus_${table}`, JSON.stringify(data));
@@ -439,7 +449,10 @@ window.toggleModule = (moduleId) => {
 };
 
 function applyUiPrefs() {
-    const prefs = JSON.parse(localStorage.getItem('nexus_ui_prefs') || '{}');
+    let prefs = {};
+    try {
+        prefs = JSON.parse(localStorage.getItem('nexus_ui_prefs')) || {};
+    } catch(e) {}
     const modules = ['habits', 'finance', 'tasks', 'videos', 'shop', 'iot', 'studies', 'goals', 'fitness'];
     
     modules.forEach(mod => {
