@@ -35,6 +35,11 @@ jobs:
       with:
         gradle-version: '8.6'
 
+    - name: Copy web assets to Android
+      run: |
+        mkdir -p mobile-apk/app/src/main/assets
+        cp -r mobile/* mobile-apk/app/src/main/assets/
+
     - name: Build APK
       run: gradle :app:assembleDebug --no-daemon --stacktrace --console=plain
       working-directory: mobile-apk
