@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
@@ -20,14 +20,14 @@
                 <img src="https://ui-avatars.com/api/?name=User&background=6c5ce7&color=fff" alt="User Avatar" class="avatar">
             </div>
             <div class="user-info">
-                <h1 class="greeting">Olá, <span id="user-name">Comandante</span></h1>
+                <h1 class="greeting">OlÃ¡, <span id="user-name">Comandante</span></h1>
                 <div class="level-badge"><i class="fa-solid fa-star"></i> Nv. <span id="user-level">--</span></div>
             </div>
         </div>
         <div class="top-actions">
-            <button class="icon-btn" aria-label="Atualizar Interface Web" onclick="forceOTAUpdate()" title="Puxar atualização da interface"><i class="fa-solid fa-rotate"></i></button>
+            <button class="icon-btn" aria-label="Atualizar Interface Web" onclick="forceOTAUpdate()" title="Puxar atualizaÃ§Ã£o da interface"><i class="fa-solid fa-rotate"></i></button>
             <button class="icon-btn" aria-label="Atualizar APK Completo" onclick="updateNativeApk()" title="Atualizar aplicativo Android"><i class="fa-brands fa-android"></i></button>
-            <button class="icon-btn" aria-label="Configurações" onclick="openSettingsModal()"><i class="fa-solid fa-gear"></i></button>
+            <button class="icon-btn" aria-label="ConfiguraÃ§Ãµes" onclick="openSettingsModal()"><i class="fa-solid fa-gear"></i></button>
         </div>
     </header>
 
@@ -40,7 +40,7 @@
                 <div class="stat-card glass">
                     <div class="stat-icon xp"><i class="fa-solid fa-bolt"></i></div>
                     <div class="stat-details">
-                        <span class="stat-label">Experiência</span>
+                        <span class="stat-label">ExperiÃªncia</span>
                         <h2 class="stat-value" id="val-xp">--</h2>
                     </div>
                 </div>
@@ -55,9 +55,9 @@
 
             <!-- Quick Action Area -->
             <section class="quick-actions">
-                <h3 class="section-title">Ações Rápidas</h3>
+                <h3 class="section-title">AÃ§Ãµes RÃ¡pidas</h3>
                 <div class="actions-scroll">
-                    <button class="action-bubble"><i class="fa-solid fa-plus"></i><br>Hábito</button>
+                    <button class="action-bubble"><i class="fa-solid fa-plus"></i><br>HÃ¡bito</button>
                     <button class="action-bubble"><i class="fa-solid fa-wallet"></i><br>Despesa</button>
                     <button class="action-bubble"><i class="fa-solid fa-pen"></i><br>Nota</button>
                     <button class="action-bubble"><i class="fa-solid fa-brain"></i><br>Flashcard</button>
@@ -67,7 +67,7 @@
 
         <!-- Habits View -->
         <div id="view-habits" class="view">
-            <h2 class="page-title">Meus Hábitos</h2>
+            <h2 class="page-title">Meus HÃ¡bitos</h2>
             <div class="list-container" id="habits-list">
                 <div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> Carregando...</div>
             </div>
@@ -75,7 +75,7 @@
 
         <!-- Finances View -->
         <div id="view-finance" class="view">
-            <h2 class="page-title">Finanças</h2>
+            <h2 class="page-title">FinanÃ§as</h2>
             <div class="list-container" id="finance-list">
                 <div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> Carregando...</div>
             </div>
@@ -131,7 +131,7 @@
                 </div>
             </div>
 
-            <h3 class="section-title">Anotações</h3>
+            <h3 class="section-title">AnotaÃ§Ãµes</h3>
             <div class="list-container" id="studies-list">
             </div>
         </div>
@@ -145,7 +145,7 @@
 
         <!-- Fitness View -->
         <div id="view-fitness" class="view">
-            <h2 class="page-title">Saúde & Treino</h2>
+            <h2 class="page-title">SaÃºde & Treino</h2>
             <div class="list-container" id="fitness-list">
             </div>
         </div>
@@ -155,15 +155,15 @@
     <nav class="bottom-nav">
         <a href="#" class="nav-item active" data-target="view-home">
             <i class="fa-solid fa-house"></i>
-            <span>Início</span>
+            <span>InÃ­cio</span>
         </a>
         <a href="#" class="nav-item" data-target="view-habits">
             <i class="fa-solid fa-check-double"></i>
-            <span>Hábitos</span>
+            <span>HÃ¡bitos</span>
         </a>
         <a href="#" class="nav-item" data-target="view-finance">
             <i class="fa-solid fa-chart-pie"></i>
-            <span>Finanças</span>
+            <span>FinanÃ§as</span>
         </a>
         <a href="#" class="nav-item" data-target="view-tasks">
             <i class="fa-solid fa-list-check"></i>
@@ -171,7 +171,7 @@
         </a>
         <a href="#" class="nav-item" data-target="view-videos">
             <i class="fa-solid fa-play"></i>
-            <span>Vídeos</span>
+            <span>VÃ­deos</span>
         </a>
         <a href="#" class="nav-item" data-target="view-shop">
             <i class="fa-solid fa-store"></i>
@@ -209,14 +209,14 @@
             </div>
             <div class="modal-body" style="display: flex; flex-direction: column; gap: 15px;">
                 <select id="create-type" style="padding: 12px; border-radius: 8px; background: rgba(0,0,0,0.3); color: white; border: 1px solid var(--border-glass);">
-                    <option value="task">📝 Nova Tarefa</option>
-                    <option value="habit">🔄 Novo Hábito</option>
+                    <option value="task">ðŸ“ Nova Tarefa</option>
+                    <option value="habit">ðŸ”„ Novo HÃ¡bito</option>
                 </select>
-                <input type="text" id="create-title" placeholder="Nome / Título" style="padding: 12px; border-radius: 8px; background: rgba(0,0,0,0.3); color: white; border: 1px solid var(--border-glass);">
+                <input type="text" id="create-title" placeholder="Nome / TÃ­tulo" style="padding: 12px; border-radius: 8px; background: rgba(0,0,0,0.3); color: white; border: 1px solid var(--border-glass);">
                 
                 <div id="habit-options" style="display: none; flex-direction: column; gap: 15px;">
                     <input type="time" id="create-time" style="padding: 12px; border-radius: 8px; background: rgba(0,0,0,0.3); color: white; border: 1px solid var(--border-glass);">
-                    <input type="text" id="create-desc" placeholder="Descrição (opcional)" style="padding: 12px; border-radius: 8px; background: rgba(0,0,0,0.3); color: white; border: 1px solid var(--border-glass);">
+                    <input type="text" id="create-desc" placeholder="DescriÃ§Ã£o (opcional)" style="padding: 12px; border-radius: 8px; background: rgba(0,0,0,0.3); color: white; border: 1px solid var(--border-glass);">
                 </div>
 
                 <button onclick="saveQuickAdd()" style="background: var(--accent-purple); color: white; padding: 14px; border: none; border-radius: 12px; font-weight: 800; font-size: 1.1rem; margin-top: 10px;">SALVAR</button>
@@ -228,16 +228,16 @@
     <div id="settings-modal" class="modal-overlay">
         <div class="modal-content glass">
             <div class="modal-header">
-                <h2 class="modal-title">Módulos do App</h2>
+                <h2 class="modal-title">MÃ³dulos do App</h2>
                 <button class="close-btn" onclick="closeSettingsModal()"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <div class="modal-body">
                 <div class="toggle-row">
-                    <span>Hábitos</span>
+                    <span>HÃ¡bitos</span>
                     <label class="switch"><input type="checkbox" id="toggle-habits" onchange="toggleModule('habits')" checked><span class="slider"></span></label>
                 </div>
                 <div class="toggle-row">
-                    <span>Finanças</span>
+                    <span>FinanÃ§as</span>
                     <label class="switch"><input type="checkbox" id="toggle-finance" onchange="toggleModule('finance')" checked><span class="slider"></span></label>
                 </div>
                 <div class="toggle-row">
@@ -245,7 +245,7 @@
                     <label class="switch"><input type="checkbox" id="toggle-tasks" onchange="toggleModule('tasks')" checked><span class="slider"></span></label>
                 </div>
                 <div class="toggle-row">
-                    <span>Vídeos</span>
+                    <span>VÃ­deos</span>
                     <label class="switch"><input type="checkbox" id="toggle-videos" onchange="toggleModule('videos')" checked><span class="slider"></span></label>
                 </div>
                 <div class="toggle-row">
@@ -312,12 +312,12 @@
         
         function updateNativeApk() {
             if (window.NexusAndroid && typeof window.NexusAndroid.installNativeApk === 'function') {
-                if (confirm("Isso fará o download da última versão completa do APK para instalar funcionalidades nativas. Deseja prosseguir?")) {
+                if (confirm("Isso farÃ¡ o download da Ãºltima versÃ£o completa do APK para instalar funcionalidades nativas. Deseja prosseguir?")) {
                     const apkUrl = 'https://github.com/mariagilda402-rgb/Project-AI/releases/latest/download/app-debug.apk';
                     window.NexusAndroid.installNativeApk(apkUrl);
                 }
             } else {
-                alert("Atualização nativa só funciona no aplicativo Android.");
+                alert("AtualizaÃ§Ã£o nativa sÃ³ funciona no aplicativo Android.");
             }
         }
     </script>

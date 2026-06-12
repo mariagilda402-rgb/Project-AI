@@ -38,7 +38,7 @@ public class MainActivity extends Activity {
 
     private static final int PERMISSION_REQUEST_CODE = 4401;
     private static final String LOCAL_APP_URL = "file:///android_asset/index.html";
-    private static final String REMOTE_BUNDLE_BASE = "https://mariagilda402-rgb.github.io/Project-AI/";
+    private static final String REMOTE_BUNDLE_BASE = "https://mariagilda402-rgb.github.io/Project-AI/mobile/";
     private static final String BUNDLE_DIR_NAME = "mobile_bundle";
     private static final String[] WEB_BUNDLE_FILES = {
         "version.json",

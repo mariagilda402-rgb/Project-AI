@@ -1,7 +1,12 @@
 // Supabase Configuration
 const supabaseUrl = 'https://oxwpwfhjyiiwdhcggtlt.supabase.co';
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im94d3B3ZmhqeWlpd2RoY2dndGx0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODExMzA3NjAsImV4cCI6MjA5NjcwNjc2MH0.mIOis8ugOlubw2P6Z8_TuNeLukvltsXAlPb-ttaaOpY';
-const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+let supabase = null;
+if (window.supabase) {
+    supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+} else {
+    console.warn("Supabase client not loaded. Running in full offline mode.");
+}
 
 // ----------------------------------------------------
 // Offline-First Database (LocalStorage)
@@ -36,7 +41,7 @@ class LocalDB {
 // Sync Engine
 // ----------------------------------------------------
 async function backgroundSync() {
-    if (!navigator.onLine) return;
+    if (!navigator.onLine || !supabase) return;
     try {
         const tables = ['nexus_user', 'habits', 'tasks', 'finance_transactions', 'nexus_rewards', 'study_notes', 'nexus_goals', 'fitness_workouts'];
         let lastSync = localStorage.getItem('nexus_last_sync') || '1970-01-01T00:00:00Z';
@@ -149,7 +154,7 @@ async function loadUserStats() {
 async function loadVideos() {
     const container = document.getElementById('videos-list');
     const data = LocalDB.get('nexus_videos');
-    container.innerHTML = data.length ? '' : '<div style="text-align:center; color:var(--text-secondary); margin-top:20px;">Nenhum vídeo salvo offline.</div>';
+    container.innerHTML = data.length ? '' : '<div style="text-align:center; color:var(--text-secondary); margin-top:20px;">Nenhum vÃ­deo salvo offline.</div>';
     data.forEach(v => {
         const el = document.createElement('div');
         el.className = 'list-item glass';
@@ -170,7 +175,7 @@ async function loadHabits() {
     const container = document.getElementById('habits-list');
     const data = LocalDB.get('habits').filter(h => h.active === 1 && !h.is_deleted);
     
-    container.innerHTML = data.length ? '' : '<div style="text-align:center; color:var(--text-secondary); margin-top:20px;">Nenhum hábito cadastrado.</div>';
+    container.innerHTML = data.length ? '' : '<div style="text-align:center; color:var(--text-secondary); margin-top:20px;">Nenhum hÃ¡bito cadastrado.</div>';
     data.forEach(habit => {
         const el = document.createElement('div');
         el.className = 'list-item glass';
@@ -178,7 +183,7 @@ async function loadHabits() {
         el.innerHTML = `
             <div class="item-main">
                 <span class="item-title">${habit.name}</span>
-                <span class="item-subtitle">Streak: 🔥 ${habit.current_streak}</span>
+                <span class="item-subtitle">Streak: ðŸ”¥ ${habit.current_streak}</span>
             </div>
             <button class="item-action ${isDone ? 'done' : ''}" onclick="toggleHabit(${habit.id}, this)">
                 <i class="fa-solid fa-check"></i>
@@ -193,7 +198,7 @@ window.toggleHabit = async (id, btn) => {
     if (navigator.vibrate) navigator.vibrate(50);
     
     if (btn.classList.contains('done')) {
-        sendLocalNotification('Hábito Concluído!', 'Você ganhou pontos de experiência!');
+        sendLocalNotification('HÃ¡bito ConcluÃ­do!', 'VocÃª ganhou pontos de experiÃªncia!');
         
         // Update user stats offline
         const user = LocalDB.getSingle('nexus_user', 1) || { id: 1, xp: 0, points: 0, level: 1 };
@@ -244,11 +249,11 @@ async function loadFinances() {
     const container = document.getElementById('finance-list');
     const data = LocalDB.get('finance_transactions').filter(t => !t.is_deleted).sort((a,b) => (b.occurred_at || b.created_at || '').localeCompare(a.occurred_at || a.created_at || ''));
     
-    container.innerHTML = data.length ? '' : '<div style="text-align:center; color:var(--text-secondary); margin-top:20px;">Sem transações.</div>';
+    container.innerHTML = data.length ? '' : '<div style="text-align:center; color:var(--text-secondary); margin-top:20px;">Sem transaÃ§Ãµes.</div>';
     data.slice(0, 15).forEach(t => {
         const el = document.createElement('div');
         el.className = 'list-item glass';
-        el.innerHTML = `<div class="item-main"><span class="item-title">${t.description || 'Transação'}</span><span class="item-subtitle" style="color:${t.type==='income'?'#00b894':'#fd79a8'}">${t.type==='income'?'+':'-'} $${t.amount}</span></div>`;
+        el.innerHTML = `<div class="item-main"><span class="item-title">${t.description || 'TransaÃ§Ã£o'}</span><span class="item-subtitle" style="color:${t.type==='income'?'#00b894':'#fd79a8'}">${t.type==='income'?'+':'-'} $${t.amount}</span></div>`;
         container.appendChild(el);
     });
 }
@@ -379,6 +384,7 @@ window.discoverIoT = async () => {
 // Realtime Subscription
 // ----------------------------------------------------
 function setupRealtime() {
+    if (!supabase) return;
     supabase.channel('custom-all-channel')
     .on(
       'postgres_changes',
@@ -479,7 +485,7 @@ window.saveQuickAdd = () => {
     const type = document.getElementById('create-type').value;
     const title = document.getElementById('create-title').value.trim();
     if (!title) {
-        alert('O t�tulo � obrigat�rio.');
+        alert('O título é obrigatório.');
         return;
     }
 
@@ -509,7 +515,7 @@ window.saveQuickAdd = () => {
         };
         LocalDB.upsert('habits', newHabit);
         loadHabits();
-        sendLocalNotification('H�bito Criado', 'Seu novo h�bito foi salvo offline.');
+        sendLocalNotification('Hábito Criado', 'Seu novo hábito foi salvo offline.');
     }
 
     closeCreateModal();
@@ -555,7 +561,7 @@ window.startPomodoro = () => {
             loadUserStats();
             backgroundSync();
             
-            sendLocalNotification('Foco Conclu�do!', 'Voc� ganhou +50 XP por 25 minutos de estudo.');
+            sendLocalNotification('Foco Concluído!', 'Você ganhou +50 XP por 25 minutos de estudo.');
             playBeep(800, 500); // Toca alarme final
             
             pomoTimeLeft = 25 * 60; // reset
@@ -606,7 +612,7 @@ function checkHabitAlarms() {
     activeHabits.forEach(habit => {
         if (habit.target_time && habit.target_time.substring(0, 5) === timeStr) {
             // Verifica se j foi feito hoje (simplificado, precisaria de uma checkagem real nos logs)
-            sendLocalNotification('Hora do H�bito!', habit.name);
+            sendLocalNotification('Hora do Hábito!', habit.name);
             playBeep(600, 300);
             setTimeout(() => playBeep(600, 300), 500);
         }
