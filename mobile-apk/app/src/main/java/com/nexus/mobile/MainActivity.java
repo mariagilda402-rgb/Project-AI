@@ -57,6 +57,14 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        android.content.SharedPreferences prefs = getSharedPreferences("NexusMobilePrefs", MODE_PRIVATE);
+        int lastVersionCode = prefs.getInt("lastVersionCode", -1);
+        int currentVersionCode = BuildConfig.VERSION_CODE;
+        if (currentVersionCode > lastVersionCode) {
+            deleteRecursively(getDownloadedBundleDir());
+            prefs.edit().putInt("lastVersionCode", currentVersionCode).apply();
+        }
+
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         getWindow().setFlags(
             WindowManager.LayoutParams.FLAG_FULLSCREEN,
