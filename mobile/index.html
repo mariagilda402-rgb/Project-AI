@@ -203,7 +203,8 @@
             <div id="study-main-view">
                 <div class="actions-scroll" style="margin-bottom: 15px;">
                     <button class="action-bubble" onclick="openNoteEditor()"><i class="fa-solid fa-plus"></i><br>Nova Nota</button>
-                    <button class="action-bubble"><i class="fa-solid fa-brain"></i><br>Revisar</button>
+                    <button class="action-bubble" onclick="showFlashcards()"><i class="fa-solid fa-brain"></i><br>Flashcards</button>
+                    <button class="action-bubble" onclick="openJournal()"><i class="fa-solid fa-book-open"></i><br>Diário</button>
                 </div>
                 <div class="list-container" id="studies-list">
                     <div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> Carregando...</div>
@@ -215,9 +216,15 @@
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                     <button onclick="closeNoteEditor()" style="background: none; border: none; color: white; font-size: 1.5rem;"><i class="fa-solid fa-arrow-left"></i></button>
                     <h3 style="margin: 0;">Editor de Notas</h3>
-                    <button onclick="saveNote()" style="background: var(--accent-green); border: none; color: white; padding: 8px 15px; border-radius: 8px; font-weight: bold;"><i class="fa-solid fa-save"></i> Salvar</button>
+                    <div style="display: flex; gap: 8px;">
+                        <button onclick="triggerOcrCamera()" title="Transcrever Caderno (Câmera)" style="background: rgba(0,206,201,0.2); border: 1px solid var(--accent-blue); color: var(--accent-blue); padding: 8px 12px; border-radius: 8px; font-size: 0.9rem;"><i class="fa-solid fa-camera"></i></button>
+                        <button onclick="saveNote()" style="background: var(--accent-green); border: none; color: white; padding: 8px 15px; border-radius: 8px; font-weight: bold;"><i class="fa-solid fa-save"></i> Salvar</button>
+                    </div>
                 </div>
                 
+                <!-- OCR status -->
+                <div id="ocr-status" style="display:none; color: var(--accent-blue); font-size:0.85rem; text-align:center;"><i class="fa-solid fa-circle-notch fa-spin"></i> Transcrevendo seu caderno com Gemini...</div>
+
                 <input type="text" id="note-title" placeholder="Título da Nota" style="padding: 12px; border-radius: 8px; background: rgba(0,0,0,0.4); color: white; border: 1px solid var(--border-glass); font-size: 1.2rem; font-weight: bold;">
                 <input type="text" id="note-subject" placeholder="Assunto Geral (Visível para IA)" style="padding: 10px; border-radius: 8px; background: rgba(0,0,0,0.2); color: var(--accent-purple); border: 1px dashed var(--accent-purple); font-size: 0.9rem;">
                 
@@ -233,6 +240,42 @@
                         <button onclick="rejectAiDiff()" style="flex: 1; background: var(--accent-pink); color: white; border: none; padding: 10px; border-radius: 8px;"><i class="fa-solid fa-xmark"></i> Recusar</button>
                     </div>
                 </div>
+            </div>
+
+            <!-- Flashcards Tinder View (Hidden) -->
+            <div id="flashcard-view" style="display:none; position:absolute; top:0; left:0; width:100%; height:calc(100vh - 120px); z-index:10; padding:20px; display:none; flex-direction:column; gap:15px;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <button onclick="closeFlashcards()" style="background:none; border:none; color:white; font-size:1.5rem;"><i class="fa-solid fa-arrow-left"></i></button>
+                    <h3 style="margin:0; color:white;">Flashcards</h3>
+                    <span id="fc-counter" style="color:var(--accent-blue); font-size:0.9rem;">0/0</span>
+                </div>
+                <div id="flashcard-card" class="glass" style="flex:1; border-radius:20px; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:30px; text-align:center; border:1px solid var(--accent-purple); cursor:pointer; user-select:none;" onclick="flipFlashcard()">
+                    <p id="fc-front" style="font-size:1.3rem; font-weight:bold; color:white; margin:0;">Carregando...</p>
+                    <p id="fc-back" style="font-size:1rem; color:var(--accent-blue); margin-top:20px; display:none;"></p>
+                    <p style="font-size:0.75rem; color:var(--text-secondary); margin-top:auto;">Toque para revelar</p>
+                </div>
+                <div style="display:flex; gap:20px; justify-content:center;">
+                    <button onclick="answerFlashcard(false)" style="flex:1; background:rgba(255,71,87,0.3); border:2px solid var(--accent-pink); color:white; padding:15px; border-radius:16px; font-size:1.5rem;">✗ Errei</button>
+                    <button onclick="answerFlashcard(true)" style="flex:1; background:rgba(0,210,121,0.3); border:2px solid var(--accent-green); color:white; padding:15px; border-radius:16px; font-size:1.5rem;">✓ Acertei</button>
+                </div>
+            </div>
+
+            <!-- Journal View (Hidden) -->
+            <div id="journal-view" style="display:none; position:absolute; top:0; left:0; width:100%; height:calc(100vh - 120px); z-index:10; padding:20px; flex-direction:column; gap:15px;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <button onclick="closeJournal()" style="background:none; border:none; color:white; font-size:1.5rem;"><i class="fa-solid fa-arrow-left"></i></button>
+                    <h3 style="margin:0; color:white;">📓 Diário</h3>
+                    <span id="journal-date" style="color:var(--text-secondary); font-size:0.85rem;"></span>
+                </div>
+                <div class="glass" style="padding:15px; border-radius:12px; border:1px solid var(--accent-purple);">
+                    <p style="margin:0 0 10px 0; color:var(--accent-blue); font-size:0.9rem;"><i class="fa-solid fa-robot"></i> Diga ao Jarvis como foi seu dia, ele irá resumir e salvar.</p>
+                    <div style="display:flex; gap:10px; align-items:center;">
+                        <button id="journal-mic-btn" onclick="startJournalDictation()" style="background:linear-gradient(135deg,var(--accent-purple),var(--accent-pink)); border:none; color:white; padding:12px 18px; border-radius:12px; font-size:1.2rem;"><i class="fa-solid fa-microphone"></i></button>
+                        <span id="journal-mic-status" style="color:var(--text-secondary); font-size:0.85rem;">Pressione para ditar</span>
+                    </div>
+                </div>
+                <textarea id="journal-content" placeholder="Ou escreva aqui como foi seu dia..." style="flex:1; padding:15px; border-radius:12px; background:rgba(0,0,0,0.4); color:white; border:1px solid var(--border-glass); font-size:1rem; resize:none;"></textarea>
+                <button onclick="saveJournalEntry()" style="background:linear-gradient(135deg,var(--accent-green),var(--accent-blue)); color:white; padding:14px; border:none; border-radius:12px; font-weight:bold;"><i class="fa-solid fa-save"></i> Salvar Entrada do Diário</button>
             </div>
         </div>
 
@@ -316,12 +359,19 @@
             <i class="fa-solid fa-lightbulb"></i>
             <span>Casa</span>
         </a>
+        <a href="#" class="nav-item" onclick="openJournal(); return false;">
+            <i class="fa-solid fa-book-open"></i>
+            <span>Diário</span>
+        </a>
     </nav>
 
     <!-- FAB (Floating Action Button) -->
     <button id="fab-add" class="fab" onclick="openCreateModal()">
         <i class="fa-solid fa-plus"></i>
     </button>
+
+    <!-- Hidden file input for OCR camera fallback -->
+    <input type="file" id="ocr-file-input" accept="image/*" capture="environment" style="display:none" onchange="handleOcrFileSelected(event)">
 
     <!-- Create Modal (Quick Add) -->
     <div id="create-modal" class="modal-overlay">

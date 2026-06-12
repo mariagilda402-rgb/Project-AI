@@ -1,3 +1,4 @@
+from src.services.nexus_cloud_agent import NexusCloudAgent
 import sys
 import os
 import logging

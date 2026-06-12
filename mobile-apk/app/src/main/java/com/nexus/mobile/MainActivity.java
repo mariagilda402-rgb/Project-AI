@@ -8,6 +8,13 @@ import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+
+import android.provider.MediaStore;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.util.Base64;
+import java.io.ByteArrayOutputStream;
+
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
@@ -37,6 +44,10 @@ import java.util.List;
 public class MainActivity extends Activity {
 
     private static final int PERMISSION_REQUEST_CODE = 4401;
+
+    private static final int REQUEST_IMAGE_CAPTURE = 4403;
+    private String currentPhotoPath = "";
+
     private static final String LOCAL_APP_URL = "file:///android_asset/index.html";
     private static final String REMOTE_BUNDLE_BASE = "https://mariagilda402-rgb.github.io/Project-AI/mobile/";
     private static final String BUNDLE_DIR_NAME = "mobile_bundle";
@@ -372,6 +383,40 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface
+        
+        @JavascriptInterface
+        
+        @JavascriptInterface
+        public void showNotification(String title, String message) {
+            runOnUiThread(() -> {
+                String channelId = "nexus_alert_channel";
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                    NotificationChannel channel = new NotificationChannel(channelId, "Nexus Alerts", NotificationManager.IMPORTANCE_HIGH);
+                    NotificationManager nm = (NotificationManager) getSystemService(android.content.Context.NOTIFICATION_SERVICE);
+                    if (nm != null) nm.createNotificationChannel(channel);
+                }
+                android.app.Notification notif = new androidx.core.app.NotificationCompat.Builder(MainActivity.this, channelId)
+                    .setContentTitle(title)
+                    .setContentText(message)
+                    .setSmallIcon(android.R.drawable.ic_dialog_info)
+                    .setPriority(androidx.core.app.NotificationCompat.PRIORITY_HIGH)
+                    .build();
+                NotificationManager nm = (NotificationManager) getSystemService(android.content.Context.NOTIFICATION_SERVICE);
+                if (nm != null) nm.notify((int)(System.currentTimeMillis() % 10000), notif);
+            });
+        }
+
+        public void openNativeCamera() {
+            runOnUiThread(() -> {
+                Intent takePictureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+                if (takePictureIntent.resolveActivity(getPackageManager()) != null) {
+                    startActivityForResult(takePictureIntent, REQUEST_IMAGE_CAPTURE);
+                } else {
+                    Toast.makeText(MainActivity.this, "Câmera não encontrada", Toast.LENGTH_SHORT).show();
+                }
+            });
+        }
+
         public void stopJarvisCall() {
             runOnUiThread(() -> {
                 Intent serviceIntent = new Intent(MainActivity.this, JarvisCallService.class);

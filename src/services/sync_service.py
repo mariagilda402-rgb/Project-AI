@@ -17,7 +17,9 @@ TABLES_TO_SYNC = [
     "nexus_rewards",
     "study_notes",
     "nexus_goals",
-    "fitness_workouts"
+    "fitness_workouts",
+    "nexus_commands",
+    "nexus_memory_sync"
 ]
 
 class SyncService:

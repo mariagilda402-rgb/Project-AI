@@ -871,3 +871,438 @@ window.receiveNativeVision = function(data) {
         alert("Dados da tela/clipboard enviados pro Jarvis analisar!");
     });
 };
+
+// ====================================================
+// PHASE 11: OCR via Camera (Gemini Vision)
+// ====================================================
+window.triggerOcrCamera = function() {
+    if (window.AndroidNative && window.AndroidNative.openNativeCamera) {
+        window.AndroidNative.openNativeCamera();
+    } else {
+        // Fallback: HTML file input with camera capture
+        document.getElementById('ocr-file-input').click();
+    }
+};
+
+// Called by native Java after camera capture
+window.receiveCameraImage = function(base64jpeg) {
+    var status = document.getElementById('ocr-status');
+    if (status) { status.style.display = 'block'; }
+
+    // Send OCR command to Supabase → PC will process with Gemini Vision
+    if (nexusDb) {
+        nexusDb.from('nexus_commands').insert([{
+            command: 'IMAGE_TRANSCRIPT:' + base64jpeg,
+            source: 'mobile_ocr',
+            status: 'pending'
+        }]).then(function() {
+            if (status) {
+                status.innerHTML = '<i class="fa-solid fa-check"></i> Enviado! O Jarvis irá transcrever e inserir o texto aqui em breve.';
+                setTimeout(function() { status.style.display = 'none'; }, 4000);
+            }
+            // Poll for result every 5s for up to 60s
+            var attempts = 0;
+            var poll = setInterval(function() {
+                attempts++;
+                if (attempts > 12) { clearInterval(poll); return; }
+                nexusDb.from('nexus_commands')
+                    .select('result, status')
+                    .eq('source', 'mobile_ocr')
+                    .eq('status', 'completed')
+                    .order('created_at', { ascending: false })
+                    .limit(1)
+                    .then(function(res) {
+                        if (res.data && res.data.length > 0 && res.data[0].result) {
+                            clearInterval(poll);
+                            var textarea = document.getElementById('note-content');
+                            if (textarea) {
+                                textarea.value = (textarea.value ? textarea.value + '\n\n' : '') + res.data[0].result;
+                            }
+                        }
+                    });
+            }, 5000);
+        });
+    }
+};
+
+// Fallback: file input handler
+window.handleOcrFileSelected = function(event) {
+    var file = event.target.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function(e) {
+        var base64 = e.target.result.split(',')[1];
+        window.receiveCameraImage(base64);
+    };
+    reader.readAsDataURL(file);
+};
+
+// PC returns transcription result and calls this
+window.receiveOcrTranscription = function(text) {
+    var textarea = document.getElementById('note-content');
+    if (textarea) {
+        textarea.value = (textarea.value ? textarea.value + '\n\n' : '') + text;
+    }
+    var status = document.getElementById('ocr-status');
+    if (status) { status.style.display = 'none'; }
+};
+
+// ====================================================
+// PHASE 11: Flashcards Tinder-Style
+// ====================================================
+window._flashcards = [];
+window._fcIndex = 0;
+window._fcFlipped = false;
+
+window.showFlashcards = function() {
+    // Navigate to studies first
+    document.querySelectorAll('.view').forEach(function(v) { v.classList.remove('active-view'); });
+    var sv = document.getElementById('view-studies');
+    if (sv) sv.classList.add('active-view');
+
+    var fc = document.getElementById('flashcard-view');
+    if (fc) {
+        fc.style.display = 'flex';
+        fc.style.flexDirection = 'column';
+    }
+
+    // Load from Supabase or LocalDB
+    var cards = LocalDB.get('flashcards');
+    if (cards.length === 0) {
+        // Demo cards if none exist
+        cards = [
+            { id: 1, question: 'O que é fotossíntese?', answer: 'Processo pelo qual plantas convertem luz solar em energia química (glicose).', next_review: null, ease: 2.5 },
+            { id: 2, question: 'O que é Machine Learning?', answer: 'Subcampo da IA onde sistemas aprendem com dados sem serem explicitamente programados.', next_review: null, ease: 2.5 }
+        ];
+        LocalDB.set('flashcards', cards);
+    }
+
+    // Filter due cards
+    var now = new Date().toISOString();
+    var due = cards.filter(function(c) { return !c.next_review || c.next_review <= now; });
+    if (due.length === 0) due = cards; // show all if none due
+
+    window._flashcards = due;
+    window._fcIndex = 0;
+    window._fcFlipped = false;
+    window.renderFlashcard();
+};
+
+window.renderFlashcard = function() {
+    var total = window._flashcards.length;
+    var idx = window._fcIndex;
+    var counter = document.getElementById('fc-counter');
+    if (counter) counter.textContent = (idx + 1) + '/' + total;
+
+    var card = window._flashcards[idx];
+    if (!card) {
+        document.getElementById('fc-front').textContent = '🎉 Todas as cartas revisadas!';
+        document.getElementById('fc-back').style.display = 'none';
+        return;
+    }
+
+    document.getElementById('fc-front').textContent = card.question;
+    var back = document.getElementById('fc-back');
+    back.textContent = card.answer;
+    back.style.display = 'none';
+    window._fcFlipped = false;
+};
+
+window.flipFlashcard = function() {
+    if (window._fcFlipped) return;
+    window._fcFlipped = true;
+    var back = document.getElementById('fc-back');
+    if (back) back.style.display = 'block';
+    var card = document.getElementById('flashcard-card');
+    if (card) {
+        card.style.background = 'rgba(0,206,201,0.1)';
+        card.style.borderColor = 'var(--accent-blue)';
+    }
+};
+
+window.answerFlashcard = function(correct) {
+    if (!window._fcFlipped) {
+        alert('Toque na carta primeiro para ver a resposta!');
+        return;
+    }
+    var card = window._flashcards[window._fcIndex];
+    if (card) {
+        // Spaced repetition: SM-2 simplified
+        var ease = card.ease || 2.5;
+        var interval = correct ? Math.round(ease * (card.interval || 1)) : 1;
+        ease = Math.max(1.3, ease + (correct ? 0.1 : -0.2));
+        var nextDate = new Date(Date.now() + interval * 86400000).toISOString();
+        card.ease = ease;
+        card.interval = interval;
+        card.next_review = nextDate;
+        LocalDB.upsert('flashcards', card);
+    }
+
+    // Reset card style
+    var cardEl = document.getElementById('flashcard-card');
+    if (cardEl) { cardEl.style.background = ''; cardEl.style.borderColor = 'var(--accent-purple)'; }
+
+    window._fcIndex++;
+    if (window._fcIndex >= window._flashcards.length) {
+        document.getElementById('fc-front').textContent = '🎉 Sessão concluída! +50 XP';
+        document.getElementById('fc-back').style.display = 'none';
+    } else {
+        window.renderFlashcard();
+    }
+};
+
+window.closeFlashcards = function() {
+    var fc = document.getElementById('flashcard-view');
+    if (fc) fc.style.display = 'none';
+};
+
+// ====================================================
+// PHASE 12: Journal (Diário) - Text & Voice
+// ====================================================
+var _journalRecognition = null;
+
+window.openJournal = function() {
+    // Make studies view active
+    document.querySelectorAll('.view').forEach(function(v) { v.classList.remove('active-view'); });
+    var sv = document.getElementById('view-studies');
+    if (sv) sv.classList.add('active-view');
+
+    var jv = document.getElementById('journal-view');
+    if (jv) {
+        jv.style.display = 'flex';
+        jv.style.flexDirection = 'column';
+    }
+    var dateEl = document.getElementById('journal-date');
+    if (dateEl) {
+        dateEl.textContent = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
+    }
+    // Load today's entry if exists
+    var today = new Date().toISOString().split('T')[0];
+    var entries = LocalDB.get('journal_entries');
+    var todayEntry = entries.find(function(e) { return e.date === today; });
+    var ta = document.getElementById('journal-content');
+    if (ta) ta.value = todayEntry ? (todayEntry.content || '') : '';
+};
+
+window.closeJournal = function() {
+    var jv = document.getElementById('journal-view');
+    if (jv) jv.style.display = 'none';
+    if (_journalRecognition) { try { _journalRecognition.stop(); } catch(e) {} }
+};
+
+window.startJournalDictation = function() {
+    var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+        alert('Reconhecimento de voz não suportado neste navegador/WebView.');
+        return;
+    }
+    var btn = document.getElementById('journal-mic-btn');
+    var status = document.getElementById('journal-mic-status');
+
+    if (_journalRecognition && _journalRecognition.active) {
+        _journalRecognition.stop();
+        return;
+    }
+
+    _journalRecognition = new SpeechRecognition();
+    _journalRecognition.lang = 'pt-BR';
+    _journalRecognition.continuous = true;
+    _journalRecognition.interimResults = true;
+    _journalRecognition.active = true;
+
+    if (btn) btn.style.background = 'linear-gradient(135deg, var(--accent-pink), var(--accent-purple))';
+    if (status) status.textContent = '🔴 Gravando... Fale agora';
+
+    var finalTranscript = '';
+    _journalRecognition.onresult = function(event) {
+        var interim = '';
+        for (var i = event.resultIndex; i < event.results.length; i++) {
+            if (event.results[i].isFinal) {
+                finalTranscript += event.results[i][0].transcript + ' ';
+            } else {
+                interim += event.results[i][0].transcript;
+            }
+        }
+        var ta = document.getElementById('journal-content');
+        if (ta) ta.value = finalTranscript + interim;
+    };
+
+    _journalRecognition.onend = function() {
+        _journalRecognition.active = false;
+        if (btn) btn.style.background = 'linear-gradient(135deg,var(--accent-purple),var(--accent-pink))';
+        if (status) status.textContent = 'Gravação encerrada. Salve sua entrada!';
+    };
+
+    _journalRecognition.start();
+};
+
+window.saveJournalEntry = function() {
+    var content = (document.getElementById('journal-content') || {}).value;
+    if (!content || !content.trim()) { alert('Escreva ou dite algo primeiro!'); return; }
+
+    var today = new Date().toISOString().split('T')[0];
+    var entry = {
+        id: today,
+        date: today,
+        content: content,
+        device_source: 'mobile', // CONTEXT: from mobile
+        updated_at: new Date().toISOString()
+    };
+    LocalDB.upsert('journal_entries', entry);
+
+    // Queue AI summarization on PC
+    if (nexusDb) {
+        nexusDb.from('nexus_commands').insert([{
+            command: 'SUMMARIZE_JOURNAL:' + today,
+            source: 'mobile_journal',
+            status: 'pending',
+            context: JSON.stringify({ device: 'mobile', date: today })
+        }]).then(function() {});
+    }
+
+    alert('📖 Entrada do Diário salva! O Jarvis irá analisá-la no PC.');
+    window.closeJournal();
+};
+
+// ====================================================
+// PHASE 12: Device Context Injection
+// ====================================================
+// Inject device context into every nexus_command
+var _originalNexusInsert = null;
+function injectDeviceContext() {
+    if (!nexusDb) return;
+    var deviceCtx = JSON.stringify({
+        device: 'mobile',
+        user_agent: navigator.userAgent,
+        timestamp: new Date().toISOString(),
+        location: 'Nexus Mobile App'
+    });
+    // Store in localStorage so PC can read it from commands
+    localStorage.setItem('nexus_device_context', deviceCtx);
+}
+injectDeviceContext();
+
+// ====================================================
+// PHASE 12: Remote Clipboard Control
+// ====================================================
+// To copy to the PHONE's clipboard
+window.copyToLocalClipboard = function(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function() {
+            console.log('Copied to mobile clipboard:', text.substring(0, 50));
+        }).catch(function() {
+            // Fallback
+            var ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed'; ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+        });
+    }
+};
+
+// To copy to the PC clipboard (sends command via Supabase)
+window.copyToPcClipboard = function(text) {
+    if (nexusDb) {
+        nexusDb.from('nexus_commands').insert([{
+            command: 'COPY_TO_PC_CLIPBOARD: ' + text,
+            source: 'mobile_clipboard',
+            status: 'pending'
+        }]).then(function() {
+            console.log('PC clipboard command sent.');
+        });
+    }
+};
+
+// ====================================================
+// PHASE 13: PC → Mobile Push Notifications
+// ====================================================
+// Poll Supabase every 20s for commands directed at mobile
+setInterval(function() {
+    if (!nexusDb || !navigator.onLine) return;
+    nexusDb.from('nexus_commands')
+        .select('*')
+        .eq('status', 'pending')
+        .eq('source', 'pc_notification')
+        .limit(5)
+        .then(function(res) {
+            if (!res.data || res.data.length === 0) return;
+            res.data.forEach(function(cmd) {
+                // Mark as delivered
+                nexusDb.from('nexus_commands').update({ status: 'delivered' }).eq('id', cmd.id).then(function() {});
+
+                var msg = cmd.command || 'Nova mensagem do Jarvis';
+
+                // Show in-app notification
+                showInAppNotification(msg);
+
+                // Native Android notification
+                if (window.AndroidNative && window.AndroidNative.showNotification) {
+                    window.AndroidNative.showNotification('Jarvis', msg);
+                }
+
+                // Also show in chat
+                window.receiveJarvisSpeech(msg);
+            });
+        });
+}, 20000);
+
+function showInAppNotification(msg) {
+    var notif = document.createElement('div');
+    notif.style.cssText = 'position:fixed; top:60px; left:50%; transform:translateX(-50%); background:rgba(108,92,231,0.95); color:white; padding:12px 20px; border-radius:12px; z-index:9999; max-width:90%; text-align:center; font-size:0.9rem; box-shadow:0 4px 20px rgba(0,0,0,0.4); animation: slideDown 0.3s ease;';
+    notif.innerHTML = '<i class="fa-solid fa-robot"></i> ' + msg;
+    document.body.appendChild(notif);
+    setTimeout(function() {
+        notif.style.opacity = '0';
+        notif.style.transition = 'opacity 0.5s';
+        setTimeout(function() { notif.remove(); }, 500);
+    }, 5000);
+}
+
+// ====================================================
+// PHASE 14: Geofencing & GPS Context
+// ====================================================
+(function initGeoFencing() {
+    if (!navigator.geolocation) return;
+    
+    // Check position every 5 minutes
+    setInterval(function() {
+        navigator.geolocation.getCurrentPosition(function(pos) {
+            var geoData = {
+                lat: pos.coords.latitude,
+                lon: pos.coords.longitude,
+                accuracy: pos.coords.accuracy,
+                timestamp: new Date().toISOString(),
+                device: 'mobile'
+            };
+            localStorage.setItem('nexus_last_location', JSON.stringify(geoData));
+
+            // Send to Supabase for PC to check geofences
+            if (nexusDb) {
+                nexusDb.from('nexus_commands').insert([{
+                    command: 'GPS_UPDATE: ' + JSON.stringify(geoData),
+                    source: 'mobile_geo',
+                    status: 'pending'
+                }]).then(function() {});
+            }
+        }, function(err) {
+            // Silently fail if user denies location
+            console.log('Geo not available:', err.message);
+        }, { timeout: 10000, maximumAge: 300000 });
+    }, 300000); // every 5 minutes
+})();
+
+// Kick off geo on startup too (after 3s delay to not overwhelm init)
+setTimeout(function() {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(function(pos) {
+        localStorage.setItem('nexus_last_location', JSON.stringify({
+            lat: pos.coords.latitude, lon: pos.coords.longitude,
+            timestamp: new Date().toISOString(), device: 'mobile'
+        }));
+    }, function() {}, { timeout: 10000 });
+}, 3000);
+
+
