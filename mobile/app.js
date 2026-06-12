@@ -30,11 +30,11 @@ class LocalDB {
     }
     static getSingle(table, id) {
         const rows = this.get(table);
-        return rows.find(r => r.id === id);
+        return rows.find(function(r) { return r.id === id; });
     }
     static upsert(table, record) {
         const rows = this.get(table);
-        const idx = rows.findIndex(r => r.id === record.id);
+        const idx = rows.findIndex(function(r) { return r.id === record.id; });
         record.updated_at = new Date().toISOString();
         if (idx > -1) {
             rows[idx] = { ...rows[idx], ...record };
@@ -50,7 +50,7 @@ class LocalDB {
 // ----------------------------------------------------
 // Sync Engine
 // ----------------------------------------------------
-async function backgroundSync() {
+function backgroundSync() { return; 
     if (!navigator.onLine || !supabase) return;
     try {
         const tables = ['nexus_user', 'habits', 'tasks', 'finance_transactions', 'nexus_rewards', 'study_notes', 'nexus_goals', 'fitness_workouts'];
@@ -59,13 +59,13 @@ async function backgroundSync() {
 
         for (let table of tables) {
             // Pull
-            const { data: remoteData, error } = await supabase.from(table).select('*').gt('updated_at', lastSync).order('updated_at', { ascending: true });
+            // await sync
             if (remoteData && remoteData.length > 0) {
-                remoteData.forEach(remoteRow => {
+                remoteData.forEach(function(remoteRow) {
                     const localRow = LocalDB.getSingle(table, remoteRow.id);
                     if (!localRow || remoteRow.updated_at > (localRow.updated_at || '')) {
                         const rows = LocalDB.get(table);
-                        const idx = rows.findIndex(r => r.id === remoteRow.id);
+                        const idx = rows.findIndex(function(r) { return r.id === remoteRow.id; });
                         if (idx > -1) Object.assign(rows[idx], remoteRow);
                         else rows.push(remoteRow);
                         LocalDB.set(table, rows);
@@ -75,11 +75,11 @@ async function backgroundSync() {
             }
 
             // Push
-            const localData = LocalDB.get(table).filter(r => (r.updated_at || '') > lastSync);
+            const localData = LocalDB.get(table).filter(function(r) { return (r.updated_at || '') > lastSync; });
             for (let localRow of localData) {
                 // Remove UI-only fields if necessary
-                const { ...cleanRow } = localRow;
-                const { error: pushErr } = await supabase.from(table).upsert(cleanRow);
+                var cleanRow = Object.assign({}, localRow);
+                // await upsert
                 if (!pushErr) {
                     if (localRow.updated_at > newSyncTime) newSyncTime = localRow.updated_at;
                 }
@@ -103,15 +103,15 @@ async function backgroundSync() {
 // ----------------------------------------------------
 // UI Logic
 // ----------------------------------------------------
-document.querySelectorAll('.nav-item').forEach(item => {
-    item.addEventListener('click', (e) => {
+document.querySelectorAll('.nav-item').forEach(function(item) {
+    item.addEventListener('click', function(e) {
         e.preventDefault();
         
-        document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
+        document.querySelectorAll('.nav-item').forEach(function(nav) { nav.classList.remove('active'); });
         item.classList.add('active');
         
         const targetId = item.getAttribute('data-target');
-        document.querySelectorAll('.view').forEach(view => view.classList.remove('active-view'));
+        document.querySelectorAll('.view').forEach(function(view) { view.classList.remove('active-view'); });
         document.getElementById(targetId).classList.add('active-view');
         
         if(targetId === 'view-habits') loadHabits();
@@ -129,18 +129,18 @@ document.querySelectorAll('.nav-item').forEach(item => {
 // ----------------------------------------------------
 // Notifications
 // ----------------------------------------------------
-async function requestNotificationPermission() {
+function requestNotificationPermission() {
     if (!("Notification" in window)) return;
     if (Notification.permission === "granted") return;
     
     if (Notification.permission !== "denied") {
-        await Notification.requestPermission();
+        Notification.requestPermission();
     }
 }
 
 function sendLocalNotification(title, body) {
     if (Notification.permission === "granted") {
-        navigator.serviceWorker.ready.then(registration => {
+        navigator.serviceWorker.ready.then(function(registration) {
             registration.showNotification(title, {
                 body: body,
                 icon: 'https://cdn-icons-png.flaticon.com/512/8244/8244509.png',
@@ -154,18 +154,18 @@ function sendLocalNotification(title, body) {
 // Offline-First Data Operations
 // ----------------------------------------------------
 
-async function loadUserStats() {
+function loadUserStats() {
     const user = LocalDB.getSingle('nexus_user', 1) || { xp: 0, level: 1, points: 0 };
     document.getElementById('user-level').innerText = user.level;
     document.getElementById('val-xp').innerText = user.xp;
     document.getElementById('val-points').innerText = user.points;
 }
 
-async function loadVideos() {
+function loadVideos() {
     const container = document.getElementById('videos-list');
     const data = LocalDB.get('nexus_videos');
     container.innerHTML = data.length ? '' : '<div style="text-align:center; color:var(--text-secondary); margin-top:20px;">Nenhum vÃ­deo salvo offline.</div>';
-    data.forEach(v => {
+    data.forEach(function(v) {
         const el = document.createElement('div');
         el.className = 'list-item glass';
         const badgeClass = v.is_watched ? 'color: var(--accent-green);' : 'color: var(--accent-blue);';
@@ -181,12 +181,12 @@ async function loadVideos() {
     });
 }
 
-async function loadHabits() {
+function loadHabits() {
     const container = document.getElementById('habits-list');
-    const data = LocalDB.get('habits').filter(h => h.active === 1 && !h.is_deleted);
+    const data = LocalDB.get('habits').filter(function(h) { return h.active === 1 && !h.is_deleted; });
     
     container.innerHTML = data.length ? '' : '<div style="text-align:center; color:var(--text-secondary); margin-top:20px;">Nenhum hÃ¡bito cadastrado.</div>';
-    data.forEach(habit => {
+    data.forEach(function(habit) {
         const el = document.createElement('div');
         el.className = 'list-item glass';
         const isDone = false; // Need a better way to store daily completions offline
@@ -203,7 +203,7 @@ async function loadHabits() {
     });
 }
 
-window.toggleHabit = async (id, btn) => {
+window.toggleHabit = function(id, btn) {
     btn.classList.toggle('done');
     if (navigator.vibrate) navigator.vibrate(50);
     
@@ -222,12 +222,12 @@ window.toggleHabit = async (id, btn) => {
     }
 };
 
-async function loadTasks() {
+function loadTasks() {
     const container = document.getElementById('tasks-list');
-    const data = LocalDB.get('tasks').filter(t => !t.done_at && !t.is_deleted);
+    const data = LocalDB.get('tasks').filter(function(t) { return !t.done_at && !t.is_deleted; });
     
     container.innerHTML = data.length ? '' : '<div style="text-align:center; color:var(--text-secondary); margin-top:20px;">Sem tarefas ativas!</div>';
-    data.forEach(t => {
+    data.forEach(function(t) {
         const el = document.createElement('div');
         el.className = 'list-item glass';
         el.innerHTML = `<div class="item-main"><span class="item-title">${t.title}</span><span class="item-subtitle">+${t.points_reward} XP</span></div>
@@ -236,7 +236,7 @@ async function loadTasks() {
     });
 }
 
-window.completeTask = async (id, btn) => {
+window.completeTask = function(id, btn) {
     const task = LocalDB.getSingle('tasks', id);
     if(task) {
         task.done_at = new Date().toISOString();
@@ -255,12 +255,12 @@ window.completeTask = async (id, btn) => {
     }
 };
 
-async function loadFinances() {
+function loadFinances() {
     const container = document.getElementById('finance-list');
-    const data = LocalDB.get('finance_transactions').filter(t => !t.is_deleted).sort((a,b) => (b.occurred_at || b.created_at || '').localeCompare(a.occurred_at || a.created_at || ''));
+    const data = LocalDB.get('finance_transactions').filter(function(t) { return !t.is_deleted; }).sort(function(a,b) { return (b.occurred_at || b.created_at || '').localeCompare(a.occurred_at || a.created_at || ''); });
     
     container.innerHTML = data.length ? '' : '<div style="text-align:center; color:var(--text-secondary); margin-top:20px;">Sem transaÃ§Ãµes.</div>';
-    data.slice(0, 15).forEach(t => {
+    data.slice(0, 15).forEach(function(t) {
         const el = document.createElement('div');
         el.className = 'list-item glass';
         el.innerHTML = `<div class="item-main"><span class="item-title">${t.description || 'TransaÃ§Ã£o'}</span><span class="item-subtitle" style="color:${t.type==='income'?'#00b894':'#fd79a8'}">${t.type==='income'?'+':'-'} $${t.amount}</span></div>`;
@@ -273,12 +273,12 @@ async function loadFinances() {
 // New Offline Modules
 // ----------------------------------------------------
 
-async function loadShop() {
+function loadShop() {
     const container = document.getElementById('shop-list');
-    const data = LocalDB.get('nexus_rewards').filter(r => !r.is_deleted);
+    const data = LocalDB.get('nexus_rewards').filter(function(r) { return !r.is_deleted; });
     if(data.length) {
         container.innerHTML = '';
-        data.forEach(item => {
+        data.forEach(function(item) {
             const el = document.createElement('div');
             el.className = 'list-item glass';
             el.innerHTML = `
@@ -297,7 +297,7 @@ async function loadShop() {
     }
 }
 
-window.buyItem = async (id, name, cost) => {
+window.buyItem = function(id, name, cost) {
     const user = LocalDB.getSingle('nexus_user', 1);
     if (!user || user.points < cost) {
         alert("Pontos insuficientes!");
@@ -322,12 +322,12 @@ window.buyItem = async (id, name, cost) => {
     }
 };
 
-async function loadStudies() {
+function loadStudies() {
     const container = document.getElementById('studies-list');
     if(!container) return;
-    const data = LocalDB.get('study_notes').filter(t => !t.is_deleted);
+    const data = LocalDB.get('study_notes').filter(function(t) { return !t.is_deleted; });
     container.innerHTML = data.length ? '' : '<div style="text-align:center; color:var(--text-secondary); margin-top:20px;">Nenhuma nota de estudo.</div>';
-    data.forEach(t => {
+    data.forEach(function(t) {
         const el = document.createElement('div');
         el.className = 'list-item glass';
         el.innerHTML = `<div class="item-main"><span class="item-title">${t.title}</span><span class="item-subtitle">${t.subject || 'Geral'}</span></div>`;
@@ -335,12 +335,12 @@ async function loadStudies() {
     });
 }
 
-async function loadGoals() {
+function loadGoals() {
     const container = document.getElementById('goals-list');
     if(!container) return;
-    const data = LocalDB.get('nexus_goals').filter(t => !t.is_deleted && t.status !== 'achieved');
+    const data = LocalDB.get('nexus_goals').filter(function(t) { return !t.is_deleted && t.status !== 'achieved'; });
     container.innerHTML = data.length ? '' : '<div style="text-align:center; color:var(--text-secondary); margin-top:20px;">Sem metas ativas.</div>';
-    data.forEach(t => {
+    data.forEach(function(t) {
         const el = document.createElement('div');
         el.className = 'list-item glass';
         el.innerHTML = `<div class="item-main"><span class="item-title">${t.name}</span><span class="item-subtitle">Progresso: ${t.progress || 0}%</span></div>`;
@@ -348,12 +348,12 @@ async function loadGoals() {
     });
 }
 
-async function loadFitness() {
+function loadFitness() {
     const container = document.getElementById('fitness-list');
     if(!container) return;
-    const data = LocalDB.get('fitness_workouts').filter(t => !t.is_deleted);
+    const data = LocalDB.get('fitness_workouts').filter(function(t) { return !t.is_deleted; });
     container.innerHTML = data.length ? '' : '<div style="text-align:center; color:var(--text-secondary); margin-top:20px;">Nenhum treino registrado.</div>';
-    data.slice(0,10).forEach(t => {
+    data.slice(0,10).forEach(function(t) {
         const el = document.createElement('div');
         el.className = 'list-item glass';
         el.innerHTML = `<div class="item-main"><span class="item-title">${t.type}</span><span class="item-subtitle">${t.duration_minutes || 0} min | ${t.calories_burned || 0} kcal</span></div>`;
@@ -361,15 +361,15 @@ async function loadFitness() {
     });
 }
 
-window.discoverIoT = async () => {
+window.discoverIoT = function() { return; 
     const container = document.getElementById('iot-list');
     container.innerHTML = '<div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> Buscando...</div>';
     try {
-        const res = await fetch('/api/nexus/iot/discover');
-        const data = await res.json();
+        // const res = await fetch
+        // const data = await res.json()
         if (data && data.devices) {
             container.innerHTML = data.devices.length ? '' : '<div style="text-align:center; color:var(--text-secondary); margin-top:20px;">Nenhum dispositivo encontrado.</div>';
-            data.devices.forEach(dev => {
+            data.devices.forEach(function(dev) {
                 const el = document.createElement('div');
                 el.className = 'list-item glass';
                 const is_on = dev.status === "LIGADO";
@@ -399,23 +399,23 @@ function setupRealtime() {
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'nexus_user' },
-      (payload) => {
+      function(payload) {
           backgroundSync();
       }
     ).on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'tasks' },
-      (payload) => { backgroundSync(); }
+      function(payload) { backgroundSync(); }
     ).on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'habits' },
-      (payload) => { backgroundSync(); }
+      function(payload) { backgroundSync(); }
     )
     .subscribe();
 }
 
 // App Initialization
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', function() {
     // Initial UI load from LocalStorage
     loadUserStats();
     loadHabits();
@@ -432,15 +432,15 @@ document.addEventListener('DOMContentLoaded', () => {
 // ----------------------------------------------------
 // UI Preferences & Module Toggling
 // ----------------------------------------------------
-window.openSettingsModal = () => {
+window.openSettingsModal = function() {
     document.getElementById('settings-modal').classList.add('show');
 };
 
-window.closeSettingsModal = () => {
+window.closeSettingsModal = function() {
     document.getElementById('settings-modal').classList.remove('show');
 };
 
-window.toggleModule = (moduleId) => {
+window.toggleModule = function(moduleId) {
     const isChecked = document.getElementById('toggle-' + moduleId).checked;
     const prefs = JSON.parse(localStorage.getItem('nexus_ui_prefs') || '{}');
     prefs[moduleId] = isChecked;
@@ -455,7 +455,7 @@ function applyUiPrefs() {
     } catch(e) {}
     const modules = ['habits', 'finance', 'tasks', 'videos', 'shop', 'iot', 'studies', 'goals', 'fitness'];
     
-    modules.forEach(mod => {
+    modules.forEach(function(mod) {
         const isEnabled = prefs[mod] !== false; // Default true
         
         // Update checkbox
@@ -471,30 +471,30 @@ function applyUiPrefs() {
 }
 
 // Call applyUiPrefs on boot
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', function() {
     applyUiPrefs();
 });
 
 // ----------------------------------------------------
 // Quick Add Logic (FAB)
 // ----------------------------------------------------
-window.openCreateModal = () => {
+window.openCreateModal = function() {
     document.getElementById('create-title').value = '';
     document.getElementById('create-desc').value = '';
     document.getElementById('create-time').value = '08:00';
     document.getElementById('create-modal').classList.add('show');
 };
 
-window.closeCreateModal = () => {
+window.closeCreateModal = function() {
     document.getElementById('create-modal').classList.remove('show');
 };
 
-document.getElementById('create-type').addEventListener('change', (e) => {
+document.getElementById('create-type').addEventListener('change', function(e) {
     const opts = document.getElementById('habit-options');
     opts.style.display = e.target.value === 'habit' ? 'flex' : 'none';
 });
 
-window.saveQuickAdd = () => {
+window.saveQuickAdd = function() {
     const type = document.getElementById('create-type').value;
     const title = document.getElementById('create-title').value.trim();
     if (!title) {
@@ -548,14 +548,14 @@ function formatPomoTime(secs) {
     return m + ":" + s;
 }
 
-window.startPomodoro = () => {
+window.startPomodoro = function() {
     if (pomoActive) return;
     pomoActive = true;
     
     // Play a tiny beep to acknowledge start
     playBeep(400, 100);
     
-    pomoInterval = setInterval(() => {
+    pomoInterval = setInterval(function() {
         if (pomoTimeLeft > 0) {
             pomoTimeLeft--;
             document.getElementById('pomodoro-timer').innerText = formatPomoTime(pomoTimeLeft);
@@ -583,12 +583,12 @@ window.startPomodoro = () => {
     }, 1000);
 };
 
-window.pausePomodoro = () => {
+window.pausePomodoro = function() {
     pomoActive = false;
     clearInterval(pomoInterval);
 };
 
-window.resetPomodoro = () => {
+window.resetPomodoro = function() {
     pomoActive = false;
     clearInterval(pomoInterval);
     pomoTimeLeft = 25 * 60;
@@ -606,7 +606,7 @@ function playBeep(freq, duration) {
         oscillator.frequency.setValueAtTime(freq, audioCtx.currentTime);
         oscillator.connect(audioCtx.destination);
         oscillator.start();
-        setTimeout(() => oscillator.stop(), duration);
+        setTimeout(function() { oscillator.stop(); }, duration);
     } catch(e) { }
 }
 
@@ -621,13 +621,13 @@ function checkHabitAlarms() {
     
     const timeStr = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
     
-    const activeHabits = LocalDB.get('habits').filter(h => h.active === 1 && !h.is_deleted);
-    activeHabits.forEach(habit => {
+    const activeHabits = LocalDB.get('habits').filter(function(h) { return h.active === 1 && !h.is_deleted; });
+    activeHabits.forEach(function(habit) {
         if (habit.target_time && habit.target_time.substring(0, 5) === timeStr) {
             // Verifica se j foi feito hoje (simplificado, precisaria de uma checkagem real nos logs)
             sendLocalNotification('Hora do Hábito!', habit.name);
             playBeep(600, 300);
-            setTimeout(() => playBeep(600, 300), 500);
+            setTimeout(function() { playBeep(600, 300); }, 500);
         }
     });
 }
