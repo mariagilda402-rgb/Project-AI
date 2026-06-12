@@ -59,7 +59,11 @@ public class MainActivity extends Activity {
 
         android.content.SharedPreferences prefs = getSharedPreferences("NexusMobilePrefs", MODE_PRIVATE);
         int lastVersionCode = prefs.getInt("lastVersionCode", -1);
-        int currentVersionCode = BuildConfig.VERSION_CODE;
+        int currentVersionCode = 1;
+        try {
+            currentVersionCode = getPackageManager().getPackageInfo(getPackageName(), 0).versionCode;
+        } catch (Exception e) {}
+        
         if (currentVersionCode > lastVersionCode) {
             deleteRecursively(getDownloadedBundleDir());
             prefs.edit().putInt("lastVersionCode", currentVersionCode).apply();
