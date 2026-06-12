@@ -395,7 +395,7 @@ window.discoverIoT = function() { return;
 // ----------------------------------------------------
 function setupRealtime() {
     if (!supabase) return;
-    supabase.channel('custom-all-channel')
+    nexusDb.channel('custom-all-channel')
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'nexus_user' },
@@ -495,15 +495,15 @@ document.getElementById('create-type').addEventListener('change', function(e) {
 });
 
 window.saveQuickAdd = function() {
-    const type = document.getElementById('create-type').value;
-    const title = document.getElementById('create-title').value.trim();
+    var type = document.getElementById('create-type').value;
+    var title = document.getElementById('create-title').value.trim();
     if (!title) {
-        alert('O título é obrigatório.');
+        alert('O t\u00edtulo \u00e9 obrigat\u00f3rio.');
         return;
     }
 
     if (type === 'task') {
-        const newTask = {
+        var newTask = {
             id: Date.now(),
             title: title,
             completed: 0,
@@ -514,21 +514,27 @@ window.saveQuickAdd = function() {
         loadTasks();
         sendLocalNotification('Tarefa Criada', 'Sua nova tarefa foi salva offline.');
     } else {
-        const time = document.getElementById('create-time').value;
-        const desc = document.getElementById('create-desc').value;
-        const newHabit = {
+        var time = document.getElementById('create-time').value;
+        var desc = document.getElementById('create-desc').value;
+        var icon = document.getElementById('create-icon') ? document.getElementById('create-icon').value : 'fa-fire';
+        var freq = document.getElementById('create-freq') ? document.getElementById('create-freq').value : 'daily';
+        var xp = document.getElementById('create-xp') ? parseInt(document.getElementById('create-xp').value) || 50 : 50;
+        
+        var newHabit = {
             id: Date.now(),
             name: title,
             description: desc,
+            icon: icon,
+            frequency: freq,
             active: 1,
             target_time: time,
             current_streak: 0,
-            xp_reward: 50,
+            xp_reward: xp,
             created_at: new Date().toISOString()
         };
         LocalDB.upsert('habits', newHabit);
         loadHabits();
-        sendLocalNotification('Hábito Criado', 'Seu novo hábito foi salvo offline.');
+        sendLocalNotification('H\u00e1bito Criado', 'Seu novo h\u00e1bito foi salvo offline.');
     }
 
     closeCreateModal();
@@ -636,3 +642,19 @@ function checkHabitAlarms() {
 setInterval(checkHabitAlarms, 30000); // checks every 30 seconds
 
 
+
+
+window.startNexusAI = function() {
+    var cmd = prompt("Qual o seu comando para o Nexus (Gemini)?");
+    if(cmd) {
+        nexusDb.from('nexus_commands').insert([
+            { command: cmd, source: 'mobile', status: 'pending' }
+        ]).then(function(res) {
+            if(res.error) {
+                alert("Erro ao enviar comando: " + res.error.message);
+            } else {
+                alert("Comando enviado para o PC com sucesso!");
+            }
+        });
+    }
+};

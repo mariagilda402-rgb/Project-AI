@@ -65,10 +65,10 @@
             <section class="quick-actions">
                 <h3 class="section-title">AÃ§Ãµes RÃ¡pidas</h3>
                 <div class="actions-scroll">
-                    <button class="action-bubble"><i class="fa-solid fa-plus"></i><br>HÃ¡bito</button>
-                    <button class="action-bubble"><i class="fa-solid fa-wallet"></i><br>Despesa</button>
-                    <button class="action-bubble"><i class="fa-solid fa-pen"></i><br>Nota</button>
-                    <button class="action-bubble"><i class="fa-solid fa-brain"></i><br>Flashcard</button>
+                    <button class="action-bubble" onclick="openCreateModal()"><i class="fa-solid fa-plus"></i><br>Hábito</button>
+                    <button class="action-bubble" onclick="document.querySelector('.nav-item[data-target=\'view-finance\']').click();"><i class="fa-solid fa-wallet"></i><br>Despesa</button>
+                    <button class="action-bubble" onclick="document.querySelector('.nav-item[data-target=\'view-studies\']').click();"><i class="fa-solid fa-pen"></i><br>Nota</button>
+                    <button class="action-bubble" onclick="document.querySelector('.nav-item[data-target=\'view-studies\']').click();"><i class="fa-solid fa-brain"></i><br>Flashcard</button>
                 </div>
             </section>
         </div>
@@ -159,6 +159,12 @@
         </div>
     </main>
 
+    
+    <!-- Nexus AI FAB -->
+    <button class="glass" id="nexus-ai-fab" onclick="startNexusAI()" style="position: fixed; bottom: 90px; right: 20px; width: 60px; height: 60px; border-radius: 30px; background: linear-gradient(135deg, var(--accent-purple), var(--accent-blue)); color: white; border: none; box-shadow: 0 4px 15px rgba(108, 92, 231, 0.4); z-index: 999; display: flex; align-items: center; justify-content: center; font-size: 1.5rem;">
+        <i class="fa-solid fa-microphone"></i>
+    </button>
+
     <!-- Bottom Navigation -->
     <nav class="bottom-nav">
         <a href="#" class="nav-item active" data-target="view-home">
@@ -216,18 +222,33 @@
                 <button class="close-btn" onclick="closeCreateModal()"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <div class="modal-body" style="display: flex; flex-direction: column; gap: 15px;">
-                <select id="create-type" style="padding: 12px; border-radius: 8px; background: rgba(0,0,0,0.3); color: white; border: 1px solid var(--border-glass);">
-                    <option value="task">ðŸ“ Nova Tarefa</option>
-                    <option value="habit">ðŸ”„ Novo HÃ¡bito</option>
+                <select id="create-type" style="padding: 12px; border-radius: 8px; background: rgba(0,0,0,0.5); color: white; border: 1px solid var(--border-glass);">
+                    <option value="task">📝 Nova Tarefa</option>
+                    <option value="habit">🔥 Novo Hábito</option>
                 </select>
-                <input type="text" id="create-title" placeholder="Nome / TÃ­tulo" style="padding: 12px; border-radius: 8px; background: rgba(0,0,0,0.3); color: white; border: 1px solid var(--border-glass);">
+                <input type="text" id="create-title" placeholder="Nome / Título" style="padding: 12px; border-radius: 8px; background: rgba(0,0,0,0.5); color: white; border: 1px solid var(--border-glass);">
                 
                 <div id="habit-options" style="display: none; flex-direction: column; gap: 15px;">
-                    <input type="time" id="create-time" style="padding: 12px; border-radius: 8px; background: rgba(0,0,0,0.3); color: white; border: 1px solid var(--border-glass);">
-                    <input type="text" id="create-desc" placeholder="DescriÃ§Ã£o (opcional)" style="padding: 12px; border-radius: 8px; background: rgba(0,0,0,0.3); color: white; border: 1px solid var(--border-glass);">
+                    <div style="display:flex; gap:10px;">
+                        <input type="time" id="create-time" style="flex:1; padding: 12px; border-radius: 8px; background: rgba(0,0,0,0.5); color: white; border: 1px solid var(--border-glass);">
+                        <select id="create-icon" style="flex:1; padding: 12px; border-radius: 8px; background: rgba(0,0,0,0.5); color: white; border: 1px solid var(--border-glass);">
+                            <option value="fa-fire">🔥 Fogo</option>
+                            <option value="fa-dumbbell">💪 Peso</option>
+                            <option value="fa-book">📚 Livro</option>
+                            <option value="fa-droplet">💧 Água</option>
+                            <option value="fa-heart">❤️ Coração</option>
+                        </select>
+                    </div>
+                    <select id="create-freq" style="padding: 12px; border-radius: 8px; background: rgba(0,0,0,0.5); color: white; border: 1px solid var(--border-glass);">
+                        <option value="daily">Todos os Dias</option>
+                        <option value="weekdays">Dias de Semana</option>
+                        <option value="weekends">Finais de Semana</option>
+                    </select>
+                    <input type="number" id="create-xp" placeholder="Recompensa de XP (ex: 50)" style="padding: 12px; border-radius: 8px; background: rgba(0,0,0,0.5); color: white; border: 1px solid var(--border-glass);">
+                    <input type="text" id="create-desc" placeholder="Descrição (opcional)" style="padding: 12px; border-radius: 8px; background: rgba(0,0,0,0.5); color: white; border: 1px solid var(--border-glass);">
                 </div>
 
-                <button onclick="saveQuickAdd()" style="background: var(--accent-purple); color: white; padding: 14px; border: none; border-radius: 12px; font-weight: 800; font-size: 1.1rem; margin-top: 10px;">SALVAR</button>
+                <button onclick="saveQuickAdd()" style="background: linear-gradient(135deg, var(--accent-purple), var(--accent-blue)); color: white; padding: 14px; border: none; border-radius: 12px; font-weight: 800; font-size: 1.1rem; margin-top: 10px; box-shadow: 0 0 15px rgba(108,92,231,0.5);">SALVAR</button>
             </div>
         </div>
     </div>
