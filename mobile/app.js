@@ -139,14 +139,25 @@ function requestNotificationPermission() {
 }
 
 function sendLocalNotification(title, body) {
-    if (Notification.permission === "granted") {
-        navigator.serviceWorker.ready.then(function(registration) {
-            registration.showNotification(title, {
-                body: body,
-                icon: 'https://cdn-icons-png.flaticon.com/512/8244/8244509.png',
-                vibrate: [200, 100, 200]
+    // Use native bridge if available (WebView Android)
+    if (window.AndroidNative && window.AndroidNative.showNotification) {
+        window.AndroidNative.showNotification(title, body);
+        return;
+    }
+    // Fallback: Web Notification API (only works in browser, not file:// WebView)
+    if (typeof Notification !== 'undefined' && Notification.permission === "granted") {
+        try {
+            navigator.serviceWorker.ready.then(function(registration) {
+                registration.showNotification(title, {
+                    body: body,
+                    icon: 'https://cdn-icons-png.flaticon.com/512/8244/8244509.png',
+                    vibrate: [200, 100, 200]
+                });
             });
-        });
+        } catch(e) { console.log('SW notification not available:', e); }
+    } else {
+        // Last resort: in-app banner
+        showInAppNotification(title + ': ' + body);
     }
 }
 
@@ -1219,9 +1230,10 @@ window.copyToPcClipboard = function(text) {
 // ====================================================
 // PHASE 13: PC → Mobile Push Notifications
 // ====================================================
-// Poll Supabase every 20s for commands directed at mobile
+// Poll Supabase every 20s (when active) or 60s (when hidden) for commands directed at mobile
 setInterval(function() {
     if (!nexusDb || !navigator.onLine) return;
+    if (document.hidden) return; // Save battery when screen is off / app in background
     nexusDb.from('nexus_commands')
         .select('*')
         .eq('status', 'pending')
@@ -1267,19 +1279,42 @@ function showInAppNotification(msg) {
 (function initGeoFencing() {
     if (!navigator.geolocation) return;
     
-    // Check position every 5 minutes
-    setInterval(function() {
+    var lastLat = null;
+    var lastLon = null;
+    var MIN_DISTANCE_METERS = 200; // Only report if moved more than 200m
+
+    function distanceMeters(lat1, lon1, lat2, lon2) {
+        var R = 6371000;
+        var dLat = (lat2 - lat1) * Math.PI / 180;
+        var dLon = (lon2 - lon1) * Math.PI / 180;
+        var a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLon/2) * Math.sin(dLon/2);
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    }
+
+    function checkAndReport() {
+        if (document.hidden) return; // Don't use GPS when screen is off
         navigator.geolocation.getCurrentPosition(function(pos) {
+            var lat = pos.coords.latitude;
+            var lon = pos.coords.longitude;
+
+            // Only send update if location changed significantly
+            if (lastLat !== null && distanceMeters(lastLat, lastLon, lat, lon) < MIN_DISTANCE_METERS) {
+                return;
+            }
+            lastLat = lat;
+            lastLon = lon;
+
             var geoData = {
-                lat: pos.coords.latitude,
-                lon: pos.coords.longitude,
+                lat: lat,
+                lon: lon,
                 accuracy: pos.coords.accuracy,
                 timestamp: new Date().toISOString(),
                 device: 'mobile'
             };
             localStorage.setItem('nexus_last_location', JSON.stringify(geoData));
 
-            // Send to Supabase for PC to check geofences
             if (nexusDb) {
                 nexusDb.from('nexus_commands').insert([{
                     command: 'GPS_UPDATE: ' + JSON.stringify(geoData),
@@ -1288,10 +1323,12 @@ function showInAppNotification(msg) {
                 }]).then(function() {});
             }
         }, function(err) {
-            // Silently fail if user denies location
             console.log('Geo not available:', err.message);
         }, { timeout: 10000, maximumAge: 300000 });
-    }, 300000); // every 5 minutes
+    }
+
+    // Check every 5 minutes
+    setInterval(checkAndReport, 300000);
 })();
 
 // Kick off geo on startup too (after 3s delay to not overwhelm init)

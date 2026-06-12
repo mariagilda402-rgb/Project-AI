@@ -106,7 +106,8 @@ public class MainActivity extends Activity {
     private void configureWebView() {
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
-        settings.setDomStorageEnabled(true);
+        webView.addJavascriptInterface(new NexusAndroidBridge(), "NexusAndroid");
+        webView.addJavascriptInterface(new WebAppInterface(), "AndroidNative");
         settings.setDefaultTextEncodingName("utf-8");
         settings.setCacheMode(WebSettings.LOAD_DEFAULT);
         settings.setAllowFileAccess(true);
@@ -123,7 +124,7 @@ public class MainActivity extends Activity {
         cookieManager.setAcceptCookie(true);
         cookieManager.setAcceptThirdPartyCookies(webView, true);
 
-        webView.addJavascriptInterface(new NexusAndroidBridge(), "NexusAndroid");
+        settings.setDomStorageEnabled(true);
 
         webView.setWebViewClient(new WebViewClient() {
             @Override
@@ -186,6 +187,17 @@ public class MainActivity extends Activity {
         }
         if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
             missing.add(Manifest.permission.CAMERA);
+        }
+        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            missing.add(Manifest.permission.ACCESS_FINE_LOCATION);
+        }
+        if (checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            missing.add(Manifest.permission.ACCESS_COARSE_LOCATION);
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                missing.add(Manifest.permission.POST_NOTIFICATIONS);
+            }
         }
 
         if (!missing.isEmpty()) {
@@ -383,10 +395,6 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface
-        
-        @JavascriptInterface
-        
-        @JavascriptInterface
         public void showNotification(String title, String message) {
             runOnUiThread(() -> {
                 String channelId = "nexus_alert_channel";
@@ -406,6 +414,7 @@ public class MainActivity extends Activity {
             });
         }
 
+        @JavascriptInterface
         public void openNativeCamera() {
             runOnUiThread(() -> {
                 Intent takePictureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
@@ -417,6 +426,7 @@ public class MainActivity extends Activity {
             });
         }
 
+        @JavascriptInterface
         public void stopJarvisCall() {
             runOnUiThread(() -> {
                 Intent serviceIntent = new Intent(MainActivity.this, JarvisCallService.class);

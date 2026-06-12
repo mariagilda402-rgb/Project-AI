@@ -243,7 +243,7 @@
             </div>
 
             <!-- Flashcards Tinder View (Hidden) -->
-            <div id="flashcard-view" style="display:none; position:absolute; top:0; left:0; width:100%; height:calc(100vh - 120px); z-index:10; padding:20px; display:none; flex-direction:column; gap:15px;">
+            <div id="flashcard-view" style="display:none; position:absolute; top:0; left:0; width:100%; height:calc(100vh - 120px); z-index:10; padding:20px; flex-direction:column; gap:15px;">
                 <div style="display:flex; justify-content:space-between; align-items:center;">
                     <button onclick="closeFlashcards()" style="background:none; border:none; color:white; font-size:1.5rem;"><i class="fa-solid fa-arrow-left"></i></button>
                     <h3 style="margin:0; color:white;">Flashcards</h3>
@@ -359,7 +359,7 @@
             <i class="fa-solid fa-lightbulb"></i>
             <span>Casa</span>
         </a>
-        <a href="#" class="nav-item" onclick="openJournal(); return false;">
+        <a href="#" class="nav-item" data-target="view-studies" id="nav-journal" onclick="setTimeout(openJournal, 50)">
             <i class="fa-solid fa-book-open"></i>
             <span>Diário</span>
         </a>
