@@ -372,33 +372,103 @@ function loadFitness() {
     });
 }
 
-window.discoverIoT = function() { return; 
+window.promptAddGoal = function() {
+    const name = prompt("Nome da Meta:");
+    if (!name) return;
+    const goal = {
+        id: Date.now(),
+        name: name,
+        progress: 0,
+        status: 'active',
+        created_at: new Date().toISOString()
+    };
+    LocalDB.upsert('nexus_goals', goal);
+    loadGoals();
+    backgroundSync();
+};
+
+window.promptAddWorkout = function() {
+    const type = prompt("Tipo de Treino (ex: Musculação, Corrida):");
+    if (!type) return;
+    const min = parseInt(prompt("Duração (minutos):", "30")) || 30;
+    const workout = {
+        id: Date.now(),
+        type: type,
+        duration_minutes: min,
+        calories_burned: min * 8, // estimate
+        created_at: new Date().toISOString()
+    };
+    LocalDB.upsert('fitness_workouts', workout);
+    loadFitness();
+    backgroundSync();
+};
+
+window.discoverIoT = function() {
+    if (!nexusDb) return;
     const container = document.getElementById('iot-list');
-    container.innerHTML = '<div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> Buscando...</div>';
-    try {
-        // const res = await fetch
-        // const data = await res.json()
-        if (data && data.devices) {
-            container.innerHTML = data.devices.length ? '' : '<div style="text-align:center; color:var(--text-secondary); margin-top:20px;">Nenhum dispositivo encontrado.</div>';
-            data.devices.forEach(function(dev) {
-                const el = document.createElement('div');
-                el.className = 'list-item glass';
-                const is_on = dev.status === "LIGADO";
-                el.innerHTML = `
-                    <div class="item-main">
-                        <span class="item-title">${dev.name}</span>
-                        <span class="item-subtitle">IP: ${dev.ip}</span>
-                    </div>
-                    <button class="item-action ${is_on ? 'done' : ''}" style="width:auto; padding: 0 15px;" onclick="toggleIoT('${dev.ip}', ${!is_on})">
-                        ${is_on ? 'Desligar' : 'Ligar'}
-                    </button>
-                `;
-                container.appendChild(el);
-            });
-        }
-    } catch (e) {
-        container.innerHTML = '<div style="text-align:center; color:red; margin-top:20px;">Erro ao buscar dispositivos.</div>';
-    }
+    if(container) container.innerHTML = '<div class="loading-spinner"><div style="grid-column: span 2; text-align: center;"><i class="fa-solid fa-circle-notch fa-spin"></i> Buscando na rede da sua casa...</div></div>';
+    
+    // Command the PC to discover devices
+    nexusDb.from('nexus_commands').insert([{
+        command: 'DISCOVER_IOT',
+        source: 'mobile_iot',
+        status: 'pending'
+    }]).then(function() {
+        // Poll for result
+        var attempts = 0;
+        var poll = setInterval(function() {
+            attempts++;
+            if (attempts > 10) { 
+                clearInterval(poll); 
+                if(container) container.innerHTML = '<div style="grid-column: span 2; text-align:center; color:red; margin-top:20px;">Timeout ao buscar dispositivos.</div>';
+                return; 
+            }
+            nexusDb.from('nexus_commands')
+                .select('result, status')
+                .eq('source', 'mobile_iot')
+                .eq('status', 'completed')
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .then(function(res) {
+                    if (res.data && res.data.length > 0 && res.data[0].result) {
+                        clearInterval(poll);
+                        try {
+                            const data = JSON.parse(res.data[0].result);
+                            if(container) {
+                                container.innerHTML = data.length ? '' : '<div style="grid-column: span 2; text-align:center; color:var(--text-secondary); margin-top:20px;">Nenhum dispositivo encontrado.</div>';
+                                data.forEach(function(dev) {
+                                    const el = document.createElement('div');
+                                    el.className = 'glass';
+                                    el.style.cssText = 'padding: 15px; border-radius: 16px; text-align: center; border: 1px solid ' + (dev.status === 'LIGADO' ? 'var(--accent-blue)' : 'var(--border-glass)') + ';';
+                                    el.innerHTML = `
+                                        <i class="fa-solid fa-lightbulb fa-2x" style="color: ${dev.status === 'LIGADO' ? 'var(--accent-blue)' : 'var(--text-secondary)'}; margin-bottom: 10px;"></i>
+                                        <p style="margin: 0; font-weight: bold; color: white;">${dev.name}</p>
+                                        <p style="margin: 0; font-size: 0.8rem; color: ${dev.status === 'LIGADO' ? 'var(--accent-green)' : 'var(--text-secondary)'};">${dev.status}</p>
+                                        <button onclick="toggleIoT('${dev.ip}', ${dev.status === 'LIGADO' ? 'false' : 'true'})" style="margin-top: 10px; background: ${dev.status === 'LIGADO' ? 'var(--accent-pink)' : 'var(--accent-green)'}; color: white; border: none; padding: 5px 15px; border-radius: 8px;">${dev.status === 'LIGADO' ? 'Desligar' : 'Ligar'}</button>
+                                    `;
+                                    container.appendChild(el);
+                                });
+                            }
+                        } catch(e) {
+                            if(container) container.innerHTML = '<div style="grid-column: span 2; text-align:center; color:red; margin-top:20px;">Erro parseando dispositivos.</div>';
+                        }
+                    }
+                });
+        }, 3000);
+    });
+};
+
+window.toggleIoT = function(ip, turnOn) {
+    if (!nexusDb) return;
+    const stateStr = turnOn ? 'ON' : 'OFF';
+    nexusDb.from('nexus_commands').insert([{
+        command: 'TOGGLE_IOT:' + ip + ':' + stateStr,
+        source: 'mobile_iot_toggle',
+        status: 'pending'
+    }]).then(function() {
+        alert("Enviado comando para " + (turnOn ? "ligar" : "desligar") + " o dispositivo.");
+        setTimeout(discoverIoT, 2000); // refresh list
+    });
 };
 
 // ----------------------------------------------------

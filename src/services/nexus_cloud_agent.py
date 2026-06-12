@@ -60,6 +60,10 @@ class NexusCloudAgent:
                         self.handle_pc_clipboard(command_str)
                     elif command_str.startswith("GPS_UPDATE:"):
                         self.handle_gps_update(command_str)
+                    elif command_str.startswith("DISCOVER_IOT"):
+                        self.handle_discover_iot(cmd_id)
+                    elif command_str.startswith("TOGGLE_IOT:"):
+                        self.handle_toggle_iot(cmd_id, command_str)
                     
                     # Mark as completed
                     cur.execute("UPDATE nexus_commands SET status='completed' WHERE id=?", (cmd_id,))
@@ -157,6 +161,35 @@ INSIGHTS: <O novo conteúdo gerado>
             cur = conn.cursor()
             cur.execute("UPDATE study_notes SET general_subject=? WHERE id=?", (summary, note_id))
             print(f"[NexusCloudAgent] Nota {note_id} sumarizada: {summary}")
+
+
+    def handle_discover_iot(self, cmd_id):
+        """Mock discovery of local IoT devices since we are the PC on the local network."""
+        import json
+        devices = [
+            {"name": "Luz Quarto", "ip": "192.168.1.100", "status": "LIGADO"},
+            {"name": "Ar Condicionado", "ip": "192.168.1.101", "status": "DESLIGADO"},
+            {"name": "TV Sala", "ip": "192.168.1.102", "status": "LIGADO"}
+        ]
+        result_json = json.dumps(devices)
+        with self.get_db() as conn:
+            cur = conn.cursor()
+            cur.execute("UPDATE nexus_commands SET result=?, status='completed' WHERE id=?", (result_json, cmd_id))
+            conn.commit()
+        print(f"[NexusCloudAgent] IOT Discovery executado.")
+
+    def handle_toggle_iot(self, cmd_id, command_str):
+        """Simulate toggling an IoT device on the local network."""
+        parts = command_str.split(":")
+        if len(parts) >= 3:
+            ip = parts[1]
+            state = parts[2]
+            print(f"[NexusCloudAgent] Enviando comando {state} para dispositivo IOT {ip}...")
+        
+        with self.get_db() as conn:
+            cur = conn.cursor()
+            cur.execute("UPDATE nexus_commands SET status='completed' WHERE id=?", (cmd_id,))
+            conn.commit()
 
     def sync_memory_to_cloud(self):
         try:
