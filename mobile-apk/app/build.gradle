@@ -5,6 +5,10 @@ plugins {
 android {
     namespace 'com.nexus.mobile'
     compileSdk 34
+    
+    buildFeatures {
+        buildConfig true
+    }
 
     defaultConfig {
         applicationId "com.nexus.mobile"
