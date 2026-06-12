@@ -6,9 +6,9 @@ window.onerror = function(msg, url, line, col, error) {
 // Supabase Configuration
 const supabaseUrl = 'https://oxwpwfhjyiiwdhcggtlt.supabase.co';
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im94d3B3ZmhqeWlpd2RoY2dndGx0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODExMzA3NjAsImV4cCI6MjA5NjcwNjc2MH0.mIOis8ugOlubw2P6Z8_TuNeLukvltsXAlPb-ttaaOpY';
-let supabase = null;
+var nexusDb = null;
 if (window.supabase) {
-    supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+    nexusDb = window.supabase.createClient(supabaseUrl, supabaseKey);
 } else {
     console.warn("Supabase client not loaded. Running in full offline mode.");
 }
