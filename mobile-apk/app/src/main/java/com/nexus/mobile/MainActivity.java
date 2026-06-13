@@ -105,6 +105,54 @@ public class MainActivity extends Activity {
 
         webView.setBackgroundColor(Color.parseColor("#0d0d12"));
         loadBestAvailableApp();
+        handleOAuthIntent(getIntent());
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        handleOAuthIntent(intent);
+    }
+
+    private void handleOAuthIntent(Intent intent) {
+        if (intent == null || intent.getData() == null || webView == null) {
+            return;
+        }
+        Uri uri = intent.getData();
+        if (!"com.nexus.mobile".equals(uri.getScheme()) || !"auth".equals(uri.getHost())) {
+            return;
+        }
+        final String callbackUrl = uri.toString();
+        webView.post(() -> {
+            String escaped = callbackUrl
+                .replace("\\", "\\\\")
+                .replace("'", "\\'")
+                .replace("\n", "")
+                .replace("\r", "");
+            webView.evaluateJavascript(
+                "if(window.handleOAuthCallback){window.handleOAuthCallback('" + escaped + "');}",
+                null
+            );
+        });
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQUEST_IMAGE_CAPTURE && resultCode == RESULT_OK && data != null) {
+            android.os.Bundle extras = data.getExtras();
+            if (extras != null) {
+                Bitmap imageBitmap = (Bitmap) extras.get("data");
+                if (imageBitmap != null) {
+                    ByteArrayOutputStream stream = new ByteArrayOutputStream();
+                    imageBitmap.compress(Bitmap.CompressFormat.JPEG, 80, stream);
+                    String base64 = Base64.encodeToString(stream.toByteArray(), Base64.NO_WRAP);
+                    String js = "javascript:if(window.onNativeCameraResult) window.onNativeCameraResult('data:image/jpeg;base64," + base64 + "');";
+                    webView.evaluateJavascript(js, null);
+                }
+            }
+        }
     }
 
     private void configureWebView() {
@@ -313,7 +361,25 @@ public class MainActivity extends Activity {
     public class NexusAndroidBridge {
         @JavascriptInterface
         public String getShellInfo() {
-            return "{\"nativeShell\":true,\"platform\":\"android\",\"version\":\"1.0\"}";
+            return "{\"nativeShell\":true,\"platform\":\"android\",\"version\":\"1.2\"}";
+        }
+
+        @JavascriptInterface
+        public String getOAuthRedirect() {
+            return "com.nexus.mobile://auth/callback";
+        }
+
+        @JavascriptInterface
+        public void openOAuthUrl(String url) {
+            runOnUiThread(() -> {
+                try {
+                    Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    startActivity(intent);
+                } catch (Exception e) {
+                    Toast.makeText(MainActivity.this, "Não foi possível abrir login: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                }
+            });
         }
 
         @JavascriptInterface

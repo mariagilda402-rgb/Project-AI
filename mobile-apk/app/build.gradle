@@ -2,6 +2,8 @@ plugins {
     id 'com.android.application'
 }
 
+def mobileWebDir = file("../../mobile")
+
 android {
     namespace 'com.nexus.mobile'
     compileSdk 34
@@ -14,8 +16,8 @@ android {
         applicationId "com.nexus.mobile"
         minSdk 23
         targetSdk 34
-        versionCode 3
-        versionName "1.2"
+        versionCode 4
+        versionName "1.3"
     }
 
     buildTypes {
@@ -38,3 +40,12 @@ android {
 dependencies {
     implementation 'androidx.core:core:1.12.0'
 }
+
+tasks.register("copyMobileWebAssets", Copy) {
+    from(mobileWebDir) {
+        include "index.html", "app.js", "style.css", "manifest.json", "sw.js", "version.json"
+    }
+    into layout.projectDirectory.dir("src/main/assets")
+}
+
+preBuild.dependsOn(tasks.named("copyMobileWebAssets"))

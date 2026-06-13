@@ -107,6 +107,20 @@ def test_mobile_no_literal_backslash_n_in_html():
     assert "\\n        <div" not in html
 
 
+def test_mobile_exposes_oauth_handlers():
+    app_js = read_app_js()
+    assert "window.handleOAuthCallback" in app_js
+    assert "getOAuthRedirectUrl" in app_js
+    assert "exchangeCodeForSession" in app_js
+    assert "window.triggerOcrCamera" in app_js
+
+
+def test_mobile_apk_has_oauth_deep_link():
+    manifest = (ROOT / "mobile-apk" / "app" / "src" / "main" / "AndroidManifest.xml").read_text(encoding="utf-8")
+    assert 'android:scheme="com.nexus.mobile"' in manifest
+    assert "singleTask" in manifest
+
+
 def test_mobile_loaders_guard_missing_containers():
     app_js = read_app_js()
     for loader in ["loadVideos", "loadShop", "loadGoals", "loadFitness"]:

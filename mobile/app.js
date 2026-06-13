@@ -4048,20 +4048,68 @@ function updateSettingsUI() {
     }
 }
 
+function getOAuthRedirectUrl() {
+    if (window.NexusAndroid && typeof window.NexusAndroid.getOAuthRedirect === 'function') {
+        return window.NexusAndroid.getOAuthRedirect();
+    }
+    if (window.location.protocol === 'file:') {
+        return 'com.nexus.mobile://auth/callback';
+    }
+    return window.location.origin + window.location.pathname;
+}
+
+window.handleOAuthCallback = async function(callbackUrl) {
+    if (!window.nexusSupabase || !callbackUrl) return;
+    try {
+        const parsed = new URL(callbackUrl.replace('com.nexus.mobile://', 'https://local/'));
+        const code = parsed.searchParams.get('code');
+        if (code) {
+            const { error } = await window.nexusSupabase.auth.exchangeCodeForSession(code);
+            if (error) showToast('Erro OAuth: ' + error.message);
+            else {
+                showToast('Login realizado com sucesso!');
+                if (typeof forceSyncData === 'function') forceSyncData();
+            }
+            return;
+        }
+        const hashIdx = callbackUrl.indexOf('#');
+        if (hashIdx > -1) {
+            const hashParams = new URLSearchParams(callbackUrl.substring(hashIdx + 1));
+            const access_token = hashParams.get('access_token');
+            const refresh_token = hashParams.get('refresh_token');
+            if (access_token && refresh_token) {
+                const { error } = await window.nexusSupabase.auth.setSession({ access_token, refresh_token });
+                if (error) showToast('Erro OAuth: ' + error.message);
+                else showToast('Login realizado com sucesso!');
+            }
+        }
+    } catch (e) {
+        console.error('OAuth callback error:', e);
+        showToast('Falha ao processar login.');
+    }
+};
+
 async function loginWithGoogle() {
     if (!window.nexusSupabase) {
         showToast("Servidor indisponível (Offline).");
         return;
     }
-    const redirectTo = (window.location.protocol === 'file:')
-        ? 'com.nexus.mobile://auth/callback'
-        : (window.location.origin + window.location.pathname);
-    const { error } = await window.nexusSupabase.auth.signInWithOAuth({
+    const redirectTo = getOAuthRedirectUrl();
+    const useExternalBrowser = !!(window.NexusAndroid && typeof window.NexusAndroid.openOAuthUrl === 'function');
+    const { data, error } = await window.nexusSupabase.auth.signInWithOAuth({
         provider: 'google',
-        options: { redirectTo }
+        options: {
+            redirectTo,
+            skipBrowserRedirect: useExternalBrowser
+        }
     });
     if (error) {
         showToast("Erro no login: " + error.message);
+        return;
+    }
+    if (useExternalBrowser && data?.url) {
+        window.NexusAndroid.openOAuthUrl(data.url);
+        showToast("Complete o login no navegador...");
     }
 }
 
@@ -4089,6 +4137,32 @@ function forceSyncData() {
 
 window.forceSyncData = forceSyncData;
 window.loginWithGoogle = loginWithGoogle;
+window.logoutGoogle = logoutGoogle;
+window.handleOAuthCallback = window.handleOAuthCallback;
+
+window.triggerOcrCamera = function() {
+    if (window.AndroidNative && typeof window.AndroidNative.openNativeCamera === 'function') {
+        window.AndroidNative.openNativeCamera();
+        showToast('Abrindo câmera...');
+    } else {
+        showToast('Câmera disponível apenas no app Android.');
+    }
+};
+
+window.onNativeCameraResult = function(dataUrl) {
+    if (!dataUrl) return;
+    const editor = document.getElementById('note-content-rich');
+    if (editor) {
+        const img = document.createElement('img');
+        img.src = dataUrl;
+        img.style.maxWidth = '100%';
+        img.style.borderRadius = '8px';
+        editor.appendChild(img);
+        showToast('Foto inserida na nota.');
+    } else {
+        showToast('Foto capturada — abra o editor de notas para inserir.');
+    }
+};
 
 // ─── Settings: Appearance & Local Data ───────────────────────────
 
