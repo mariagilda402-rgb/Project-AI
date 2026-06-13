@@ -4,6 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
     <title>Nexus Mobile</title>
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#0d0d12">
@@ -116,6 +117,22 @@
             </div>
         </section>
 
+            <!-- Tab Hoje: briefing + checklist -->
+            <section class="glass" id="hoje-panel" style="margin-bottom:16px;padding:16px;border-radius:16px">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+                    <h3 class="section-title" style="margin:0"><i class="fa-solid fa-sun"></i> Hoje</h3>
+                    <span id="hoje-date-label" style="font-size:0.75rem;color:var(--text-secondary)"></span>
+                </div>
+                <p id="hoje-briefing-text" style="margin:0 0 12px;font-size:0.9rem;color:var(--text-secondary);line-height:1.4">Carregando seu dia...</p>
+                <div id="hoje-habits-checklist" style="display:flex;flex-direction:column;gap:8px"></div>
+                <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+                    <button class="study-chip" onclick="navigateTo('view-studies')"><i class="fa-solid fa-brain"></i> SRS</button>
+                    <button class="study-chip" onclick="navigateTo('view-routines')"><i class="fa-solid fa-list-check"></i> Rotina</button>
+                    <button class="study-chip" onclick="navigateTo('view-studies');setTimeout(openQuiz,300)"><i class="fa-solid fa-bolt"></i> Quiz</button>
+                    <button class="study-chip" onclick="requestMorningBriefing()"><i class="fa-solid fa-robot"></i> Briefing</button>
+                </div>
+            </section>
+
             <!-- Quick Action Area -->
             <section class="quick-actions">
                 <h3 class="section-title">Ações Rápidas</h3>
@@ -162,10 +179,11 @@
         <!-- Habits View -->
                 <!-- FASE 3: HABITS -->
         <div id="view-habits" class="view" style="position:relative;overflow:hidden">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+            <div class="view-header">
                 <h2 class="page-title" style="margin-bottom:0">Habitos</h2>
-                <div style="display:flex;gap:8px">
-                    <button class="icon-btn" onclick="promptAddHabit()"><i class="fa-solid fa-plus"></i></button>
+                <div class="view-header-actions">
+                    <button class="icon-btn calendar-btn" onclick="NexusCalendar.open({module:'habits',onSelect:function(){loadHabits();}})" title="Calendario"><i class="fa-solid fa-calendar"></i> <span id="habits-date-label">Hoje</span></button>
+                    <button class="icon-btn" onclick="openHabitForm()" title="Novo habito"><i class="fa-solid fa-plus"></i></button>
                 </div>
             </div>
 
@@ -194,44 +212,54 @@
 
             <div id="habits-list" class="list-container" style="padding-bottom:80px"></div>
 
-            <!-- Habit Detail Modal (hidden) -->
+            <!-- Habit Detail Modal (full CRUD form) -->
             <div id="habit-detail-modal" class="bottom-sheet" style="display:none">
                 <div class="bottom-sheet-content glass">
                     <div class="bottom-sheet-handle"></div>
-                    <div style="display:flex;justify-content:space-between;align-items:flex-start">
-                        <h3 id="habit-detail-name" style="margin:0;font-size:1.4rem;color:var(--accent-primary)">Nome</h3>
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+                        <h3 id="habit-form-title" style="margin:0;font-size:1.1rem">Habito</h3>
                         <button onclick="closeHabitDetail()" class="icon-btn"><i class="fa-solid fa-xmark"></i></button>
                     </div>
-                    
-                    <div style="display:flex;gap:12px;margin:20px 0">
-                        <div class="glass" style="flex:1;padding:12px;text-align:center;border-radius:12px">
-                            <div style="font-size:1.6rem;font-weight:800;color:#f97316" id="habit-detail-streak">0</div>
-                            <div style="font-size:0.7rem;color:var(--text-secondary)">Streak atual</div>
-                        </div>
-                        <div class="glass" style="flex:1;padding:12px;text-align:center;border-radius:12px">
-                            <div style="font-size:1.6rem;font-weight:800;color:var(--accent-green)" id="habit-detail-total">0</div>
-                            <div style="font-size:0.7rem;color:var(--text-secondary)">Vezes total</div>
+                    <div class="form-field"><label>Nome</label><input type="text" id="habit-form-name" placeholder="Ex: Meditar 10 min"></div>
+                    <div class="form-field"><label>Descricao</label><input type="text" id="habit-form-desc" placeholder="Opcional"></div>
+                    <div style="display:flex;gap:10px">
+                        <div class="form-field" style="flex:1"><label>XP</label><input type="number" id="habit-form-xp" value="50" min="1"></div>
+                        <div class="form-field" style="flex:1"><label>Periodo</label>
+                            <select id="habit-form-period"><option value="morning">Manha</option><option value="afternoon">Tarde</option><option value="night">Noite</option><option value="all">Qualquer</option></select>
                         </div>
                     </div>
-
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.1)">
-                        <div style="display:flex;align-items:center;gap:10px">
-                            <i class="fa-solid fa-bell" style="color:var(--text-secondary)"></i>
-                            <span style="font-size:0.9rem">Lembrete diario</span>
-                        </div>
-                        <input type="time" id="habit-alarm-time" style="background:rgba(255,255,255,0.1);border:none;color:white;padding:6px 10px;border-radius:8px" onchange="saveHabitAlarm()">
+                    <label class="form-label-sm">Dias da Semana</label>
+                    <div class="dow-row" id="habit-form-dow">
+                        <button type="button" class="dow-btn" data-d="0">D</button>
+                        <button type="button" class="dow-btn selected" data-d="1">S</button>
+                        <button type="button" class="dow-btn selected" data-d="2">T</button>
+                        <button type="button" class="dow-btn selected" data-d="3">Q</button>
+                        <button type="button" class="dow-btn selected" data-d="4">Q</button>
+                        <button type="button" class="dow-btn selected" data-d="5">S</button>
+                        <button type="button" class="dow-btn" data-d="6">S</button>
                     </div>
-
-                    <div style="margin-top:24px;display:flex;gap:10px">
-                        <button onclick="deleteCurrentHabit()" style="flex:1;background:rgba(255,71,87,0.15);border:1px solid var(--accent-pink);color:var(--accent-pink);padding:14px;border-radius:12px;font-weight:700"><i class="fa-solid fa-trash"></i> Excluir</button>
-                        <button id="habit-detail-complete-btn" onclick="completeCurrentHabit()" style="flex:2;background:var(--accent-primary);border:none;color:white;padding:14px;border-radius:12px;font-weight:700"><i class="fa-solid fa-check"></i> Feito Hoje</button>
+                    <div class="form-field" style="margin-top:12px"><label>Lembrete</label><input type="time" id="habit-alarm-time"></div>
+                    <div style="display:flex;gap:8px;align-items:center;margin:12px 0;padding:10px;background:rgba(255,255,255,0.04);border-radius:10px">
+                        <div style="flex:1;text-align:center"><div style="font-size:1.4rem;font-weight:800;color:#f97316" id="habit-detail-streak">0</div><div style="font-size:0.7rem;color:var(--text-secondary)">Streak</div></div>
+                        <div style="flex:1;text-align:center"><div style="font-size:1.4rem;font-weight:800;color:var(--accent-green)" id="habit-detail-total">0</div><div style="font-size:0.7rem;color:var(--text-secondary)">Total</div></div>
+                    </div>
+                    <div style="display:flex;gap:10px;margin-top:16px">
+                        <button onclick="deleteCurrentHabit()" style="flex:1;background:rgba(255,71,87,0.15);border:1px solid var(--accent-pink);color:var(--accent-pink);padding:14px;border-radius:12px;font-weight:700"><i class="fa-solid fa-trash"></i></button>
+                        <button onclick="saveHabitForm()" style="flex:2;background:var(--accent-primary);border:none;color:white;padding:14px;border-radius:12px;font-weight:700">Salvar</button>
+                        <button id="habit-detail-complete-btn" onclick="completeCurrentHabit()" style="flex:2;background:rgba(255,255,255,0.1);border:none;color:white;padding:14px;border-radius:12px;font-weight:700"><i class="fa-solid fa-check"></i> Feito</button>
                     </div>
                 </div>
             </div>
         </div>
 
         <div id="view-finance" class="view">
-            <h2 class="page-title">Finanças</h2>
+            <div class="view-header">
+                <h2 class="page-title" style="margin-bottom:0">Financas</h2>
+                <div class="view-header-actions">
+                    <button class="icon-btn calendar-btn" onclick="NexusCalendar.open({module:'finance',onSelect:function(){loadFinances();}})"><i class="fa-solid fa-calendar"></i> <span id="finance-date-label">Hoje</span></button>
+                    <button class="icon-btn" onclick="openFinanceOverflow(event)" title="Mais"><i class="fa-solid fa-ellipsis-vertical"></i></button>
+                </div>
+            </div>
 
             <!-- Finance Analytics Dashboard -->
             <div class="glass" style="margin-bottom:16px;padding:15px;border-radius:16px">
@@ -255,11 +283,12 @@
         <!-- Tasks View -->
                 <!-- FASE 4: TASKS -->
         <div id="view-tasks" class="view" style="position:relative;overflow:hidden">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+            <div class="view-header">
                 <h2 class="page-title" style="margin-bottom:0">Tarefas</h2>
-                <div style="display:flex;gap:8px">
-                    <button class="icon-btn" onclick="toggleTaskKanban()"><i class="fa-solid fa-table-columns"></i></button>
-                    <button class="icon-btn" onclick="promptAddTask()"><i class="fa-solid fa-plus"></i></button>
+                <div class="view-header-actions">
+                    <button class="icon-btn calendar-btn" onclick="NexusCalendar.open({module:'tasks',onSelect:function(){loadTasks();}})"><i class="fa-solid fa-calendar"></i> <span id="tasks-date-label">Hoje</span></button>
+                    <button class="icon-btn" onclick="openTaskForm()" title="Nova tarefa"><i class="fa-solid fa-plus"></i></button>
+                    <button class="icon-btn" onclick="toggleTaskKanban()" title="Kanban"><i class="fa-solid fa-table-columns"></i></button>
                 </div>
             </div>
 
@@ -295,28 +324,36 @@
                 <div class="bottom-sheet-content glass">
                     <div class="bottom-sheet-handle"></div>
                     <input type="text" id="task-detail-name" style="width:100%;background:none;border:none;color:white;font-size:1.4rem;font-weight:700;margin-bottom:10px;font-family:inherit" onchange="saveTaskDetail()">
-                    
-                    <div style="display:flex;gap:10px;margin-bottom:20px">
+                    <textarea id="task-detail-description" placeholder="Descricao..." rows="2" style="width:100%;background:rgba(255,255,255,0.05);border:1px solid var(--border-glass);color:white;padding:10px;border-radius:8px;font-family:inherit;margin-bottom:12px;resize:none" onchange="saveTaskDetail()"></textarea>
+                    <div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap">
                         <select id="task-detail-priority" style="background:rgba(255,255,255,0.1);color:white;border:none;padding:6px 12px;border-radius:8px;font-size:0.85rem" onchange="saveTaskDetail()">
-                            <option value="low">Baixa Prioridade</option>
-                            <option value="medium">Media Prioridade</option>
-                            <option value="high">Alta Prioridade 🔥</option>
+                            <option value="low">Baixa</option>
+                            <option value="medium">Media</option>
+                            <option value="high">Alta</option>
+                        </select>
+                        <select id="task-detail-status" style="background:rgba(255,255,255,0.1);color:white;border:none;padding:6px 12px;border-radius:8px;font-size:0.85rem" onchange="saveTaskDetail()">
+                            <option value="todo">A fazer</option>
+                            <option value="doing">Fazendo</option>
+                            <option value="done">Concluida</option>
                         </select>
                         <input type="date" id="task-detail-due" style="background:rgba(255,255,255,0.1);color:white;border:none;padding:6px 12px;border-radius:8px;font-size:0.85rem" onchange="saveTaskDetail()">
                     </div>
-                    
-                    <!-- Subtasks -->
+                    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding:10px;background:rgba(255,255,255,0.04);border-radius:10px">
+                        <label class="switch" style="margin:0"><input type="checkbox" id="task-detail-notify-enabled" onchange="saveTaskDetail()"><span class="slider"></span></label>
+                        <span style="font-size:0.85rem;flex:1">Notificar</span>
+                        <input type="datetime-local" id="task-detail-notify-at" style="background:rgba(255,255,255,0.1);color:white;border:none;padding:6px 10px;border-radius:8px;font-size:0.8rem" onchange="saveTaskDetail()">
+                    </div>
                     <div style="margin-bottom:20px">
                         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
                             <span style="font-size:0.85rem;color:var(--text-secondary);font-weight:600">SUBTAREFAS</span>
-                            <button onclick="addSubtask()" style="background:none;border:none;color:var(--accent-primary);font-size:0.85rem;font-weight:700;cursor:pointer">+ Adicionar</button>
+                            <button onclick="addSubtaskInline()" style="background:none;border:none;color:var(--accent-primary);font-size:0.85rem;font-weight:700;cursor:pointer">+ Adicionar</button>
                         </div>
                         <div id="task-subtasks-list" style="display:flex;flex-direction:column;gap:8px;max-height:150px;overflow-y:auto"></div>
                     </div>
-                    
                     <div style="display:flex;gap:10px">
                         <button onclick="deleteCurrentTask()" style="flex:1;background:rgba(255,71,87,0.15);border:1px solid var(--accent-pink);color:var(--accent-pink);padding:14px;border-radius:12px;font-weight:700"><i class="fa-solid fa-trash"></i></button>
-                        <button onclick="closeTaskDetail()" style="flex:3;background:var(--accent-primary);border:none;color:white;padding:14px;border-radius:12px;font-weight:700">Fechar</button>
+                        <button onclick="completeCurrentTask()" style="flex:2;background:var(--accent-green);border:none;color:white;padding:14px;border-radius:12px;font-weight:700"><i class="fa-solid fa-check"></i> Concluir</button>
+                        <button onclick="closeTaskDetail()" style="flex:1;background:rgba(255,255,255,0.1);border:none;color:white;padding:14px;border-radius:12px;font-weight:700">Fechar</button>
                     </div>
                 </div>
             </div>
@@ -339,11 +376,11 @@
                 <div id="view-studies" class="view" style="position:relative;overflow:hidden">
             <!-- MAIN STUDY VIEW -->
             <div id="study-main-view">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+                <div class="view-header">
                     <h2 class="page-title" style="margin-bottom:0">Estudos</h2>
-                    <div style="display:flex;gap:8px">
-                        <button class="icon-btn" onclick="toggleStudySearch()" id="study-search-toggle"><i class="fa-solid fa-magnifying-glass"></i></button>
-                        <button class="icon-btn" onclick="openNewNotebook()"><i class="fa-solid fa-folder-plus"></i></button>
+                    <div class="view-header-actions">
+                        <button class="icon-btn" onclick="toggleStudySearch()" id="study-search-toggle" title="Buscar"><i class="fa-solid fa-magnifying-glass"></i></button>
+                        <button class="icon-btn" onclick="openSubjectForm()" title="Novo caderno"><i class="fa-solid fa-folder-plus"></i></button>
                     </div>
                 </div>
 
@@ -376,6 +413,10 @@
                         <span class="study-stat-value" id="study-cards-val">0</span>
                         <span class="study-stat-label"><i class="fa-solid fa-layer-group" style="color:var(--accent-green)"></i> Cards</span>
                     </div>
+                    <div class="study-stat-item" style="border-left:1px solid rgba(255,255,255,0.06)">
+                        <span class="study-stat-value" id="study-quiz-val">—</span>
+                        <span class="study-stat-label"><i class="fa-solid fa-bolt" style="color:#fbbf24"></i> Quiz</span>
+                    </div>
                 </div>
 
                 
@@ -387,12 +428,24 @@
                     </div>
                 </div>
 
-                <!-- Notebooks Grid -->
+                <!-- Subjects Grid (study_notebooks with covers) -->
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-                    <h3 class="section-title" style="margin:0">Cadernos</h3>
-                    <button onclick="openNewNotebook()" style="background:none;border:none;color:var(--accent-primary);font-size:0.85rem;cursor:pointer;font-weight:600;font-family:inherit">+ Novo</button>
+                    <h3 class="section-title" style="margin:0">Materias</h3>
+                    <button onclick="openSubjectForm()" style="background:none;border:none;color:var(--accent-primary);font-size:0.85rem;cursor:pointer;font-weight:600;font-family:inherit">+ Novo</button>
                 </div>
-                <div id="notebooks-grid" class="notebooks-grid"></div>
+                <div id="subjects-grid" class="subjects-grid"></div>
+                <div id="notebooks-grid" class="notebooks-grid" style="display:none"></div>
+
+                <!-- Subject detail overlay -->
+                <div id="subject-detail-view" style="display:none;position:absolute;top:0;left:0;width:100%;min-height:100%;background:var(--bg-base);z-index:5;padding-bottom:80px">
+                    <div class="view-header">
+                        <button onclick="closeSubjectDetail()" style="background:none;border:none;color:white;font-size:1.5rem"><i class="fa-solid fa-arrow-left"></i></button>
+                        <h3 id="subject-detail-title" style="margin:0;color:white;font-size:1rem;flex:1;text-align:center"></h3>
+                        <button onclick="openSubjectMenu(event)" style="background:none;border:none;color:var(--text-secondary);font-size:1.2rem"><i class="fa-solid fa-ellipsis-vertical"></i></button>
+                    </div>
+                    <div class="list-container" id="subject-notes-list" style="padding:0 16px"></div>
+                    <button onclick="openNoteEditor(null,currentNotebookId)" style="position:fixed;bottom:90px;right:20px;width:56px;height:56px;border-radius:28px;background:var(--accent-primary);border:none;color:white;font-size:1.5rem;box-shadow:0 4px 14px rgba(108,92,231,0.4);z-index:10"><i class="fa-solid fa-plus"></i></button>
+                </div>
 
                 <!-- Quick Tools -->
                 <h3 class="section-title" style="margin-top:20px">Ferramentas</h3>
@@ -409,6 +462,9 @@
                     <button class="action-bubble" onclick="showFlashcards()">
                         <i class="fa-solid fa-clone"></i><br>Flashcards
                     </button>
+                    <button class="action-bubble" onclick="openQuiz()">
+                        <i class="fa-solid fa-bolt" style="color:#fbbf24"></i><br>Quiz ENEM
+                    </button>
                     <button class="action-bubble" onclick="openFocusMode()">
                         <i class="fa-solid fa-bullseye"></i><br>Modo Foco
                     </button>
@@ -417,16 +473,7 @@
                     </button>
                 </div>
 
-                <!-- Recent Notes -->
-                <div style="display:flex;justify-content:space-between;align-items:center;margin:20px 0 12px">
-                    <h3 class="section-title" style="margin:0">Notas Recentes</h3>
-                    <div style="display:flex;gap:6px">
-                        <button class="study-chip active" data-filter="all" onclick="filterNotes('all',this)">Todas</button>
-                        <button class="study-chip" data-filter="pinned" onclick="filterNotes('pinned',this)">Fixadas</button>
-                        <button class="study-chip" data-filter="recent" onclick="filterNotes('recent',this)">Recentes</button>
-                    </div>
-                </div>
-                <div class="list-container" id="studies-list"></div>
+                <div class="list-container" id="studies-list" style="display:none"></div>
             </div>
 
             <!-- NOTEBOOK DETAIL (hidden overlay) -->
@@ -441,7 +488,7 @@
 
 
             <!-- NOTE EDITOR (hidden overlay) — Rich Text v2 -->
-            <div id="note-editor-view" style="display:none;flex-direction:column;gap:0;position:absolute;top:0;left:0;width:100%;min-height:calc(100vh - 70px);z-index:10;background:var(--bg-base);padding:0;padding-bottom:80px">
+            <div id="note-editor-view" class="note-editor-fullscreen" style="display:none;flex-direction:column;gap:0;position:fixed;top:0;left:0;width:100%;height:calc(100vh - 56px);z-index:200;background:var(--bg-base);padding:0">
 
                 <!-- Editor Top Bar -->
                 <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid var(--border-glass);background:rgba(0,0,0,0.4);backdrop-filter:blur(12px);position:sticky;top:0;z-index:20">
@@ -469,10 +516,8 @@
                     </div>
                 </div>
 
-                <!-- Meta fields -->
+                <!-- Meta fields (title derived from first H1/line in editor) -->
                 <div style="padding:16px 16px 0">
-                    <input type="text" id="note-title" placeholder="Título da Nota..."
-                        style="padding:10px 0;border:none;border-bottom:1px solid var(--border-glass);background:transparent;color:white;font-size:1.4rem;font-weight:800;width:100%;font-family:inherit;outline:none;margin-bottom:10px">
                     <div style="display:flex;gap:8px;margin-bottom:10px">
                         <select id="note-notebook" style="flex:1;padding:7px 10px;border-radius:8px;background:rgba(255,255,255,0.05);color:var(--text-secondary);border:1px solid var(--border-glass);font-size:0.82rem">
                             <option value="">📁 Sem caderno...</option>
@@ -484,38 +529,29 @@
                         style="padding:7px 10px;border-radius:8px;background:rgba(0,0,0,0.2);color:var(--text-secondary);border:1px solid var(--border-glass);font-size:0.82rem;width:100%;font-family:inherit;margin-bottom:12px">
                 </div>
 
-                <!-- Rich Toolbar -->
-                <div class="rich-toolbar" id="rich-toolbar">
-                    <!-- Text Style Group -->
+                <!-- Rich Toolbar (collapsible + overflow) -->
+                <div class="rich-toolbar rich-toolbar-collapsible" id="rich-toolbar">
+                    <div class="rt-visible">
                     <button class="rt-btn" onclick="richCmd('bold')" title="Negrito"><b>B</b></button>
                     <button class="rt-btn" onclick="richCmd('italic')" title="Itálico"><i>I</i></button>
-                    <button class="rt-btn" onclick="richCmd('underline')" title="Sublinhado"><u>U</u></button>
-                    <button class="rt-btn" onclick="richCmd('strikeThrough')" title="Tachado"><s>S</s></button>
-                    <div class="rt-sep"></div>
-                    <!-- Heading Group -->
-                    <button class="rt-btn" onclick="richHeading(1)" title="Título Grande">H1</button>
-                    <button class="rt-btn" onclick="richHeading(2)" title="Título Médio">H2</button>
-                    <button class="rt-btn" onclick="richHeading(3)" title="Título Pequeno">H3</button>
-                    <button class="rt-btn" onclick="richHeading(0)" title="Parágrafo Normal">P</button>
-                    <div class="rt-sep"></div>
-                    <!-- Lists -->
+                    <button class="rt-btn" onclick="richHeading(1)" title="Título">H1</button>
                     <button class="rt-btn" onclick="richCmd('insertUnorderedList')" title="Lista"><i class="fa-solid fa-list-ul"></i></button>
-                    <button class="rt-btn" onclick="richCmd('insertOrderedList')" title="Lista Numerada"><i class="fa-solid fa-list-ol"></i></button>
-                    <button class="rt-btn" onclick="richInsertChecklist()" title="Checklist"><i class="fa-solid fa-square-check"></i></button>
-                    <div class="rt-sep"></div>
-                    <!-- Color -->
-                    <button class="rt-btn color-dot" onclick="toggleColorPicker(event)" title="Cor do Texto" id="color-picker-btn" style="position:relative">
-                        <span id="color-indicator" style="display:inline-block;width:14px;height:14px;border-radius:50%;background:#fff;border:1.5px solid rgba(255,255,255,0.3)"></span>
-                    </button>
-                    <div class="rt-sep"></div>
-                    <!-- Inserts -->
-                    <button class="rt-btn" onclick="openSlashMenu()" title="Inserir bloco (/)"><i class="fa-solid fa-plus"></i></button>
-                    <button class="rt-btn" onclick="richInsertLink()" title="Inserir Link"><i class="fa-solid fa-link"></i></button>
-                    <button class="rt-btn" onclick="openImagePicker()" title="Imagem"><i class="fa-solid fa-image"></i></button>
-                    <button class="rt-btn" onclick="openYouTubeModal()" title="Vídeo YouTube"><i class="fa-brands fa-youtube" style="color:#ff4444"></i></button>
-                    <div class="rt-sep"></div>
-                    <!-- AI Actions -->
-                    <button class="rt-btn ai-glow" onclick="openJarvisPanel()" title="Jarvis IA"><i class="fa-solid fa-wand-magic-sparkles"></i> IA</button>
+                    <button class="rt-btn" onclick="openSlashMenu()" title="Inserir (/)"><i class="fa-solid fa-plus"></i></button>
+                    <button class="rt-btn" onclick="openYouTubeModal()" title="YouTube"><i class="fa-brands fa-youtube" style="color:#ff4444"></i></button>
+                    <button class="rt-btn ai-glow" onclick="openJarvisPanel()" title="IA"><i class="fa-solid fa-wand-magic-sparkles"></i></button>
+                    </div>
+                    <button class="rt-btn rt-overflow-btn" onclick="toggleToolbarOverflow(event)" title="Mais"><i class="fa-solid fa-ellipsis"></i></button>
+                    <div class="rt-overflow-menu" id="rt-overflow-menu" style="display:none">
+                    <button class="rt-btn" onclick="richCmd('underline')"><u>U</u></button>
+                    <button class="rt-btn" onclick="richCmd('strikeThrough')"><s>S</s></button>
+                    <button class="rt-btn" onclick="richHeading(2)">H2</button>
+                    <button class="rt-btn" onclick="richHeading(3)">H3</button>
+                    <button class="rt-btn" onclick="richCmd('insertOrderedList')"><i class="fa-solid fa-list-ol"></i></button>
+                    <button class="rt-btn" onclick="richInsertChecklist()"><i class="fa-solid fa-square-check"></i></button>
+                    <button class="rt-btn" onclick="toggleColorPicker(event)"><span id="color-indicator" style="display:inline-block;width:14px;height:14px;border-radius:50%;background:#fff"></span></button>
+                    <button class="rt-btn" onclick="richInsertLink()"><i class="fa-solid fa-link"></i></button>
+                    <button class="rt-btn" onclick="openImagePicker()"><i class="fa-solid fa-image"></i></button>
+                    </div>
                 </div>
 
                 <!-- Color Picker Popup -->
@@ -706,6 +742,34 @@
                     <button onclick="answerFlashcard(true)" style="flex:1;background:rgba(0,210,121,0.3);border:2px solid var(--accent-green);color:white;padding:15px;border-radius:16px;font-size:1.5rem;cursor:pointer">&#10003; Acertei</button>
                 </div>
             </div>
+
+            <!-- QUIZ ENEM VIEW -->
+            <div id="quiz-view" style="display:none;position:absolute;top:0;left:0;width:100%;height:calc(100vh - 120px);z-index:11;padding:20px;flex-direction:column;gap:15px;background:var(--bg-base)">
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                    <button onclick="closeQuiz()" style="background:none;border:none;color:white;font-size:1.5rem"><i class="fa-solid fa-arrow-left"></i></button>
+                    <h3 style="margin:0;color:white">Quiz ENEM</h3>
+                    <span style="width:24px"></span>
+                </div>
+                <div id="quiz-setup" class="glass quiz-setup">
+                    <h4 style="margin:0 0 12px">Configurar sessão</h4>
+                    <label class="settings-field-label">Área</label>
+                    <select id="quiz-area-sel" class="settings-select">
+                        <option value="">Todas as áreas</option>
+                        <option>Matemática</option>
+                        <option>Português</option>
+                        <option>Ciências da Natureza</option>
+                        <option>Ciências Humanas</option>
+                    </select>
+                    <label class="settings-field-label" style="margin-top:12px">Modo</label>
+                    <select id="quiz-mode-sel" class="settings-select">
+                        <option value="5">Rápido (5 questões)</option>
+                        <option value="10">Médio (10 questões)</option>
+                    </select>
+                    <button class="quiz-btn primary" style="margin-top:16px;width:100%" onclick="startQuiz()"><i class="fa-solid fa-bolt"></i> Começar</button>
+                </div>
+                <div id="quiz-play" style="display:none;flex:1"></div>
+                <div id="quiz-done" style="display:none"></div>
+            </div>
         </div>
 
         <!-- JOURNAL / MOOD VIEW (dedicated, separate from studies) -->
@@ -794,11 +858,15 @@
         </div>
 
         <div id="view-goals" class="view">
-            <h2 class="page-title">Metas</h2>
-
-            <div class="actions-scroll" style="margin-bottom: 15px;">
-                <button class="action-bubble" onclick="promptAddGoal()"><i class="fa-solid fa-plus"></i><br>Nova
-                    Meta</button>
+            <div class="view-header">
+                <h2 class="page-title" style="margin-bottom:0">Metas</h2>
+                <div class="view-header-actions">
+                    <button class="icon-btn" onclick="openGoalForm()" title="Nova meta"><i class="fa-solid fa-plus"></i></button>
+                </div>
+            </div>
+            <div id="goals-archived-section" style="display:none;margin-bottom:16px">
+                <h3 class="section-title">Metas Concluidas</h3>
+                <div id="goals-archived-list" style="display:flex;flex-direction:column;gap:10px"></div>
             </div>
 
             <div id="goals-list" style="display: flex; flex-direction: column; gap: 15px;">
@@ -808,9 +876,12 @@
 
         <!-- Fitness View -->
         <div id="view-fitness" class="view">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-                <h2 class="page-title" style="margin-bottom:0">Saúde & Fitness</h2>
-                <button class="icon-btn" onclick="openWorkoutBuilder()"><i class="fa-solid fa-plus"></i></button>
+            <div class="view-header">
+                <h2 class="page-title" style="margin-bottom:0">Saude & Fitness</h2>
+                <div class="view-header-actions">
+                    <button class="icon-btn calendar-btn" onclick="NexusCalendar.open({module:'fitness',onSelect:function(){loadFitness();}})"><i class="fa-solid fa-calendar"></i> <span id="fitness-date-label">Hoje</span></button>
+                    <button class="icon-btn" onclick="openWorkoutForm()" title="Novo treino"><i class="fa-solid fa-plus"></i></button>
+                </div>
             </div>
 
             <!-- Fitness Tabs -->
@@ -962,11 +1033,56 @@
 
             <!-- Sync Section -->
             <h3 class="section-title">Sincronização</h3>
-            <div class="glass" style="margin-bottom:20px;padding:15px;border-radius:16px">
+            <div class="glass settings-card" style="margin-bottom:20px;padding:15px;border-radius:16px">
                 <button onclick="forceSyncData()" style="background:var(--accent-primary);color:white;border:none;padding:12px 20px;border-radius:8px;font-weight:bold;font-size:1rem;cursor:pointer;width:100%;margin-bottom:10px">
                     <i class="fa-solid fa-rotate"></i> Forçar Sincronização
                 </button>
-                <p style="color:var(--text-secondary);font-size:0.8rem;text-align:center;margin:0">O aplicativo sincroniza automaticamente a cada 60 segundos quando online.</p>
+                <label class="settings-field-label">Intervalo automático</label>
+                <select id="cfg-sync-interval" class="settings-select" onchange="setSyncInterval(this.value)" style="margin-bottom:8px">
+                    <option value="30">30 segundos</option>
+                    <option value="60" selected>60 segundos</option>
+                    <option value="120">2 minutos</option>
+                    <option value="300">5 minutos</option>
+                </select>
+                <p id="sync-interval-hint" style="color:var(--text-secondary);font-size:0.8rem;text-align:center;margin:0">O aplicativo sincroniza automaticamente quando online.</p>
+            </div>
+
+            <!-- Network & Jarvis -->
+            <h3 class="section-title">Rede &amp; Jarvis</h3>
+            <div class="glass settings-card" style="margin-bottom:20px;padding:15px;border-radius:16px">
+                <div id="settings-wifi-status" class="settings-net-off" style="font-weight:700;margin-bottom:8px">Verificando...</div>
+                <p style="color:var(--text-secondary);font-size:0.85rem;margin:0;line-height:1.45">Ligação de voz, chat com IA e ações do Jarvis exigem <strong>Wi-Fi</strong> e o Nexus desktop ligado na mesma rede.</p>
+            </div>
+
+            <!-- Finance budget -->
+            <h3 class="section-title">Financas</h3>
+            <div class="glass settings-card" style="margin-bottom:20px;padding:15px;border-radius:16px">
+                <label class="settings-field-label">Orcamento diario (R$)</label>
+                <input type="number" id="nexus_daily_budget" class="settings-select" min="0" step="1" placeholder="100" onchange="saveDailyBudget(this.value)" style="margin-bottom:8px">
+                <p style="color:var(--text-secondary);font-size:0.8rem;margin:0">Usado no calendario de financas.</p>
+            </div>
+
+            <!-- Experience -->
+            <h3 class="section-title">Experiência</h3>
+            <div class="glass settings-card" style="margin-bottom:20px;padding:15px;border-radius:16px">
+                <label class="settings-field-label">Animações</label>
+                <select id="cfg-motion-level" class="settings-select" onchange="applyMotionLevel(this.value)" style="margin-bottom:12px">
+                    <option value="reduced">Reduzidas</option>
+                    <option value="balanced" selected>Balanceadas</option>
+                    <option value="expressive">Expressivas</option>
+                </select>
+                <div class="toggle-row" style="margin-bottom:10px">
+                    <span>Modo AMOLED (preto puro)</span>
+                    <label class="switch"><input type="checkbox" id="toggle-amoled" onchange="toggleAmoled()"><span class="slider"></span></label>
+                </div>
+                <div class="toggle-row" style="margin-bottom:10px">
+                    <span>Modo ENEM (destaque estudos)</span>
+                    <label class="switch"><input type="checkbox" id="toggle-enem-mode" onchange="applyEnemMode(this.checked)"><span class="slider"></span></label>
+                </div>
+                <div class="toggle-row">
+                    <span>Notificações locais</span>
+                    <label class="switch"><input type="checkbox" id="toggle-notifications" checked onchange="applyNotificationsPref(this.checked)"><span class="slider"></span></label>
+                </div>
             </div>
 
             <!-- Appearance Section -->
@@ -1002,7 +1118,7 @@
 
 
     <!-- Nexus AI FAB -->
-    <button class="glass" id="nexus-ai-fab" onclick="toggleJarvisCall()"
+    <button class="glass" id="nexus-ai-fab" onclick="toggleJarvisCall()" title="Ligar para o Jarvis"
         style="position: fixed; bottom: 90px; right: 20px; width: 60px; height: 60px; border-radius: 30px; background: linear-gradient(135deg, var(--accent-purple), var(--accent-blue)); color: white; border: none; box-shadow: 0 4px 15px rgba(108, 92, 231, 0.4); z-index: 999; display: flex; align-items: center; justify-content: center; font-size: 1.5rem;">
         <i class="fa-solid fa-microphone"></i>
     </button>
@@ -1183,7 +1299,100 @@
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Nexus Calendar Modal (shared) -->
+    <div id="nexus-calendar-modal" class="modal-overlay" style="display:none" onclick="if(event.target===this)NexusCalendar.close()">
+        <div class="nexus-calendar-panel glass" onclick="event.stopPropagation()">
+            <div class="nexus-cal-header">
+                <h3>Calendario</h3>
+                <div class="nexus-cal-nav">
+                    <button type="button" class="icon-btn" onclick="NexusCalendar.changeMonth(-1)">&lt;</button>
+                    <span id="nexus-cal-month-label"></span>
+                    <button type="button" class="icon-btn" onclick="NexusCalendar.changeMonth(1)">&gt;</button>
+                    <button type="button" class="cal-today-btn" onclick="NexusCalendar.goToday()">Hoje</button>
+                </div>
+            </div>
+            <div class="nexus-cal-dow"><span>D</span><span>S</span><span>T</span><span>Q</span><span>Q</span><span>S</span><span>S</span></div>
+            <div id="nexus-cal-grid" class="nexus-cal-grid"></div>
+            <div class="nexus-cal-legend">
+                <span class="hm-legend hm-green"></span> 100%
+                <span class="hm-legend hm-orange"></span> 1-49%
+                <span class="hm-legend hm-red"></span> 0%
+                <span class="hm-legend hm-gray"></span> vazio
+            </div>
+        </div>
+    </div>
+
+    <!-- Goal Form Modal -->
+    <div id="goal-form-modal" class="bottom-sheet" style="display:none">
+        <div class="bottom-sheet-content glass">
+            <div class="bottom-sheet-handle"></div>
+            <h3 id="goal-form-title" style="margin:0 0 16px">Nova Meta</h3>
+            <div class="form-field"><label>Nome</label><input type="text" id="goal-form-name"></div>
+            <div class="form-field"><label>Descricao</label><textarea id="goal-form-description" rows="2"></textarea></div>
+            <div class="form-field"><label>Data alvo</label><input type="date" id="goal-form-target-date"></div>
+            <div class="form-field"><label>Progresso: <span id="goal-form-progress-label">0</span>%</label><input type="range" id="goal-form-progress" min="0" max="100" value="0" oninput="document.getElementById('goal-form-progress-label').textContent=this.value"></div>
+            <div class="form-field"><label>Status</label>
+                <select id="goal-form-status"><option value="active">Ativa</option><option value="paused">Pausada</option><option value="achieved">Concluida</option></select>
+            </div>
+            <div style="display:flex;gap:10px;margin-top:16px">
+                <button onclick="deleteGoalForm()" id="goal-form-delete-btn" style="flex:1;background:rgba(255,71,87,0.15);border:1px solid var(--accent-pink);color:var(--accent-pink);padding:14px;border-radius:12px;font-weight:700;display:none"><i class="fa-solid fa-trash"></i></button>
+                <button onclick="saveGoalForm()" style="flex:2;background:var(--accent-primary);border:none;color:white;padding:14px;border-radius:12px;font-weight:700">Salvar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Workout Form Modal -->
+    <div id="workout-form-modal" class="bottom-sheet" style="display:none">
+        <div class="bottom-sheet-content glass">
+            <div class="bottom-sheet-handle"></div>
+            <h3 id="workout-form-title" style="margin:0 0 16px">Treino</h3>
+            <div class="form-field"><label>Nome</label><input type="text" id="workout-form-name"></div>
+            <div class="form-field"><label>Grupo muscular</label><input type="text" id="workout-form-muscle"></div>
+            <div style="display:flex;gap:10px">
+                <div class="form-field" style="flex:1"><label>Data</label><input type="date" id="workout-form-date"></div>
+                <div class="form-field" style="flex:1"><label>Duracao (min)</label><input type="number" id="workout-form-duration" min="0"></div>
+            </div>
+            <div class="form-field"><label>Calorias</label><input type="number" id="workout-form-calories" min="0"></div>
+            <div class="form-field"><label>Notas</label><textarea id="workout-form-notes" rows="2"></textarea></div>
+            <div class="form-field">
+                <div style="display:flex;justify-content:space-between;align-items:center"><label style="margin:0">Exercicios</label><button onclick="addWorkoutExercise()" style="background:none;border:none;color:var(--accent-primary);font-weight:700;cursor:pointer">+ Add</button></div>
+                <div id="workout-exercises-list" style="margin-top:8px;display:flex;flex-direction:column;gap:6px"></div>
+            </div>
+            <div style="display:flex;gap:10px;margin-top:16px">
+                <button onclick="deleteWorkoutForm()" id="workout-form-delete-btn" style="flex:1;background:rgba(255,71,87,0.15);border:1px solid var(--accent-pink);color:var(--accent-pink);padding:14px;border-radius:12px;font-weight:700;display:none"><i class="fa-solid fa-trash"></i></button>
+                <button onclick="saveWorkoutForm()" style="flex:2;background:var(--accent-primary);border:none;color:white;padding:14px;border-radius:12px;font-weight:700">Salvar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Subject Form Modal -->
+    <div id="subject-form-modal" class="bottom-sheet" style="display:none">
+        <div class="bottom-sheet-content glass">
+            <div class="bottom-sheet-handle"></div>
+            <h3 style="margin:0 0 16px">Nova Materia</h3>
+            <div class="form-field"><label>Nome</label><input type="text" id="subject-form-name"></div>
+            <div class="form-field"><label>Emoji</label><input type="text" id="subject-form-icon" value="📚"></div>
+            <div class="form-field"><label>URL da capa (opcional)</label><input type="url" id="subject-form-cover" placeholder="https://..."></div>
+            <button onclick="saveSubjectForm()" style="width:100%;background:var(--accent-primary);border:none;color:white;padding:14px;border-radius:12px;font-weight:700;margin-top:8px">Criar</button>
+        </div>
+    </div>
+
+    <!-- Subject context menu -->
+    <div id="subject-menu-popup" class="context-menu-popup" style="display:none">
+        <button onclick="changeSubjectCover()">Alterar capa</button>
+        <button onclick="renameSubject()">Alterar titulo</button>
+        <button onclick="deleteSubject()" style="color:var(--accent-pink)">Excluir</button>
+    </div>
+
+    <!-- Subtask inline input -->
+    <div id="subtask-inline-modal" class="bottom-sheet" style="display:none">
+        <div class="bottom-sheet-content glass">
+            <h3 style="margin:0 0 12px">Nova subtarefa</h3>
+            <input type="text" id="subtask-inline-name" placeholder="Nome da subtarefa" style="width:100%;padding:12px;border-radius:8px;background:rgba(0,0,0,0.4);color:white;border:1px solid var(--border-glass);font-family:inherit">
+            <button onclick="confirmSubtaskInline()" style="width:100%;margin-top:12px;background:var(--accent-primary);border:none;color:white;padding:12px;border-radius:10px;font-weight:700">Adicionar</button>
+        </div>
+    </div>
+
     <script src="app.js"></script>
     <script>
         if ('serviceWorker' in navigator && /^https?:$/.test(window.location.protocol)) {

@@ -35,6 +35,14 @@ def test_mobile_exposes_jarvis_call_toggle_for_fab():
     assert "window.toggleJarvisCall" in app_js
     assert "AndroidNative.startJarvisCall" in app_js
     assert "AndroidNative.stopJarvisCall" in app_js
+    assert "isWifiConnected" in app_js
+    assert "requireWifiForJarvis" in app_js
+
+
+def test_mobile_blocks_jarvis_without_wifi():
+    app_js = read_app_js()
+    assert "requireWifiForJarvis('ligação')" in app_js
+    assert "AndroidNative.isWifiConnected" in app_js or "isWifiConnected()" in app_js
 
 
 def test_mobile_guards_web_notification_api_for_android_webview():
@@ -85,13 +93,91 @@ def test_mobile_exposes_critical_window_handlers():
     required = [
         "window.syncData",
         "window.toggleIoT",
-        "window.promptAddGoal",
+        "window.openGoalForm",
+        "window.openHabitForm",
+        "window.openTaskForm",
+        "window.sendChatMessage",
+        "window.openQuiz",
+        "window.startQuiz",
         "window.startJournalDictation",
         "window.openSettingsView",
         "window.discoverIoT",
+        "updateFitnessStats",
+        "habit_logs",
+        "window.NexusCalendar",
+        "window.syncTaskReminders",
+        "window.syncHabitReminders",
+        "window.openWorkoutForm",
+        "window.openSubjectForm",
+        "window.checkPendingReminders",
     ]
     for name in required:
         assert name in app_js, f"Missing {name}"
+
+
+def test_mobile_has_shared_calendar_modal():
+    html = read_index_html()
+    assert 'id="nexus-calendar-modal"' in html
+    assert "window.NexusCalendar" in read_app_js()
+
+
+def test_mobile_has_goal_and_workout_forms():
+    html = read_index_html()
+    assert 'id="goal-form-modal"' in html
+    assert 'id="workout-form-modal"' in html
+    assert "openGoalForm" in read_app_js()
+    assert "openWorkoutForm" in read_app_js()
+
+
+def test_mobile_task_detail_has_notify_and_complete():
+    html = read_index_html()
+    assert 'id="task-detail-notify-enabled"' in html
+    assert "completeCurrentTask" in read_app_js()
+
+
+def test_mobile_habit_form_has_days_of_week():
+    html = read_index_html()
+    assert 'id="habit-form-dow"' in html
+    assert "saveHabitForm" in read_app_js()
+
+
+def test_mobile_studies_has_subjects_grid():
+    html = read_index_html()
+    assert 'id="subjects-grid"' in html
+    assert "loadSubjectsGrid" in read_app_js() or "subjects-grid" in read_app_js()
+
+
+def test_mobile_youtube_embed_has_referrer_policy():
+    app_js = read_app_js()
+    assert 'referrerpolicy="strict-origin-when-cross-origin"' in app_js
+    html = read_index_html()
+    assert 'name="referrer"' in html
+
+
+def test_mobile_save_quick_add_sets_task_name_and_title():
+    app_js = read_app_js()
+    block = re.search(r"window\.saveQuickAdd\s*=\s*function", app_js)
+    assert block
+    snippet = app_js[block.start():block.start() + 1200]
+    assert "name: title" in snippet or "name:title" in snippet.replace(" ", "")
+    assert "title: title" in snippet or "title:title" in snippet.replace(" ", "")
+
+
+def test_mobile_apk_has_reminder_receiver():
+    manifest = (ROOT / "mobile-apk" / "app" / "src" / "main" / "AndroidManifest.xml").read_text(encoding="utf-8")
+    assert "ReminderReceiver" in manifest
+    main = (ROOT / "mobile-apk" / "app" / "src" / "main" / "java" / "com" / "nexus" / "mobile" / "MainActivity.java").read_text(encoding="utf-8")
+    assert "scheduleReminder" in main
+    assert "cancelReminder" in main
+
+
+def test_supabase_migration_phase14_exists():
+    migration = ROOT / "supabase_migration_phase14.sql"
+    assert migration.exists()
+    text = migration.read_text(encoding="utf-8")
+    assert "days_of_week" in text
+    assert "cover_image" in text
+    assert "notify_at" in text
 
 
 def test_mobile_view_routines_inside_main():
@@ -119,6 +205,22 @@ def test_mobile_apk_has_oauth_deep_link():
     manifest = (ROOT / "mobile-apk" / "app" / "src" / "main" / "AndroidManifest.xml").read_text(encoding="utf-8")
     assert 'android:scheme="com.nexus.mobile"' in manifest
     assert "singleTask" in manifest
+
+
+def test_mobile_sync_tables_include_habit_logs():
+    app_js = read_app_js()
+    assert "'habit_logs'" in app_js
+    assert "'flashcards'" in app_js
+    assert "'journal_entries'" in app_js
+    assert "'quiz_attempts'" in app_js
+
+
+def test_mobile_quiz_enem_exposed():
+    app_js = read_app_js()
+    html = read_index_html()
+    assert "window.openQuiz" in app_js
+    assert "ENEM_QUIZ_QUESTIONS" in app_js
+    assert 'id="quiz-view"' in html
 
 
 def test_mobile_loaders_guard_missing_containers():

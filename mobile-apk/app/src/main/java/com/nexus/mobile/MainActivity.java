@@ -23,17 +23,23 @@ import android.webkit.JavascriptInterface;
 import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.ProgressBar;
 import android.widget.Toast;
 
+import android.app.AlarmManager;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
+import android.app.PendingIntent;
 
 import android.content.Intent;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
 import androidx.core.content.FileProvider;
 
 import java.io.File;
@@ -182,6 +188,32 @@ public class MainActivity extends Activity {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 return false;
+            }
+
+            @Override
+            public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                if (request != null && request.getUrl() != null) {
+                    String host = request.getUrl().getHost();
+                    if (host != null && (host.contains("youtube.com") || host.contains("youtu.be") || host.contains("googlevideo.com"))) {
+                        try {
+                            URL url = new URL(request.getUrl().toString());
+                            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+                            connection.setRequestProperty("Referer", "https://www.youtube.com/");
+                            connection.setRequestProperty("Origin", "https://www.youtube.com");
+                            connection.connect();
+                            String contentType = connection.getContentType();
+                            if (contentType == null) contentType = "text/html";
+                            return new WebResourceResponse(
+                                contentType,
+                                connection.getContentEncoding() != null ? connection.getContentEncoding() : "utf-8",
+                                connection.getInputStream()
+                            );
+                        } catch (Exception ignored) {
+                            // Fall through to default WebView handling
+                        }
+                    }
+                }
+                return super.shouldInterceptRequest(view, request);
             }
 
             @Override
@@ -453,13 +485,98 @@ public class MainActivity extends Activity {
 
     private class WebAppInterface {
         @JavascriptInterface
+        public boolean isWifiConnected() {
+            try {
+                ConnectivityManager cm = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+                if (cm == null) return false;
+                Network network = cm.getActiveNetwork();
+                if (network == null) return false;
+                NetworkCapabilities caps = cm.getNetworkCapabilities(network);
+                if (caps == null) return false;
+                return caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+                    || caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET);
+            } catch (Exception e) {
+                return false;
+            }
+        }
+
+        @JavascriptInterface
+        public boolean isNetworkOnline() {
+            try {
+                ConnectivityManager cm = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+                if (cm == null) return false;
+                Network network = cm.getActiveNetwork();
+                if (network == null) return false;
+                NetworkCapabilities caps = cm.getNetworkCapabilities(network);
+                return caps != null && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET);
+            } catch (Exception e) {
+                return false;
+            }
+        }
+
+        @JavascriptInterface
         public void startJarvisCall() {
+            if (!isWifiConnected()) {
+                runOnUiThread(() -> Toast.makeText(MainActivity.this,
+                    "Conecte-se ao Wi-Fi para ligar ao Jarvis.", Toast.LENGTH_LONG).show());
+                return;
+            }
             runOnUiThread(() -> {
                 Intent serviceIntent = new Intent(MainActivity.this, JarvisCallService.class);
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     startForegroundService(serviceIntent);
                 } else {
                     startService(serviceIntent);
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void scheduleReminder(int id, String title, String body, long triggerAtMs) {
+            runOnUiThread(() -> {
+                try {
+                    AlarmManager alarmManager = (AlarmManager) getSystemService(ALARM_SERVICE);
+                    if (alarmManager == null) return;
+
+                    Intent intent = new Intent(MainActivity.this, ReminderReceiver.class);
+                    intent.putExtra(ReminderReceiver.EXTRA_ID, id);
+                    intent.putExtra(ReminderReceiver.EXTRA_TITLE, title);
+                    intent.putExtra(ReminderReceiver.EXTRA_BODY, body);
+
+                    PendingIntent pending = PendingIntent.getBroadcast(
+                        MainActivity.this,
+                        id,
+                        intent,
+                        PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+                    );
+
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMs, pending);
+                    } else {
+                        alarmManager.setExact(AlarmManager.RTC_WAKEUP, triggerAtMs, pending);
+                    }
+                } catch (Exception e) {
+                    Toast.makeText(MainActivity.this, "Falha ao agendar lembrete", Toast.LENGTH_SHORT).show();
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void cancelReminder(int id) {
+            runOnUiThread(() -> {
+                try {
+                    AlarmManager alarmManager = (AlarmManager) getSystemService(ALARM_SERVICE);
+                    if (alarmManager == null) return;
+
+                    Intent intent = new Intent(MainActivity.this, ReminderReceiver.class);
+                    PendingIntent pending = PendingIntent.getBroadcast(
+                        MainActivity.this,
+                        id,
+                        intent,
+                        PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+                    );
+                    alarmManager.cancel(pending);
+                } catch (Exception ignored) {
                 }
             });
         }

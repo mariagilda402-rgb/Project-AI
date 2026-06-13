@@ -15,6 +15,133 @@ if (window.supabase && typeof window.supabase.createClient === 'function') {
 }
 
 // ----------------------------------------------------
+// Network Guard (Wi-Fi required for Jarvis / cloud AI)
+// ----------------------------------------------------
+function isNetworkOnline() {
+    if (window.AndroidNative && typeof window.AndroidNative.isNetworkOnline === 'function') {
+        try { return !!window.AndroidNative.isNetworkOnline(); } catch (_) {}
+    }
+    return !!navigator.onLine;
+}
+
+function isWifiConnected() {
+    if (window.AndroidNative && typeof window.AndroidNative.isWifiConnected === 'function') {
+        try { return !!window.AndroidNative.isWifiConnected(); } catch (_) {}
+    }
+    if (!navigator.onLine) return false;
+    const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+    if (conn && conn.type) {
+        return conn.type === 'wifi' || conn.type === 'ethernet';
+    }
+    // APK antigo sem bridge Wi-Fi: usa rede geral até rebuild do app
+    if (window.AndroidNative && typeof window.AndroidNative.isNetworkOnline === 'function') {
+        try { return !!window.AndroidNative.isNetworkOnline(); } catch (_) {}
+    }
+    if (window.AndroidNative) return true;
+    return false;
+}
+
+function isJarvisCloudReady() {
+    return isWifiConnected() && !!window.nexusSupabase;
+}
+
+function requireWifiForJarvis(label) {
+    if (isWifiConnected()) return true;
+    showToast('Conecte-se ao Wi-Fi para usar o Jarvis' + (label ? ' (' + label + ')' : '') + '.');
+    updateJarvisFabState();
+    return false;
+}
+
+function updateJarvisFabState() {
+    const fab = document.getElementById('nexus-ai-fab');
+    if (!fab) return;
+    const ok = isWifiConnected();
+    fab.classList.toggle('jarvis-disabled', !ok);
+    fab.setAttribute('aria-disabled', ok ? 'false' : 'true');
+    fab.title = ok ? 'Ligar para o Jarvis' : 'Wi-Fi necessário';
+}
+
+function updateNetworkSettingsUI() {
+    const el = document.getElementById('settings-wifi-status');
+    if (!el) return;
+    if (isWifiConnected()) {
+        el.innerHTML = '<i class="fa-solid fa-wifi" style="color:var(--accent-green)"></i> Wi-Fi conectado';
+        el.className = 'settings-net-ok';
+    } else if (isNetworkOnline()) {
+        el.innerHTML = '<i class="fa-solid fa-signal" style="color:#fbbf24"></i> Dados móveis (Jarvis indisponível)';
+        el.className = 'settings-net-warn';
+    } else {
+        el.innerHTML = '<i class="fa-solid fa-plane" style="color:var(--accent-pink)"></i> Sem conexão';
+        el.className = 'settings-net-off';
+    }
+}
+
+let _syncIntervalMs = parseInt(localStorage.getItem('nexus_sync_interval_ms') || '60000', 10) || 60000;
+let _syncIntervalId = null;
+
+function startSyncInterval() {
+    if (_syncIntervalId) clearInterval(_syncIntervalId);
+    _syncIntervalId = setInterval(backgroundSync, _syncIntervalMs);
+}
+
+window.setSyncInterval = function(seconds) {
+    const ms = Math.max(15000, parseInt(seconds, 10) * 1000);
+    _syncIntervalMs = ms;
+    localStorage.setItem('nexus_sync_interval_ms', String(ms));
+    startSyncInterval();
+    const hint = document.getElementById('sync-interval-hint');
+    if (hint) hint.textContent = 'Sincronização automática a cada ' + (ms / 1000) + ' segundos quando online.';
+};
+
+window.applyMotionLevel = function(level) {
+    const v = level || 'balanced';
+    document.body.setAttribute('data-motion', v);
+    localStorage.setItem('nexus_motion_level', v);
+};
+
+window.applyEnemMode = function(enabled) {
+    document.body.classList.toggle('enem-mode', !!enabled);
+    localStorage.setItem('nexus_enem_mode', enabled ? '1' : '0');
+    if (enabled) showToast('Modo ENEM ativo — foco em estudos!');
+};
+
+window.applyNotificationsPref = function(enabled) {
+    localStorage.setItem('nexus_notifications', enabled ? '1' : '0');
+};
+
+function initAppPreferences() {
+    applyMotionLevel(localStorage.getItem('nexus_motion_level') || 'balanced');
+    if (localStorage.getItem('nexus_enem_mode') === '1') document.body.classList.add('enem-mode');
+    const syncSel = document.getElementById('cfg-sync-interval');
+    if (syncSel) syncSel.value = String(_syncIntervalMs / 1000);
+    const motionSel = document.getElementById('cfg-motion-level');
+    if (motionSel) motionSel.value = localStorage.getItem('nexus_motion_level') || 'balanced';
+    const enemCb = document.getElementById('toggle-enem-mode');
+    if (enemCb) enemCb.checked = localStorage.getItem('nexus_enem_mode') === '1';
+    const notifCb = document.getElementById('toggle-notifications');
+    if (notifCb) notifCb.checked = localStorage.getItem('nexus_notifications') !== '0';
+    const amoledCb = document.getElementById('toggle-amoled');
+    if (amoledCb) amoledCb.checked = !!localStorage.getItem('nexus_amoled') || document.body.classList.contains('theme-amoled');
+}
+
+window.addEventListener('online', () => {
+    updateSyncIndicator('synced');
+    updateJarvisFabState();
+    updateNetworkSettingsUI();
+    backgroundSync();
+});
+window.addEventListener('offline', () => {
+    updateSyncIndicator('offline');
+    updateJarvisFabState();
+    updateNetworkSettingsUI();
+    if (typeof jarvisCallActive !== 'undefined' && jarvisCallActive && typeof window.endJarvisCall === 'function') {
+        window.endJarvisCall();
+        showToast('Ligação encerrada — sem conexão.');
+    }
+});
+setInterval(() => { updateJarvisFabState(); updateNetworkSettingsUI(); }, 8000);
+
+// ----------------------------------------------------
 // Offline-First Database (LocalStorage)
 // ----------------------------------------------------
 class LocalDB {
@@ -111,6 +238,11 @@ window.toggleJarvisCall = function() {
         window.endJarvisCall();
         return;
     }
+    if (!requireWifiForJarvis('ligação')) return;
+    if (!window.nexusSupabase) {
+        showToast('Entre com Google nas configurações para usar o Jarvis.');
+        return;
+    }
     jarvisCallActive = true;
     jarvisCallStartedAt = Date.now();
     const banner = document.getElementById('jarvis-call-banner');
@@ -160,8 +292,10 @@ window.receiveNativeVision = function(text) {
 // Sync Engine (unified offline-first)
 // ----------------------------------------------------
 const SYNC_TABLES = [
-    'nexus_user', 'habits', 'tasks', 'finance_transactions',
-    'nexus_rewards', 'study_notes', 'nexus_goals', 'fitness_workouts', 'nexus_videos'
+    'nexus_user', 'habits', 'habit_logs', 'tasks', 'finance_transactions',
+    'nexus_rewards', 'study_notes', 'study_notebooks', 'flashcards', 'nexus_goals',
+    'fitness_workouts', 'nexus_videos', 'routines', 'journal_entries',
+    'pomo_sessions', 'reading_books', 'reading_sessions', 'quiz_attempts'
 ];
 let syncInProgress = false;
 
@@ -362,29 +496,23 @@ function sendLocalNotification(title, body) {
 // Offline-First Data Operations
 // ----------------------------------------------------
 
+function syncUserStatsToNexusUser() {
+    const stats = LocalDB.get('user_stats') || { xp: 0, points: 0, level: 1 };
+    const user = LocalDB.getSingle('nexus_user', 1) || { id: 1, name: 'Comandante' };
+    user.xp = stats.xp || 0;
+    user.points = stats.points || 0;
+    user.level = stats.level || 1;
+    LocalDB.upsert('nexus_user', user);
+}
+
 function loadUserStats() {
-    const user = LocalDB.getSingle('nexus_user', 1) || { xp: 0, level: 1, points: 0, name: 'Comandante' };
-    setTextIfPresent('user-level', user.level);
+    syncUserStatsToNexusUser();
+    const stats = LocalDB.get('user_stats') || { xp: 0, level: 1, points: 0 };
+    const user = LocalDB.getSingle('nexus_user', 1) || { name: 'Comandante' };
+    setTextIfPresent('user-level', stats.level);
     setTextIfPresent('user-name', user.name || 'Comandante');
-    setTextIfPresent('val-xp', user.xp);
-    setTextIfPresent('val-points', user.points);
-    setTextIfPresent('stat-xp', user.xp);
-    setTextIfPresent('stat-points', user.points);
-    setTextIfPresent('xp-level-label', 'Nível ' + (user.level || 1));
-
-    const today = new Date().toISOString().split('T')[0];
-    const habits = LocalDB.get('habits').filter(h => h.active === 1 && !h.is_deleted);
-    const logs = LocalDB.get('habit_logs').filter(l => l.date === today);
-    const doneToday = logs.filter(l => habits.some(h => h.id === l.habit_id)).length;
-    setTextIfPresent('stat-habits-today', doneToday + '/' + habits.length);
-
-    const tasks = LocalDB.get('tasks').filter(t => !t.is_deleted && !t.done_at);
-    setTextIfPresent('stat-tasks-pending', tasks.length);
-
-    const xpForLevel = (user.level || 1) * 100;
-    const xpPct = Math.min(100, Math.round(((user.xp || 0) % xpForLevel) / xpForLevel * 100));
-    const bar = document.getElementById('xp-progress-bar');
-    if (bar) bar.style.width = xpPct + '%';
+    setTextIfPresent('val-xp', stats.xp);
+    setTextIfPresent('val-points', stats.points);
 }
 
 function loadVideos() {
@@ -409,44 +537,18 @@ function loadVideos() {
 }
 
 function loadHabits() {
+    if (typeof filterHabits === 'function') {
+        const active = document.querySelector('#view-habits .study-chip.active');
+        filterHabits(active?.dataset?.filter || 'all', active || null);
+        return;
+    }
     const container = document.getElementById('habits-list');
-    const data = LocalDB.get('habits').filter(h => h.active === 1 && !h.is_deleted);
-    
-    container.innerHTML = data.length ? '' : '<div style="text-align:center; color:var(--text-secondary); margin-top:20px;">Nenhum hábito cadastrado.</div>';
-    data.forEach(habit => {
-        const el = document.createElement('div');
-        el.className = 'list-item glass';
-        const isDone = false; // Need a better way to store daily completions offline
-        el.innerHTML = `
-            <div class="item-main">
-                <span class="item-title">${habit.name}</span>
-                <span class="item-subtitle">Streak: 🔥 ${habit.current_streak}</span>
-            </div>
-            <button class="item-action ${isDone ? 'done' : ''}" onclick="toggleHabit(${habit.id}, this)">
-                <i class="fa-solid fa-check"></i>
-            </button>
-        `;
-        container.appendChild(el);
-    });
+    if (!container) return;
+    container.innerHTML = '<div style="text-align:center;color:var(--text-secondary);margin-top:20px;">Nenhum hábito cadastrado.</div>';
 }
 
-window.toggleHabit = function(id, btn) {
-    btn.classList.toggle('done');
-    if (navigator.vibrate) navigator.vibrate(50);
-    
-    if (btn.classList.contains('done')) {
-        sendLocalNotification('Hábito Concluído!', 'Você ganhou pontos de experiência!');
-        
-        // Update user stats offline
-        const user = LocalDB.getSingle('nexus_user', 1) || { id: 1, xp: 0, points: 0, level: 1 };
-        user.xp += 25;
-        user.points += 25;
-        user.level = 1 + Math.floor(user.xp / 1000);
-        LocalDB.upsert('nexus_user', user);
-        
-        loadUserStats();
-        backgroundSync(); // trigger sync
-    }
+window.toggleHabit = function(id) {
+    toggleHabitDirect(id);
 };
 
 function loadTasks() {
@@ -465,18 +567,12 @@ function loadTasks() {
 
 window.completeTask = function(id, btn) {
     const task = LocalDB.getSingle('tasks', id);
-    if(task) {
+    if (task) {
         task.done_at = new Date().toISOString();
+        task.status = 'done';
+        task.completed = 1;
         LocalDB.upsert('tasks', task);
-        
-        const user = LocalDB.getSingle('nexus_user', 1);
-        if(user) {
-            user.xp += task.points_reward || 10;
-            user.points += task.points_reward || 10;
-            user.level = 1 + Math.floor(user.xp / 1000);
-            LocalDB.upsert('nexus_user', user);
-            loadUserStats();
-        }
+        awardXP(task.points_reward || 10, 'Tarefa concluida');
         loadTasks();
         backgroundSync();
     }
@@ -602,15 +698,51 @@ window.updateGoalProgress = function(id) {
     showToast('Progresso atualizado!');
 };
 
+function updateFitnessStats() {
+    const workouts = LocalDB.get('fitness_workouts').filter(t => !t.is_deleted);
+    const now = new Date();
+    const weekAgo = new Date(now);
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    const weekCount = workouts.filter(w => {
+        const d = new Date(w.date || w.created_at || 0);
+        return d >= weekAgo;
+    }).length;
+
+    const dates = [...new Set(workouts.map(w => (w.date || w.created_at || '').split('T')[0]).filter(Boolean))].sort().reverse();
+    let streak = 0;
+    const today = now.toISOString().split('T')[0];
+    for (let i = 0; i < 60; i++) {
+        const d = new Date(now);
+        d.setDate(d.getDate() - i);
+        const ds = d.toISOString().split('T')[0];
+        if (dates.includes(ds)) streak++;
+        else if (i > 0) break;
+    }
+    if (!dates.includes(today) && streak === 0 && dates.length) {
+        const last = dates[0];
+        const diff = Math.floor((now - new Date(last)) / 86400000);
+        if (diff === 1) streak = 1;
+    }
+
+    setTextIfPresent('fit-week-count', weekCount);
+    setTextIfPresent('fit-streak', streak);
+    setTextIfPresent('fit-total', workouts.length);
+}
+
 function loadFitness() {
     const container = document.getElementById('fitness-list');
-    if(!container) return;
-    const data = LocalDB.get('fitness_workouts').filter(t => !t.is_deleted);
+    if (!container) return;
+    updateFitnessStats();
+    const data = LocalDB.get('fitness_workouts').filter(t => !t.is_deleted)
+        .sort((a, b) => (b.date || b.created_at || '').localeCompare(a.date || a.created_at || ''));
     container.innerHTML = data.length ? '' : '<div style="text-align:center; color:var(--text-secondary); margin-top:20px;">Nenhum treino registrado.</div>';
-    data.slice(0,10).forEach(t => {
+    data.slice(0, 10).forEach(t => {
         const el = document.createElement('div');
         el.className = 'list-item glass';
-        el.innerHTML = `<div class="item-main"><span class="item-title">${t.type}</span><span class="item-subtitle">${t.duration_minutes || 0} min | ${t.calories_burned || 0} kcal</span></div>`;
+        const title = t.name || t.type || 'Treino';
+        const sub = t.muscle_group || t.notes || '';
+        const meta = t.duration_minutes ? `${t.duration_minutes} min` : (t.date || '').split('T')[0];
+        el.innerHTML = `<div class="item-main"><span class="item-title">${escapeHtml(title)}</span><span class="item-subtitle">${escapeHtml(sub || meta)}</span></div>`;
         container.appendChild(el);
     });
 }
@@ -672,6 +804,206 @@ window.discoverIoT = async function() {
     }
 };
 
+window.promptAddHabit = function() {
+    const modal = document.getElementById('create-modal');
+    const typeSel = document.getElementById('create-type');
+    if (modal && typeSel) {
+        typeSel.value = 'habit';
+        document.getElementById('habit-options').style.display = 'flex';
+        openCreateModal();
+        return;
+    }
+    const name = prompt('Nome do hábito:');
+    if (!name || !name.trim()) return;
+    LocalDB.upsert('habits', { id: Date.now(), name: name.trim(), active: 1, current_streak: 0, period: 'all' });
+    loadHabits();
+    backgroundSync();
+    showToast('Hábito criado!');
+};
+
+window.promptAddTask = function() {
+    const modal = document.getElementById('create-modal');
+    const typeSel = document.getElementById('create-type');
+    if (modal && typeSel) {
+        typeSel.value = 'task';
+        document.getElementById('habit-options').style.display = 'none';
+        openCreateModal();
+        return;
+    }
+    const title = prompt('Título da tarefa:');
+    if (!title || !title.trim()) return;
+    LocalDB.upsert('tasks', { id: Date.now(), title: title.trim(), name: title.trim(), points_reward: 10 });
+    loadTasks();
+    backgroundSync();
+    showToast('Tarefa criada!');
+};
+
+function appendChatBubble(role, text, loading) {
+    const hist = document.getElementById('chat-history');
+    if (!hist) return null;
+    const div = document.createElement('div');
+    div.className = 'chat-message ' + (role === 'user' ? 'user-msg' : 'jarvis-msg');
+    div.style.cssText = role === 'user'
+        ? 'align-self:flex-end;background:rgba(139,92,246,0.25);border:1px solid var(--accent-purple);padding:10px 15px;border-radius:12px;border-bottom-right-radius:2px;max-width:85%'
+        : 'align-self:flex-start;background:rgba(0,206,201,0.15);border:1px solid var(--accent-blue);padding:10px 15px;border-radius:12px;border-bottom-left-radius:2px;max-width:85%';
+    div.innerHTML = '<p style="margin:0;font-size:0.95rem;color:white">' + (loading ? '<i class="fa-solid fa-circle-notch fa-spin"></i> ' : '') + escapeHtml(text) + '</p>';
+    hist.appendChild(div);
+    hist.scrollTop = hist.scrollHeight;
+    return div;
+}
+
+function tryLocalJarvisCommand(text) {
+    const t = text.toLowerCase().trim();
+    if (/^(oi|olá|ola|hey|jarvis)/.test(t)) {
+        return 'Olá! Posso criar hábitos, tarefas, registrar treinos ou ajudar nos estudos. O que precisa?';
+    }
+    const habitMatch = t.match(/(?:criar|adicionar|novo)\s+h[aá]bito\s+(.+)/i) || t.match(/h[aá]bito:\s*(.+)/i);
+    if (habitMatch) {
+        const name = habitMatch[1].trim();
+        LocalDB.upsert('habits', { id: Date.now(), name, active: 1, current_streak: 0, period: 'all' });
+        loadHabits();
+        backgroundSync();
+        return `Hábito "${name}" criado. Boa sorte mantendo a consistência!`;
+    }
+    const taskMatch = t.match(/(?:criar|adicionar|nova)\s+tarefa\s+(.+)/i) || t.match(/tarefa:\s*(.+)/i);
+    if (taskMatch) {
+        const title = taskMatch[1].trim();
+        LocalDB.upsert('tasks', { id: Date.now(), title, name: title, points_reward: 10 });
+        loadTasks();
+        backgroundSync();
+        return `Tarefa "${title}" adicionada à sua lista.`;
+    }
+    if (/quantos\s+cards|srs|flashcard/.test(t)) {
+        const cards = LocalDB.get('flashcards').filter(c => !c.is_deleted);
+        const due = cards.filter(c => !c.next_review || c.next_review <= new Date().toISOString()).length;
+        return `Você tem ${due} flashcards para revisar hoje (${cards.length} no total).`;
+    }
+    if (/briefing|resumo\s+do\s+dia|hoje/.test(t)) {
+        const habits = LocalDB.get('habits').filter(h => h.active === 1 && !h.is_deleted);
+        const today = new Date().toISOString().split('T')[0];
+        const done = LocalDB.get('habit_logs').filter(l => l.date === today).length;
+        const tasks = LocalDB.get('tasks').filter(x => !x.done_at && !x.is_deleted).length;
+        return `Hoje: ${done}/${habits.length} hábitos feitos, ${tasks} tarefas pendentes. Foco no ENEM — revise seus cards SRS!`;
+    }
+    return null;
+}
+
+async function pollCommandResult(cmdId, timeoutMs) {
+    const supabaseClient = window.nexusSupabase;
+    if (!supabaseClient) return null;
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+        const { data } = await supabaseClient.from('nexus_commands').select('status,result').eq('id', cmdId).maybeSingle();
+        if (data?.status === 'completed' && data.result) {
+            try {
+                const parsed = JSON.parse(data.result);
+                return parsed.reply || parsed.message || data.result;
+            } catch (_) {
+                return data.result;
+            }
+        }
+        if (data?.status === 'error') return 'Erro ao processar no desktop. Tente novamente.';
+        await new Promise(r => setTimeout(r, 2000));
+    }
+    return null;
+}
+
+window.sendChatMessage = async function() {
+    const input = document.getElementById('chat-input');
+    const text = input?.value?.trim();
+    if (!text) return;
+    appendChatBubble('user', text);
+    input.value = '';
+    const pending = appendChatBubble('jarvis', 'Processando...', true);
+
+    const localReply = tryLocalJarvisCommand(text);
+    if (localReply) {
+        if (pending) pending.querySelector('p').innerHTML = escapeHtml(localReply);
+        return;
+    }
+
+    if (!isWifiConnected()) {
+        if (pending) pending.querySelector('p').textContent = 'Sem Wi-Fi. Comandos locais: "criar hábito X", "criar tarefa Y", "quantos cards", "briefing".';
+        return;
+    }
+
+    if (window.nexusSupabase && isNetworkOnline()) {
+        try {
+            const { data, error } = await window.nexusSupabase.from('nexus_commands').insert({
+                command: 'MOBILE_CHAT: ' + text,
+                source: 'mobile',
+                status: 'pending'
+            }).select('id').single();
+            if (!error && data?.id) {
+                const reply = await pollCommandResult(data.id, 25000);
+                if (reply) {
+                    if (pending) pending.querySelector('p').textContent = reply;
+                    backgroundSync();
+                    return;
+                }
+            }
+        } catch (e) {
+            console.warn('Chat queue error:', e);
+        }
+    }
+
+    const fallback = 'Jarvis offline. Comandos locais: "criar hábito X", "criar tarefa Y", "quantos cards". Com o PC ligado, processo ações completas.';
+    if (pending) pending.querySelector('p').textContent = fallback;
+};
+
+window.requestMorningBriefing = function() {
+    const input = document.getElementById('chat-input');
+    if (input) input.value = 'briefing do dia';
+    sendChatMessage();
+};
+
+window.navigateTo = function(viewId) {
+    const nav = document.querySelector(`.nav-item[data-target="${viewId}"]`);
+    if (nav) nav.click();
+};
+
+function loadTodayDashboard() {
+    const now = new Date();
+    const today = now.toISOString().split('T')[0];
+    const dateLabel = document.getElementById('hoje-date-label');
+    if (dateLabel) {
+        dateLabel.textContent = now.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'short' });
+    }
+
+    const habits = LocalDB.get('habits').filter(h => h.active === 1 && !h.is_deleted);
+    const logs = LocalDB.get('habit_logs');
+    const doneToday = logs.filter(l => l.date === today).length;
+    const tasks = LocalDB.get('tasks').filter(t => !t.done_at && !t.is_deleted);
+    const cards = LocalDB.get('flashcards').filter(c => !c.is_deleted);
+    const dueCards = cards.filter(c => {
+        const nr = c.next_review || c.nextReviewDate;
+        return !nr || nr <= now.toISOString();
+    }).length;
+
+    const brief = document.getElementById('hoje-briefing-text');
+    if (brief) {
+        brief.textContent = `${doneToday}/${habits.length} hábitos feitos · ${tasks.length} tarefas · ${dueCards} cards SRS para revisar.`;
+    }
+
+    const list = document.getElementById('hoje-habits-checklist');
+    if (list) {
+        const morning = habits.filter(h => !h.period || h.period === 'all' || h.period === 'morning').slice(0, 5);
+        if (!morning.length) {
+            list.innerHTML = '<div style="font-size:0.85rem;color:var(--text-secondary)">Nenhum hábito. Toque em + Hábito para começar.</div>';
+        } else {
+            list.innerHTML = morning.map(h => {
+                const done = logs.some(l => String(l.habit_id) === String(h.id) && l.date === today);
+                return `<div class="list-item glass" style="padding:10px 12px;display:flex;justify-content:space-between;align-items:center">
+                    <span style="font-size:0.9rem">${escapeHtml(h.name)}</span>
+                    <button class="icon-btn ${done ? 'done' : ''}" style="width:28px;height:28px" onclick="toggleHabitDirect('${h.id}');loadTodayDashboard()">
+                        <i class="fa-solid fa-check"></i>
+                    </button>
+                </div>`;
+            }).join('');
+        }
+    }
+}
+
 window.toggleIoT = function(ip, turnOn) {
     showToast('IoT disponível apenas com Nexus desktop na mesma rede.');
 };
@@ -725,33 +1057,46 @@ function loadStudies() {
 
 function loadStudyStats() {
     const notes = LocalDB.get('study_notes').filter(n => !n.is_deleted);
-    const cards = LocalDB.get('flashcards');
+    const cards = LocalDB.get('flashcards').filter(c => !c.is_deleted);
     const pomoLog = LocalDB.get('pomo_sessions') || [];
-    
+    const attempts = LocalDB.get('quiz_attempts') || [];
+
     const todayStr = new Date().toDateString();
-    const todayPomos = pomoLog.filter(p => new Date(p.date).toDateString() === todayStr).length;
-    
-    // Study streak
+    const pomoDate = (p) => p.session_date || p.date || p.created_at || '';
+    const todayPomos = pomoLog.filter(p => {
+        const d = pomoDate(p);
+        return d && new Date(d).toDateString() === todayStr;
+    }).length;
+
     let streak = 0;
     const now = new Date();
     for (let i = 0; i < 60; i++) {
         const d = new Date(now);
         d.setDate(d.getDate() - i);
         const ds = d.toDateString();
+        const iso = d.toISOString().split('T')[0];
         const hadStudy = notes.some(n => n.created_at && new Date(n.created_at).toDateString() === ds) ||
-                         pomoLog.some(p => new Date(p.date).toDateString() === ds);
+                         pomoLog.some(p => String(pomoDate(p)).startsWith(iso)) ||
+                         attempts.some(a => a.finished_at && new Date(a.finished_at).toDateString() === ds);
         if (hadStudy) streak++;
         else if (i > 0) break;
     }
-    
+
+    const recentScores = attempts.filter(a => a.score_pct != null).slice(-5);
+    const avgQuiz = recentScores.length
+        ? Math.round(recentScores.reduce((s, a) => s + Number(a.score_pct), 0) / recentScores.length)
+        : null;
+
     const sv = document.getElementById('study-streak-val');
     const pv = document.getElementById('study-pomo-val');
     const nv = document.getElementById('study-notes-val');
     const cv = document.getElementById('study-cards-val');
+    const qv = document.getElementById('study-quiz-val');
     if (sv) sv.textContent = streak;
     if (pv) pv.textContent = todayPomos;
     if (nv) nv.textContent = notes.length;
     if (cv) cv.textContent = cards.length;
+    if (qv) qv.textContent = avgQuiz != null ? avgQuiz + '%' : '—';
 }
 
 function loadNotebooksGrid() {
@@ -1126,6 +1471,7 @@ function awardXP(amount, reason) {
     stats.level = newLevel;
     
     LocalDB.set('user_stats', stats);
+    syncUserStatsToNexusUser();
     
     // XP log
     const xpLog = LocalDB.get('xp_log') || [];
@@ -1139,6 +1485,7 @@ function awardXP(amount, reason) {
     }
     
     loadXPPanel();
+    loadTodayDashboard();
     console.info('[XP] +' + amount + ' XP: ' + reason + ' (total: ' + stats.xp + ')');
 }
 
@@ -1438,16 +1785,15 @@ window.openWorkoutBuilder = function() {
     const muscleGroup = prompt('Grupo muscular (ex: Peito e Ombro):') || '';
     
     const workout = {
-        id: Date.now().toString(),
+        id: Date.now(),
         name: name.trim(),
+        type: name.trim(),
         muscle_group: muscleGroup,
         exercises: [],
-        date: new Date().toISOString(),
+        date: new Date().toISOString().split('T')[0],
         created_at: new Date().toISOString()
     };
-    const workouts = LocalDB.get('fitness_workouts');
-    workouts.push(workout);
-    LocalDB.set('fitness_workouts', workouts);
+    LocalDB.upsert('fitness_workouts', workout);
     awardXP(25, 'Treino registrado: ' + name);
     loadFitness();
     showInAppNotification('Treino registrado! +25 XP', 'success');
@@ -1655,18 +2001,27 @@ window.closeHabitDetail = function() {
 };
 
 window.toggleHabitDirect = function(habitId) {
-    const logs = LocalDB.get('habit_logs');
+    const logs = LocalDB.getAll('habit_logs');
     const today = new Date().toISOString().split('T')[0];
-    const idx = logs.findIndex(l => l.habit_id === habitId && l.date === today);
+    const idx = logs.findIndex(l => String(l.habit_id) === String(habitId) && l.date === today && !l.is_deleted);
     if (idx !== -1) {
         logs.splice(idx, 1);
+        LocalDB.set('habit_logs', logs);
     } else {
-        logs.push({ id: Date.now().toString(), habit_id: habitId, date: today });
+        const entry = {
+            id: Date.now(),
+            habit_id: habitId,
+            date: today,
+            completed_date: today
+        };
+        LocalDB.upsert('habit_logs', entry);
+        logs.push(entry);
+        LocalDB.set('habit_logs', logs);
         awardXP(5, 'Habito concluido');
     }
-    LocalDB.set('habit_logs', logs);
     filterHabits(document.querySelector('#view-habits .study-chip.active')?.dataset?.filter || 'all');
     loadXPPanel();
+    backgroundSync();
 };
 
 window.completeCurrentHabit = function() {
@@ -2100,9 +2455,11 @@ window.toggleAmoled = function() {
     if (cb && cb.checked) {
         document.body.classList.add('theme-amoled');
         LocalDB.set('amoled_enabled', true);
+        localStorage.setItem('nexus_amoled', '1');
     } else {
         document.body.classList.remove('theme-amoled');
         LocalDB.set('amoled_enabled', false);
+        localStorage.removeItem('nexus_amoled');
     }
 };
 
@@ -2119,19 +2476,20 @@ window.initTheme = function() {
 
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Initial UI load from LocalStorage
     ensureDefaultRewards();
+    initAppPreferences();
     loadUserStats();
     loadHabits();
+    loadTodayDashboard();
     applyUiPrefs();
-    updateSyncIndicator(navigator.onLine && window.nexusSupabase ? 'synced' : 'offline');
-    
-    // Background tasks
+    updateJarvisFabState();
+    updateNetworkSettingsUI();
+    updateSyncIndicator(isNetworkOnline() && window.nexusSupabase ? 'synced' : 'offline');
+
     setTimeout(requestNotificationPermission, 2000);
     setTimeout(backgroundSync, 1000);
     setupRealtime();
-    
-    setInterval(backgroundSync, 60000);
+    startSyncInterval();
 });
 
 // ----------------------------------------------------
@@ -2143,6 +2501,8 @@ window.openSettingsView = function() {
     document.querySelectorAll('.view').forEach(view => view.classList.remove('active-view'));
     const view = document.getElementById('view-settings');
     if (view) view.classList.add('active-view');
+    updateNetworkSettingsUI();
+    initAppPreferences();
     if (typeof updateSettingsUI === 'function') updateSettingsUI();
 };
 
@@ -2557,6 +2917,7 @@ function updateToolbarState() {
 // ─── Jarvis AI Panel ─────────────────────────────────────────────
 
 function openJarvisPanel(mode) {
+    if (!requireWifiForJarvis('IA nas notas')) return;
     const panel = document.getElementById('jarvis-panel');
     if (!panel) return;
     panel.style.display = 'flex';
@@ -2607,6 +2968,9 @@ async function runJarvisAction() {
         alert('Por favor, insira um texto ou URL.');
         return;
     }
+    if (!requireWifiForJarvis('IA nas notas')) {
+        return;
+    }
     document.getElementById('jarvis-input-area').style.display = 'none';
     document.getElementById('jarvis-loading').style.display = 'block';
     document.getElementById('jarvis-result').style.display = 'none';
@@ -2634,8 +2998,7 @@ async function runJarvisAction() {
                 apiResponse = data;
             }
         } catch(fetchErr) {
-            // Backend offline — use simulated responses for demo
-            result = jarvisSimulate(_jarvisMode, prompt);
+            result = 'Jarvis indisponível. Verifique Wi-Fi e se o Nexus desktop está ligado.';
         }
 
         _jarvisLastResult = result;
@@ -2890,36 +3253,33 @@ function formatPomoTime(secs) {
 }
 
 window.startPomodoro = () => {
+    if (typeof startPomodoro === 'function' && document.getElementById('pomo-time')) {
+        startPomodoro();
+        return;
+    }
     if (pomoActive) return;
     pomoActive = true;
-    
-    // Play a tiny beep to acknowledge start
     playBeep(400, 100);
-    
     pomoInterval = setInterval(() => {
         if (pomoTimeLeft > 0) {
             pomoTimeLeft--;
-            document.getElementById('pomodoro-timer').innerText = formatPomoTime(pomoTimeLeft);
+            const el = document.getElementById('pomodoro-timer');
+            if (el) el.innerText = formatPomoTime(pomoTimeLeft);
         } else {
-            // Finished!
             clearInterval(pomoInterval);
             pomoActive = false;
-            
-            // Reward XP
-            const user = LocalDB.getSingle('nexus_user', 1) || { id: 1, xp: 0, points: 0, level: 1 };
-            user.xp += 50;
-            user.points += 50;
-            user.level = 1 + Math.floor(user.xp / 1000);
-            LocalDB.upsert('nexus_user', user);
-            
-            loadUserStats();
-            backgroundSync();
-            
-            sendLocalNotification('Foco Concluído!', 'Você ganhou +50 XP por 25 minutos de estudo.');
-            playBeep(800, 500); // Toca alarme final
-            
-            pomoTimeLeft = 25 * 60; // reset
-            document.getElementById('pomodoro-timer').innerText = formatPomoTime(pomoTimeLeft);
+            LocalDB.upsert('pomo_sessions', {
+                id: Date.now(),
+                type: 'focus',
+                duration_minutes: 25,
+                session_date: new Date().toISOString().split('T')[0]
+            });
+            awardXP(20, 'Sessao Pomodoro completa');
+            sendLocalNotification('Foco Concluido!', 'Voce ganhou +20 XP por 25 minutos de estudo.');
+            playBeep(800, 500);
+            pomoTimeLeft = 25 * 60;
+            const el = document.getElementById('pomodoro-timer');
+            if (el) el.innerText = formatPomoTime(pomoTimeLeft);
         }
     }, 1000);
 };
@@ -3028,18 +3388,19 @@ function resetPomodoro() {
 
 function finishPomodoro() {
     pausePomodoro();
-    _pomoTimeLeft = 5 * 60; // 5 min break
+    _pomoTimeLeft = 5 * 60;
     initPomodoroUI();
-    document.getElementById('pomo-mode-label').textContent = 'DESCANSO';
-    
-    // Save history
-    let ph = LocalDB.getAll('pomodoros') || [];
-    ph.push({ date: new Date().toISOString(), duration: 25 });
-    LocalDB.saveAll('pomodoros', ph);
-    
-    // Reward XP
-    if (typeof addXP === 'function') addXP(50);
-    showToast('🍅 Pomodoro concluído! +50 XP');
+    const label = document.getElementById('pomo-mode-label');
+    if (label) label.textContent = 'DESCANSO';
+
+    LocalDB.upsert('pomo_sessions', {
+        id: Date.now(),
+        type: 'focus',
+        duration_minutes: 25,
+        session_date: new Date().toISOString().split('T')[0]
+    });
+    awardXP(20, 'Sessao Pomodoro completa');
+    showToast('Pomodoro concluido! +20 XP');
     renderPomodoroHistory();
 }
 
@@ -3094,35 +3455,45 @@ function initFlashcardsDB() {
 }
 
 function createFlashcard(front, back, noteId = null) {
-    const cards = LocalDB.getAll('flashcards') || [];
-    cards.push({
-        id: 'fc_' + Date.now() + Math.floor(Math.random()*1000),
+    LocalDB.upsert('flashcards', {
+        id: 'fc_' + Date.now() + Math.floor(Math.random() * 1000),
+        note_id: noteId,
         noteId: noteId,
         front: front,
         back: back,
         interval: 0,
         repetition: 0,
+        repetitions: 0,
         efactor: 2.5,
+        ease_factor: 2.5,
+        next_review: new Date().toISOString(),
         nextReviewDate: new Date().toISOString()
     });
-    LocalDB.saveAll('flashcards', cards);
+}
+
+function normalizeFlashcard(card) {
+    if (!card.nextReviewDate && card.next_review) card.nextReviewDate = card.next_review;
+    if (!card.next_review && card.nextReviewDate) card.next_review = card.nextReviewDate;
+    return card;
 }
 
 function getDueFlashcards() {
-    const cards = LocalDB.getAll('flashcards') || [];
+    const cards = (LocalDB.getAll('flashcards') || []).map(normalizeFlashcard);
     const now = new Date().toISOString();
-    return cards.filter(c => c.nextReviewDate <= now);
+    return cards.filter(c => !c.is_deleted && (!c.nextReviewDate || c.nextReviewDate <= now));
 }
 
 window.showFlashcards = function() {
     initFlashcardsDB();
     _flashcardQueue = getDueFlashcards();
-    
-    // Add some dummy cards if empty for demo
-    if (LocalDB.getAll('flashcards').length === 0) {
-        createFlashcard('O que é o algoritmo SM-2?', 'É um algoritmo de Repetição Espaçada usado pelo Anki para otimizar a memorização.');
-        createFlashcard('Qual a capital do Brasil?', 'Brasília');
-        _flashcardQueue = getDueFlashcards();
+
+    if (!LocalDB.getAll('flashcards').filter(c => !c.is_deleted).length) {
+        showToast('Nenhum flashcard. Crie via notas ou Quiz ENEM.');
+        return;
+    }
+    if (!_flashcardQueue.length) {
+        showToast('Nenhum card pendente hoje. Volte amanhã!');
+        return;
     }
 
     _currentCardIndex = 0;
@@ -3216,20 +3587,16 @@ window.answerFlashcard = function(isCorrect) {
     const nextDate = new Date();
     nextDate.setDate(nextDate.getDate() + card.interval);
     card.nextReviewDate = nextDate.toISOString();
-    
-    // Update DB
-    const allCards = LocalDB.getAll('flashcards') || [];
-    const idx = allCards.findIndex(c => c.id === card.id);
-    if (idx !== -1) {
-        allCards[idx] = card;
-        LocalDB.saveAll('flashcards', allCards);
-    }
-    
-    // Animate and next
+    card.next_review = card.nextReviewDate;
+    card.ease_factor = card.efactor;
+    card.repetitions = card.repetition;
+    LocalDB.upsert('flashcards', card);
+
     const cardDiv = document.getElementById('flashcard-card');
-    cardDiv.style.transform = isCorrect ? 'translateX(50px) rotate(5deg) opacity(0)' : 'translateX(-50px) rotate(-5deg) opacity(0)';
+    cardDiv.classList.add(isCorrect ? 'fc-swipe-right' : 'fc-swipe-left');
     
     setTimeout(() => {
+        cardDiv.classList.remove('fc-swipe-right', 'fc-swipe-left');
         _currentCardIndex++;
         renderCurrentFlashcard();
     }, 300);
@@ -3934,23 +4301,20 @@ function renderHabitCharts() {
 function renderStudyCharts() {
     if (typeof Chart === 'undefined') return;
     initChartDefaults();
-    
-    const pomos = LocalDB.getAll('pomodoros') || [];
-    // Currently, flashcards don't log history per day, so we'll just track pomodoros for the chart
-    
+
+    const pomos = LocalDB.get('pomo_sessions') || [];
+    const pomoDate = (p) => p.session_date || p.date || (p.created_at || '').split('T')[0];
+
     const days = 7;
     const labels = [];
     const pomoData = [];
-    
+
     for (let i = days - 1; i >= 0; i--) {
         const d = new Date();
         d.setDate(d.getDate() - i);
         const iso = d.toISOString().split('T')[0];
-        
-        const dayName = d.toLocaleDateString('pt-BR', { weekday: 'short' });
-        labels.push(dayName);
-        
-        const count = pomos.filter(p => p.date.startsWith(iso)).length;
+        labels.push(d.toLocaleDateString('pt-BR', { weekday: 'short' }));
+        const count = pomos.filter(p => String(pomoDate(p)).startsWith(iso)).length;
         pomoData.push(count);
     }
     
@@ -3985,19 +4349,19 @@ function renderStudyCharts() {
 const _origLoadFinanceForCharts = window.loadFinance;
 window.loadFinance = function() {
     if (typeof _origLoadFinanceForCharts === 'function') _origLoadFinanceForCharts();
-    setTimeout(renderFinanceCharts, 100);
+    ensureChartJs().then(() => setTimeout(renderFinanceCharts, 100));
 };
 
 const _origLoadHabitsForCharts = window.loadHabits;
 window.loadHabits = function() {
     if (typeof _origLoadHabitsForCharts === 'function') _origLoadHabitsForCharts();
-    setTimeout(renderHabitCharts, 100);
+    ensureChartJs().then(() => setTimeout(renderHabitCharts, 100));
 };
 
 const _origLoadStudiesForCharts = window.loadStudies;
 window.loadStudies = function() {
     if (typeof _origLoadStudiesForCharts === 'function') _origLoadStudiesForCharts();
-    setTimeout(renderStudyCharts, 100);
+    ensureChartJs().then(() => setTimeout(renderStudyCharts, 100));
 };
 
 
@@ -4090,6 +4454,10 @@ window.handleOAuthCallback = async function(callbackUrl) {
 };
 
 async function loginWithGoogle() {
+    if (!isNetworkOnline()) {
+        showToast("Sem conexão com a internet.");
+        return;
+    }
     if (!window.nexusSupabase) {
         showToast("Servidor indisponível (Offline).");
         return;
@@ -4127,6 +4495,10 @@ async function logoutGoogle() {
 window.pushChangesToSupabase = syncData;
 
 function forceSyncData() {
+    if (!isNetworkOnline()) {
+        showToast("Sem conexão — sincronização indisponível.");
+        return;
+    }
     showToast("Sincronizando com a Nuvem...");
     syncData().then(() => {
         showToast("Sincronização concluída!");
@@ -4162,6 +4534,166 @@ window.onNativeCameraResult = function(dataUrl) {
     } else {
         showToast('Foto capturada — abra o editor de notas para inserir.');
     }
+};
+
+// ─── ENEM Quiz (mobile) ───────────────────────────────────────────
+
+const ENEM_QUIZ_QUESTIONS = [
+    { area: 'Matemática', stem: 'Uma família reduziu o consumo mensal de energia de 240 kWh para 204 kWh. Qual foi a redução percentual?', options: ['12%', '15%', '18%', '36%'], correct_index: 1, explanation: 'A redução foi de 36 kWh. 36/240 = 15%.' },
+    { area: 'Matemática', stem: 'Em uma função afim f(x)=2x+3, qual é o valor de f(5)?', options: ['10', '11', '13', '15'], correct_index: 2, explanation: 'f(5)=2*5+3=13.' },
+    { area: 'Matemática', stem: 'Um reservatório comporta 1200 litros e está com 35% da capacidade. Quantos litros faltam para enchê-lo?', options: ['420', '650', '780', '900'], correct_index: 2, explanation: '35% de 1200 = 420. Faltam 780 litros.' },
+    { area: 'Português', stem: "Na frase 'Ela estudou muito, portanto foi bem na prova', a palavra 'portanto' indica:", options: ['oposição', 'conclusão', 'adição', 'condição'], correct_index: 1, explanation: "'Portanto' introduz uma conclusão." },
+    { area: 'Português', stem: 'Em textos dissertativo-argumentativos, a tese é:', options: ['um exemplo secundário', 'a opinião central defendida', 'a citação obrigatória', 'o resumo final'], correct_index: 1, explanation: 'A tese é o ponto de vista central do texto.' },
+    { area: 'Português', stem: "A expressão 'chuva de ideias' é um exemplo de linguagem:", options: ['literal', 'figurada', 'técnica', 'jurídica'], correct_index: 1, explanation: 'Usa sentido figurado.' },
+    { area: 'Ciências da Natureza', stem: 'Durante a fotossíntese, a fase clara produz principalmente:', options: ['glicose e oxigênio', 'ATP e NADPH', 'DNA e RNA', 'sais minerais'], correct_index: 1, explanation: 'A fase clara produz ATP e NADPH.' },
+    { area: 'Ciências da Natureza', stem: 'Ao ligar vários aparelhos em uma mesma tomada, o risco de aquecimento aumenta por:', options: ['da queda da gravidade', 'do aumento da corrente elétrica', 'da redução da frequência', 'da ausência de tensão'], correct_index: 1, explanation: 'Mais aparelhos = maior corrente = mais aquecimento.' },
+    { area: 'Ciências da Natureza', stem: 'A mitocôndria é associada principalmente à:', options: ['digestão intracelular', 'respiração celular', 'fotossíntese', 'síntese de proteínas'], correct_index: 1, explanation: 'Mitocôndrias produzem ATP via respiração celular.' },
+    { area: 'Ciências Humanas', stem: 'A Revolução Industrial intensificou a urbanização porque:', options: ['eliminou todas as fábricas', 'concentrou empregos nas cidades', 'proibiu o comércio', 'reduziu a produção'], correct_index: 1, explanation: 'Fábricas nas cidades atraíram trabalhadores.' },
+    { area: 'Ciências Humanas', stem: 'No Brasil, a política do café com leite relacionava-se a elites de:', options: ['São Paulo e Minas Gerais', 'Amazonas e Pará', 'Bahia e Pernambuco', 'Rio Grande do Sul e Ceará'], correct_index: 0, explanation: 'Café (SP) e leite (MG).' },
+    { area: 'Ciências Humanas', stem: 'O conceito de cidadania envolve direitos:', options: ['apenas privados', 'civis, políticos e sociais', 'somente comerciais', 'exclusivos de governantes'], correct_index: 1, explanation: 'Cidadania = direitos + deveres na vida coletiva.' }
+];
+
+let _quizQuestions = [], _quizIdx = 0, _quizCorrect = 0, _quizAttemptId = null, _quizTimerId = null, _quizSeconds = 0, _quizAnswers = [];
+
+function formatQuizTime(s) {
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return (m < 10 ? '0' : '') + m + ':' + (sec < 10 ? '0' : '') + sec;
+}
+
+window.openQuiz = function() {
+    document.getElementById('quiz-view').style.display = 'flex';
+    document.getElementById('quiz-setup').style.display = 'block';
+    document.getElementById('quiz-play').style.display = 'none';
+    document.getElementById('quiz-done').style.display = 'none';
+};
+
+window.closeQuiz = function() {
+    if (_quizTimerId) clearInterval(_quizTimerId);
+    document.getElementById('quiz-view').style.display = 'none';
+};
+
+window.startQuiz = function() {
+    const area = document.getElementById('quiz-area-sel')?.value || '';
+    const count = parseInt(document.getElementById('quiz-mode-sel')?.value || '5', 10);
+    let pool = ENEM_QUIZ_QUESTIONS.slice();
+    if (area) pool = pool.filter(q => q.area === area);
+    pool.sort(() => Math.random() - 0.5);
+    _quizQuestions = pool.slice(0, Math.min(count, pool.length));
+    if (!_quizQuestions.length) {
+        showToast('Nenhuma questão para esta área.');
+        return;
+    }
+    _quizIdx = 0;
+    _quizCorrect = 0;
+    _quizSeconds = 0;
+    _quizAnswers = [];
+    _quizAttemptId = 'qa_' + Date.now();
+    if (_quizTimerId) clearInterval(_quizTimerId);
+    _quizTimerId = setInterval(() => {
+        _quizSeconds++;
+        const t = document.getElementById('quiz-timer');
+        if (t) t.textContent = formatQuizTime(_quizSeconds);
+    }, 1000);
+    document.getElementById('quiz-setup').style.display = 'none';
+    document.getElementById('quiz-play').style.display = 'block';
+    document.getElementById('quiz-done').style.display = 'none';
+    renderQuizQuestion();
+};
+
+function renderQuizQuestion() {
+    const play = document.getElementById('quiz-play');
+    if (_quizIdx >= _quizQuestions.length) {
+        finishQuiz();
+        return;
+    }
+    const q = _quizQuestions[_quizIdx];
+    play.innerHTML = `
+        <div class="quiz-card glass">
+            <div class="quiz-meta">
+                <span>Questão ${_quizIdx + 1}/${_quizQuestions.length} · ${escapeHtml(q.area)}</span>
+                <span id="quiz-timer" class="quiz-timer">${formatQuizTime(_quizSeconds)}</span>
+            </div>
+            <p class="quiz-stem">${escapeHtml(q.stem)}</p>
+            <div class="quiz-options">
+                ${q.options.map((o, i) => `<button type="button" class="quiz-opt" data-i="${i}">${escapeHtml(o)}</button>`).join('')}
+            </div>
+        </div>`;
+    play.querySelectorAll('.quiz-opt').forEach(btn => {
+        btn.onclick = () => onQuizPick(parseInt(btn.dataset.i, 10));
+    });
+}
+
+function onQuizPick(chosen) {
+    const q = _quizQuestions[_quizIdx];
+    const ok = chosen === q.correct_index;
+    if (ok) _quizCorrect++;
+    _quizAnswers.push({ question: q.stem, area: q.area, chosen, correct_index: q.correct_index, ok, explanation: q.explanation });
+    _quizIdx++;
+    renderQuizQuestion();
+}
+
+function finishQuiz() {
+    if (_quizTimerId) clearInterval(_quizTimerId);
+    const total = _quizQuestions.length;
+    const score = total ? Math.round((_quizCorrect / total) * 100) : 0;
+    const attempt = {
+        id: _quizAttemptId,
+        area: document.getElementById('quiz-area-sel')?.value || 'Todas',
+        score_pct: score,
+        correct_count: _quizCorrect,
+        total_count: total,
+        duration_sec: _quizSeconds,
+        finished_at: new Date().toISOString(),
+        answers_json: JSON.stringify(_quizAnswers)
+    };
+    LocalDB.upsert('quiz_attempts', attempt);
+    awardXP(Math.round(score / 5), 'Quiz ENEM: ' + score + '%');
+    loadStudyStats();
+
+    document.getElementById('quiz-play').style.display = 'none';
+    const done = document.getElementById('quiz-done');
+    done.style.display = 'block';
+    const cls = score >= 70 ? 'good' : score >= 50 ? 'mid' : 'bad';
+    const wrong = _quizAnswers.filter(a => !a.ok);
+    done.innerHTML = `
+        <div class="quiz-result glass">
+            <h3>Resultado</h3>
+            <div class="quiz-score ${cls}">${score}%</div>
+            <p>${_quizCorrect}/${total} acertos · ${formatQuizTime(_quizSeconds)}</p>
+            ${wrong.length ? `<div class="quiz-review">${wrong.slice(0, 3).map(w => `
+                <div class="quiz-review-item">
+                    <p>${escapeHtml(w.question)}</p>
+                    <small>${escapeHtml(w.explanation)}</small>
+                </div>`).join('')}</div>` : '<p style="color:var(--accent-green)">Perfeito! 🎉</p>'}
+            <div class="quiz-result-actions">
+                <button class="quiz-btn" onclick="quizToFlashcards()"><i class="fa-solid fa-clone"></i> Cards dos erros</button>
+                <button class="quiz-btn secondary" onclick="startQuiz()">De novo</button>
+                <button class="quiz-btn ghost" onclick="closeQuiz()">Fechar</button>
+            </div>
+        </div>`;
+}
+
+window.quizToFlashcards = function() {
+    const wrong = _quizAnswers.filter(a => !a.ok);
+    if (!wrong.length) { showToast('Nenhum erro para revisar.'); return; }
+    wrong.forEach(w => {
+        createFlashcard(w.question, w.explanation + ' (Resposta: ' + (ENEM_QUIZ_QUESTIONS.find(q => q.stem === w.question)?.options[w.correct_index] || '') + ')', null);
+    });
+    showToast(wrong.length + ' flashcards criados!');
+    closeQuiz();
+    showFlashcards();
+};
+
+window.ensureChartJs = async function() {
+    if (typeof Chart !== 'undefined') return true;
+    return new Promise((resolve) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/npm/chart.js';
+        s.onload = () => resolve(true);
+        s.onerror = () => resolve(false);
+        document.head.appendChild(s);
+    });
 };
 
 // ─── Settings: Appearance & Local Data ───────────────────────────
@@ -4226,3 +4758,974 @@ function clearLocalDB() {
         window.location.reload();
     }
 }
+
+// ================================================================
+// SPRINT 4 — NexusCalendar, CRUD forms, reminders, studies redesign
+// ================================================================
+
+(function() {
+    const MONTH_NAMES = ['Janeiro','Fevereiro','Marco','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+    const todayISO = () => new Date().toISOString().split('T')[0];
+
+    function getDailyBudget() {
+        const el = document.getElementById('nexus_daily_budget');
+        const fromEl = el && el.value ? parseFloat(el.value) : null;
+        if (fromEl && fromEl > 0) return fromEl;
+        const stored = parseFloat(localStorage.getItem('nexus_daily_budget') || '0');
+        return stored > 0 ? stored : 100;
+    }
+
+    window.saveDailyBudget = function(val) {
+        localStorage.setItem('nexus_daily_budget', String(val || 100));
+        const el = document.getElementById('nexus_daily_budget');
+        if (el) el.value = val;
+    };
+
+    function habitScheduledOnDay(habit, dateISO) {
+        const dow = new Date(dateISO + 'T12:00:00').getDay();
+        const days = habit.days_of_week || [1,2,3,4,5];
+        if (Array.isArray(days) && days.length) return days.map(Number).includes(dow);
+        return true;
+    }
+
+    function ratioColor(ratio, hasData) {
+        if (!hasData) return 'hm-gray';
+        if (ratio >= 1) return 'hm-green';
+        if (ratio >= 0.5) return 'hm-orange';
+        if (ratio > 0) return 'hm-orange';
+        return 'hm-red';
+    }
+
+    function getFitnessPlanDays() {
+        try {
+            const parsed = JSON.parse(localStorage.getItem('nexus_fitness_plan_days') || '[1,2,3,4,5]');
+            return Array.isArray(parsed) ? parsed.map(Number) : [1,2,3,4,5];
+        } catch (e) { return [1,2,3,4,5]; }
+    }
+
+    window.NexusCalendar = {
+        selectedDateISO: todayISO(),
+        currentYear: new Date().getFullYear(),
+        currentMonth: new Date().getMonth() + 1,
+        activeModule: 'habits',
+        onSelectCallback: null,
+        _monthCache: null,
+
+        getSelectedDate() { return this.selectedDateISO; },
+
+        open(opts) {
+            opts = opts || {};
+            this.activeModule = opts.module || 'habits';
+            this.onSelectCallback = opts.onSelect || null;
+            const modal = document.getElementById('nexus-calendar-modal');
+            if (modal) modal.style.display = 'flex';
+            this.render();
+        },
+
+        close() {
+            const modal = document.getElementById('nexus-calendar-modal');
+            if (modal) modal.style.display = 'none';
+        },
+
+        changeMonth(delta) {
+            this.currentMonth += delta;
+            if (this.currentMonth < 1) { this.currentMonth = 12; this.currentYear--; }
+            else if (this.currentMonth > 12) { this.currentMonth = 1; this.currentYear++; }
+            this.render();
+        },
+
+        goToday() {
+            this.currentYear = new Date().getFullYear();
+            this.currentMonth = new Date().getMonth() + 1;
+            this.selectDay(todayISO());
+        },
+
+        selectDay(dateISO) {
+            this.selectedDateISO = dateISO;
+            this.close();
+            this.updateDateLabels();
+            if (typeof this.onSelectCallback === 'function') this.onSelectCallback(dateISO);
+        },
+
+        updateDateLabels() {
+            const d = new Date(this.selectedDateISO + 'T12:00:00');
+            const label = this.selectedDateISO === todayISO() ? 'Hoje' : d.toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' });
+            ['habits-date-label','tasks-date-label','finance-date-label','fitness-date-label'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.textContent = label;
+            });
+        },
+
+        buildMonthSummary(module, year, month) {
+            const daysInMonth = new Date(year, month, 0).getDate();
+            const summary = {};
+            for (let d = 1; d <= daysInMonth; d++) {
+                const dateISO = `${year}-${String(month).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+                summary[dateISO] = { color: 'hm-gray', ratio: 0, hasData: false };
+            }
+
+            if (module === 'habits') {
+                const habits = (LocalDB.get('habits') || []).filter(h => h.active === 1 && !h.is_deleted);
+                const logs = LocalDB.get('habit_logs') || [];
+                const logsByDate = {};
+                logs.forEach(l => {
+                    if (!l.date || l.is_deleted) return;
+                    if (!logsByDate[l.date]) logsByDate[l.date] = new Set();
+                    logsByDate[l.date].add(String(l.habit_id));
+                });
+                Object.keys(summary).forEach(dateISO => {
+                    const scheduled = habits.filter(h => habitScheduledOnDay(h, dateISO));
+                    if (!scheduled.length) { summary[dateISO].color = 'hm-gray'; return; }
+                    const done = scheduled.filter(h => logsByDate[dateISO] && logsByDate[dateISO].has(String(h.id))).length;
+                    const ratio = done / scheduled.length;
+                    summary[dateISO] = { ratio, hasData: true, color: ratioColor(ratio, true) };
+                });
+            } else if (module === 'tasks') {
+                const tasks = (LocalDB.get('tasks') || []).filter(t => !t.is_deleted && t.due_date);
+                Object.keys(summary).forEach(dateISO => {
+                    const due = tasks.filter(t => t.due_date === dateISO);
+                    if (!due.length) return;
+                    const done = due.filter(t => t.done_at || t.status === 'done').length;
+                    const ratio = done / due.length;
+                    summary[dateISO] = { ratio, hasData: true, color: ratioColor(ratio, true) };
+                });
+            } else if (module === 'finance') {
+                const budget = getDailyBudget();
+                const tx = (LocalDB.get('finance_transactions') || []).filter(t => !t.is_deleted && t.type === 'expense');
+                Object.keys(summary).forEach(dateISO => {
+                    const spent = tx.filter(t => (t.occurred_at || t.date || t.created_at || '').split('T')[0] === dateISO)
+                        .reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
+                    if (spent <= 0) return;
+                    const ratio = budget > 0 ? spent / budget : 1;
+                    let color = 'hm-green';
+                    if (ratio >= 1) color = 'hm-red';
+                    else if (ratio >= 0.5) color = 'hm-orange';
+                    summary[dateISO] = { ratio, hasData: true, color };
+                });
+            } else if (module === 'fitness') {
+                const planDays = getFitnessPlanDays();
+                const workouts = (LocalDB.get('fitness_workouts') || []).filter(w => !w.is_deleted);
+                const workoutDates = new Set(workouts.map(w => (w.date || w.created_at || '').split('T')[0]).filter(Boolean));
+                Object.keys(summary).forEach(dateISO => {
+                    const dow = new Date(dateISO + 'T12:00:00').getDay();
+                    const planned = planDays.includes(dow);
+                    const logged = workoutDates.has(dateISO);
+                    if (!planned && !logged) return;
+                    if (planned && logged) summary[dateISO] = { ratio: 1, hasData: true, color: 'hm-green' };
+                    else if (planned && !logged) summary[dateISO] = { ratio: 0, hasData: true, color: 'hm-red' };
+                    else summary[dateISO] = { ratio: 0, hasData: true, color: 'hm-gray' };
+                });
+            }
+            return summary;
+        },
+
+        render() {
+            const grid = document.getElementById('nexus-cal-grid');
+            const label = document.getElementById('nexus-cal-month-label');
+            if (!grid) return;
+            if (label) label.textContent = `${MONTH_NAMES[this.currentMonth - 1]} ${this.currentYear}`;
+            this._monthCache = this.buildMonthSummary(this.activeModule, this.currentYear, this.currentMonth);
+            grid.innerHTML = '';
+            const firstDay = new Date(this.currentYear, this.currentMonth - 1, 1).getDay();
+            const daysInMonth = new Date(this.currentYear, this.currentMonth, 0).getDate();
+            for (let i = 0; i < firstDay; i++) {
+                const empty = document.createElement('div');
+                grid.appendChild(empty);
+            }
+            for (let d = 1; d <= daysInMonth; d++) {
+                const dateISO = `${this.currentYear}-${String(this.currentMonth).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+                const dayData = this._monthCache[dateISO] || { color: 'hm-gray' };
+                const box = document.createElement('button');
+                box.type = 'button';
+                box.className = 'nexus-cal-day ' + dayData.color + (dateISO === this.selectedDateISO ? ' active-day' : '');
+                box.textContent = d;
+                box.onclick = () => this.selectDay(dateISO);
+                grid.appendChild(box);
+            }
+        }
+    };
+
+    // --- Habit fixes ---
+    function getSelectedDate() {
+        return (window.NexusCalendar && NexusCalendar.getSelectedDate()) || todayISO();
+    }
+
+    window.toggleHabitDirect = function(habitId, dateISO) {
+        const targetDate = dateISO || getSelectedDate();
+        const logs = LocalDB.getAll('habit_logs');
+        const idx = logs.findIndex(l => String(l.habit_id) === String(habitId) && l.date === targetDate && !l.is_deleted);
+        if (idx !== -1) {
+            logs.splice(idx, 1);
+            LocalDB.set('habit_logs', logs);
+        } else {
+            const entry = { id: Date.now(), habit_id: habitId, date: targetDate, completed_date: targetDate };
+            LocalDB.upsert('habit_logs', entry);
+            awardXP(5, 'Habito concluido');
+        }
+        if (typeof filterHabits === 'function') filterHabits(document.querySelector('#view-habits .study-chip.active')?.dataset?.filter || 'all');
+        loadXPPanel();
+        backgroundSync();
+    };
+
+    window.openHabitForm = function(habitId) {
+        currentHabitId = habitId || null;
+        const modal = document.getElementById('habit-detail-modal');
+        const habits = LocalDB.get('habits') || [];
+        const h = habitId ? habits.find(x => String(x.id) === String(habitId)) : null;
+        document.getElementById('habit-form-title').textContent = h ? 'Editar Habito' : 'Novo Habito';
+        document.getElementById('habit-form-name').value = h ? h.name : '';
+        document.getElementById('habit-form-desc').value = h ? (h.description || '') : '';
+        document.getElementById('habit-form-xp').value = h ? (h.xp_reward || 50) : 50;
+        document.getElementById('habit-form-period').value = h ? (h.period || 'all') : 'morning';
+        const reminder = h ? (h.alarm_time || h.target_time || '') : '';
+        document.getElementById('habit-alarm-time').value = reminder ? reminder.substring(0, 5) : '';
+        const days = h && h.days_of_week ? h.days_of_week.map(Number) : [1,2,3,4,5];
+        document.querySelectorAll('#habit-form-dow .dow-btn').forEach(btn => {
+            btn.classList.toggle('selected', days.includes(Number(btn.dataset.d)));
+        });
+        if (h) openHabitDetailStats(h);
+        if (modal) modal.style.display = 'flex';
+    };
+
+    window.openHabitDetail = function(habitId) { openHabitForm(habitId); };
+
+    function openHabitDetailStats(h) {
+        const logs = LocalDB.get('habit_logs') || [];
+        const sel = getSelectedDate();
+        let streak = 0;
+        const now = new Date();
+        for (let i = 0; i < 60; i++) {
+            const d = new Date(now); d.setDate(d.getDate() - i);
+            const ds = d.toISOString().split('T')[0];
+            if (logs.some(l => String(l.habit_id) === String(h.id) && l.date === ds)) streak++;
+            else if (i > 0) break;
+        }
+        const total = logs.filter(l => String(l.habit_id) === String(h.id)).length;
+        const isDone = logs.some(l => String(l.habit_id) === String(h.id) && l.date === sel);
+        if (document.getElementById('habit-detail-streak')) document.getElementById('habit-detail-streak').textContent = streak;
+        if (document.getElementById('habit-detail-total')) document.getElementById('habit-detail-total').textContent = total;
+        const btn = document.getElementById('habit-detail-complete-btn');
+        if (btn) {
+            btn.innerHTML = isDone ? '<i class="fa-solid fa-xmark"></i> Desmarcar' : '<i class="fa-solid fa-check"></i> Feito';
+        }
+    }
+
+    window.saveHabitForm = function() {
+        const name = document.getElementById('habit-form-name')?.value?.trim();
+        if (!name) { showToast('Nome obrigatorio'); return; }
+        const days = [];
+        document.querySelectorAll('#habit-form-dow .dow-btn.selected').forEach(b => days.push(Number(b.dataset.d)));
+        const time = document.getElementById('habit-alarm-time')?.value || '';
+        const payload = {
+            name,
+            description: document.getElementById('habit-form-desc')?.value || '',
+            xp_reward: parseInt(document.getElementById('habit-form-xp')?.value || '50', 10),
+            period: document.getElementById('habit-form-period')?.value || 'all',
+            days_of_week: days.length ? days : [1,2,3,4,5],
+            alarm_time: time,
+            target_time: time,
+            active: 1
+        };
+        if (currentHabitId) {
+            const habits = LocalDB.get('habits');
+            const idx = habits.findIndex(h => String(h.id) === String(currentHabitId));
+            if (idx !== -1) { habits[idx] = { ...habits[idx], ...payload }; LocalDB.set('habits', habits); }
+        } else {
+            LocalDB.upsert('habits', { id: Date.now(), ...payload, created_at: new Date().toISOString() });
+        }
+        syncHabitReminders();
+        closeHabitDetail();
+        loadHabits();
+        backgroundSync();
+        showToast('Habito salvo!');
+    };
+
+    document.querySelectorAll('#habit-form-dow .dow-btn').forEach(btn => {
+        btn.addEventListener('click', () => btn.classList.toggle('selected'));
+    });
+
+    window.saveHabitAlarm = function() {
+        if (!currentHabitId) return;
+        const time = document.getElementById('habit-alarm-time')?.value || '';
+        const habits = LocalDB.get('habits');
+        const idx = habits.findIndex(h => String(h.id) === String(currentHabitId));
+        if (idx !== -1) {
+            habits[idx].alarm_time = time;
+            habits[idx].target_time = time;
+            LocalDB.set('habits', habits);
+            syncHabitReminders();
+        }
+    };
+
+    window.filterHabits = function(filter, btn) {
+        document.querySelectorAll('#view-habits .study-chip').forEach(b => b.classList.remove('active'));
+        if (btn) btn.classList.add('active');
+        const container = document.getElementById('habits-list');
+        if (!container) return;
+        let habits = (LocalDB.get('habits') || []).filter(h => h.active === 1 && !h.is_deleted);
+        if (filter === 'morning') habits = habits.filter(h => h.period === 'morning');
+        else if (filter === 'afternoon') habits = habits.filter(h => h.period === 'afternoon');
+        else if (filter === 'night') habits = habits.filter(h => h.period === 'night');
+        const logs = LocalDB.get('habit_logs') || [];
+        const sel = getSelectedDate();
+        if (!habits.length) {
+            container.innerHTML = '<div style="text-align:center;color:var(--text-secondary);margin-top:20px;">Nenhum habito nesta categoria.</div>';
+            return;
+        }
+        container.innerHTML = habits.map(h => {
+            const isDone = logs.some(l => String(l.habit_id) === String(h.id) && l.date === sel);
+            return `<div class="list-item glass ${isDone ? 'done' : ''}" style="cursor:pointer" onclick="openHabitDetail('${h.id}')">
+                <div class="item-main"><div class="item-title">${escapeHtml(h.name)}</div>
+                <div class="item-subtitle">${sel === todayISO() ? 'Hoje' : sel}</div></div>
+                <button class="icon-btn ${isDone ? 'done' : ''}" onclick="event.stopPropagation();toggleHabitDirect('${h.id}')"><i class="fa-solid ${isDone ? 'fa-check' : 'fa-plus'}"></i></button>
+            </div>`;
+        }).join('');
+    };
+
+    function renderHabitChartsFixed() {
+        if (typeof Chart === 'undefined') return;
+        if (typeof initChartDefaults === 'function') initChartDefaults();
+        const habits = (LocalDB.get('habits') || []).filter(h => h.active === 1 && !h.is_deleted);
+        const logs = LocalDB.get('habit_logs') || [];
+        const labels = [], percentages = [];
+        for (let i = 13; i >= 0; i--) {
+            const d = new Date(); d.setDate(d.getDate() - i);
+            const iso = d.toISOString().split('T')[0];
+            labels.push(d.getDate() + '/' + (d.getMonth()+1));
+            const scheduled = habits.filter(h => habitScheduledOnDay(h, iso));
+            if (!scheduled.length) { percentages.push(0); continue; }
+            const done = scheduled.filter(h => logs.some(l => String(l.habit_id) === String(h.id) && l.date === iso)).length;
+            percentages.push(Math.round((done / scheduled.length) * 100));
+        }
+        if (typeof safeDestroyChart === 'function') safeDestroyChart('habits-line-chart');
+        const ctx = document.getElementById('habits-line-chart');
+        if (ctx && typeof Chart !== 'undefined') {
+            window._chartInstances = window._chartInstances || {};
+            window._chartInstances['habits-line-chart'] = new Chart(ctx, {
+                type: 'line',
+                data: { labels, datasets: [{ label: 'Aderencia (%)', data: percentages, borderColor: '#a78bfa', backgroundColor: 'rgba(167,139,250,0.1)', fill: true, tension: 0.4 }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { min: 0, max: 100 } } }
+            });
+        }
+    }
+    window.renderHabitCharts = renderHabitChartsFixed;
+
+    // --- Task enhancements ---
+    window.openTaskForm = function() {
+        LocalDB.upsert('tasks', { id: Date.now(), name: 'Nova tarefa', title: 'Nova tarefa', priority: 'medium', status: 'todo', created_at: new Date().toISOString() });
+        const tasks = LocalDB.get('tasks');
+        const t = tasks[tasks.length - 1];
+        openTaskDetail(t.id);
+    };
+
+    window.completeCurrentTask = function() {
+        if (!currentTaskId) return;
+        toggleTaskDirect(currentTaskId);
+        closeTaskDetail();
+    };
+
+    window.addSubtaskInline = function() {
+        const modal = document.getElementById('subtask-inline-modal');
+        if (modal) { modal.style.display = 'flex'; document.getElementById('subtask-inline-name').value = ''; }
+    };
+
+    window.confirmSubtaskInline = function() {
+        const name = document.getElementById('subtask-inline-name')?.value?.trim();
+        if (!name || !currentTaskId) return;
+        const tasks = LocalDB.get('tasks');
+        const t = tasks.find(x => String(x.id) === String(currentTaskId));
+        if (t) {
+            if (!t.subtasks) t.subtasks = [];
+            t.subtasks.push({ name, done: false });
+            if (t.subtasks_json) t.subtasks_json = t.subtasks;
+            LocalDB.set('tasks', tasks);
+            renderSubtasks(t.subtasks);
+        }
+        document.getElementById('subtask-inline-modal').style.display = 'none';
+    };
+
+    window.addSubtask = window.addSubtaskInline;
+
+    const _saveTaskDetailOrig = window.saveTaskDetail;
+    window.saveTaskDetail = function() {
+        if (!currentTaskId) return;
+        const tasks = LocalDB.get('tasks');
+        const t = tasks.find(x => String(x.id) === String(currentTaskId));
+        if (!t) return;
+        t.name = document.getElementById('task-detail-name')?.value || t.name;
+        t.title = t.name;
+        t.priority = document.getElementById('task-detail-priority')?.value || 'medium';
+        t.status = document.getElementById('task-detail-status')?.value || 'todo';
+        t.due_date = document.getElementById('task-detail-due')?.value || null;
+        t.description = document.getElementById('task-detail-description')?.value || '';
+        t.notify_enabled = document.getElementById('task-detail-notify-enabled')?.checked ? 1 : 0;
+        const notifyAt = document.getElementById('task-detail-notify-at')?.value;
+        t.notify_at = notifyAt ? new Date(notifyAt).toISOString() : null;
+        t.subtasks_json = t.subtasks || [];
+        LocalDB.set('tasks', tasks);
+        syncTaskReminders();
+        if (typeof _saveTaskDetailOrig === 'function') _saveTaskDetailOrig();
+    };
+
+    const _openTaskDetailOrig = window.openTaskDetail;
+    window.openTaskDetail = function(taskId) {
+        currentTaskId = taskId;
+        const tasks = LocalDB.get('tasks');
+        const t = tasks.find(x => String(x.id) === String(taskId));
+        if (!t) return;
+        const modal = document.getElementById('task-detail-modal');
+        document.getElementById('task-detail-name').value = t.name || t.title || '';
+        document.getElementById('task-detail-description').value = t.description || '';
+        document.getElementById('task-detail-priority').value = t.priority || 'medium';
+        document.getElementById('task-detail-status').value = t.status || (t.done_at ? 'done' : 'todo');
+        document.getElementById('task-detail-due').value = t.due_date || '';
+        document.getElementById('task-detail-notify-enabled').checked = !!t.notify_enabled;
+        if (t.notify_at) {
+            const nd = new Date(t.notify_at);
+            document.getElementById('task-detail-notify-at').value = nd.toISOString().slice(0, 16);
+        }
+        const subs = t.subtasks || t.subtasks_json || [];
+        t.subtasks = Array.isArray(subs) ? subs : [];
+        renderSubtasks(t.subtasks);
+        if (modal) modal.style.display = 'flex';
+    };
+
+    window.filterTasks = function(filter, btn) {
+        if (btn) {
+            document.querySelectorAll('#view-tasks .study-chip').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+        }
+        if (taskKanbanMode) { renderTaskKanban(); return; }
+        const container = document.getElementById('tasks-list-view');
+        if (!container) return;
+        let tasks = (LocalDB.get('tasks') || []).filter(t => !t.is_deleted);
+        const sel = getSelectedDate();
+        if (filter === 'done') tasks = tasks.filter(t => t.done_at);
+        else tasks = tasks.filter(t => !t.done_at);
+        if (filter === 'today') tasks = tasks.filter(t => t.due_date === sel || t.due_date === todayISO());
+        if (filter === 'high') tasks = tasks.filter(t => t.priority === 'high');
+        if (NexusCalendar.activeModule === 'tasks' && sel !== todayISO()) {
+            tasks = tasks.filter(t => t.due_date === sel);
+        }
+        if (!tasks.length) {
+            container.innerHTML = '<div style="text-align:center;color:var(--text-secondary);margin-top:20px;">Nenhuma tarefa.</div>';
+            return;
+        }
+        container.innerHTML = tasks.map(t => {
+            const isDone = !!t.done_at;
+            return `<div class="list-item glass" onclick="openTaskDetail('${t.id}')">
+                <div class="item-main"><div class="item-title" style="text-decoration:${isDone?'line-through':'none'}">${escapeHtml(t.name || t.title)}</div></div>
+                <button class="icon-btn" onclick="event.stopPropagation();toggleTaskDirect('${t.id}')"><i class="fa-solid fa-check"></i></button>
+            </div>`;
+        }).join('');
+    };
+
+    // --- Native reminders ---
+    function scheduleNativeReminder(id, title, body, triggerAtMs) {
+        if (window.AndroidNative && typeof AndroidNative.scheduleReminder === 'function') {
+            AndroidNative.scheduleReminder(id, title, body, triggerAtMs);
+        }
+    }
+
+    function cancelNativeReminder(id) {
+        if (window.AndroidNative && typeof AndroidNative.cancelReminder === 'function') {
+            AndroidNative.cancelReminder(id);
+        }
+    }
+
+    window.syncTaskReminders = function() {
+        const tasks = (LocalDB.get('tasks') || []).filter(t => !t.is_deleted);
+        tasks.forEach(t => {
+            const rid = parseInt(String(t.id).replace(/\D/g,'').slice(-7) || '0', 10) || Math.abs(Number(t.id) % 100000);
+            if (t.notify_enabled && t.notify_at && !t.done_at) {
+                const ms = new Date(t.notify_at).getTime();
+                if (ms > Date.now()) scheduleNativeReminder(rid, t.name || 'Tarefa', t.description || 'Lembrete de tarefa', ms);
+                else cancelNativeReminder(rid);
+            } else cancelNativeReminder(rid);
+        });
+    };
+
+    window.syncHabitReminders = function() {
+        const habits = (LocalDB.get('habits') || []).filter(h => h.active === 1 && !h.is_deleted);
+        const logs = LocalDB.get('habit_logs') || [];
+        const td = todayISO();
+        habits.forEach(h => {
+            const time = h.alarm_time || h.target_time;
+            if (!time) return;
+            const rid = 200000 + (parseInt(String(h.id).replace(/\D/g,'').slice(-5) || '0', 10) % 50000);
+            const doneToday = logs.some(l => String(l.habit_id) === String(h.id) && l.date === td);
+            if (doneToday) { cancelNativeReminder(rid); return; }
+            const [hh, mm] = time.substring(0, 5).split(':').map(Number);
+            const trigger = new Date();
+            trigger.setHours(hh, mm, 0, 0);
+            if (trigger.getTime() <= Date.now()) trigger.setDate(trigger.getDate() + 1);
+            scheduleNativeReminder(rid, 'Hora do Habito', h.name, trigger.getTime());
+        });
+    };
+
+    const _pendingReminders = [];
+    window.checkPendingReminders = function() {
+        const now = Date.now();
+        const tasks = (LocalDB.get('tasks') || []).filter(t => t.notify_enabled && t.notify_at && !t.done_at && !t.is_deleted);
+        tasks.forEach(t => {
+            const ms = new Date(t.notify_at).getTime();
+            const key = 'task-' + t.id;
+            if (ms <= now && ms > now - 60000 && !_pendingReminders.includes(key)) {
+                _pendingReminders.push(key);
+                sendLocalNotification(t.name || 'Tarefa', t.description || 'Lembrete');
+            }
+        });
+    };
+
+    function checkHabitAlarmsFixed() {
+        const now = new Date();
+        const timeStr = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
+        const td = todayISO();
+        const logs = LocalDB.get('habit_logs') || [];
+        (LocalDB.get('habits') || []).filter(h => h.active === 1 && !h.is_deleted).forEach(habit => {
+            const t = habit.alarm_time || habit.target_time;
+            if (!t || t.substring(0, 5) !== timeStr) return;
+            if (logs.some(l => String(l.habit_id) === String(habit.id) && l.date === td)) return;
+            sendLocalNotification('Hora do Habito!', habit.name);
+            playBeep(600, 300);
+        });
+        checkPendingReminders();
+    }
+    window.checkHabitAlarms = checkHabitAlarmsFixed;
+
+    // --- saveQuickAdd fix ---
+    window.saveQuickAdd = function() {
+        const type = document.getElementById('create-type').value;
+        const title = document.getElementById('create-title').value.trim();
+        if (!title) { alert('O titulo e obrigatorio.'); return; }
+        if (type === 'task') {
+            LocalDB.upsert('tasks', {
+                id: Date.now(),
+                name: title,
+                title: title,
+                priority: 'medium',
+                status: 'todo',
+                points_reward: 10,
+                created_at: new Date().toISOString()
+            });
+            loadTasks();
+        } else {
+            const time = document.getElementById('create-time')?.value || '';
+            const desc = document.getElementById('create-desc')?.value || '';
+            const freq = document.getElementById('create-freq')?.value || 'daily';
+            const icon = document.getElementById('create-icon')?.value || 'fa-fire';
+            const xp = parseInt(document.getElementById('create-xp')?.value || '50', 10);
+            let days = [1,2,3,4,5];
+            if (freq === 'weekdays') days = [1,2,3,4,5];
+            else if (freq === 'weekends') days = [0,6];
+            else days = [0,1,2,3,4,5,6];
+            LocalDB.upsert('habits', {
+                id: Date.now(),
+                name: title,
+                description: desc,
+                active: 1,
+                target_time: time,
+                alarm_time: time,
+                icon,
+                xp_reward: xp,
+                days_of_week: days,
+                period: 'morning',
+                created_at: new Date().toISOString()
+            });
+            loadHabits();
+            syncHabitReminders();
+        }
+        closeCreateModal();
+        backgroundSync();
+    };
+
+    // --- Goals form ---
+    let editingGoalId = null;
+    window.openGoalForm = function(goalId) {
+        editingGoalId = goalId || null;
+        const goals = LocalDB.get('nexus_goals') || [];
+        const g = goalId ? goals.find(x => String(x.id) === String(goalId)) : null;
+        document.getElementById('goal-form-title').textContent = g ? 'Editar Meta' : 'Nova Meta';
+        document.getElementById('goal-form-name').value = g ? g.name : '';
+        document.getElementById('goal-form-description').value = g ? (g.description || '') : '';
+        document.getElementById('goal-form-target-date').value = g ? (g.target_date || '') : '';
+        document.getElementById('goal-form-progress').value = g ? (g.progress || 0) : 0;
+        document.getElementById('goal-form-progress-label').textContent = g ? (g.progress || 0) : 0;
+        document.getElementById('goal-form-status').value = g ? (g.status || 'active') : 'active';
+        document.getElementById('goal-form-delete-btn').style.display = g ? 'block' : 'none';
+        document.getElementById('goal-form-modal').style.display = 'flex';
+    };
+
+    window.saveGoalForm = function() {
+        const name = document.getElementById('goal-form-name')?.value?.trim();
+        if (!name) return;
+        const payload = {
+            name,
+            description: document.getElementById('goal-form-description')?.value || '',
+            target_date: document.getElementById('goal-form-target-date')?.value || null,
+            progress: parseInt(document.getElementById('goal-form-progress')?.value || '0', 10),
+            status: document.getElementById('goal-form-status')?.value || 'active'
+        };
+        if (payload.progress >= 100) payload.status = 'achieved';
+        if (editingGoalId) {
+            const goals = LocalDB.get('nexus_goals');
+            const idx = goals.findIndex(g => String(g.id) === String(editingGoalId));
+            if (idx !== -1) { goals[idx] = { ...goals[idx], ...payload }; LocalDB.set('nexus_goals', goals); }
+        } else {
+            LocalDB.upsert('nexus_goals', { id: Date.now(), ...payload });
+        }
+        document.getElementById('goal-form-modal').style.display = 'none';
+        editingGoalId = null;
+        loadGoals();
+    };
+
+    window.deleteGoalForm = function() {
+        if (!editingGoalId) return;
+        const goals = LocalDB.get('nexus_goals');
+        const idx = goals.findIndex(g => String(g.id) === String(editingGoalId));
+        if (idx !== -1) { goals[idx].is_deleted = true; LocalDB.set('nexus_goals', goals); }
+        document.getElementById('goal-form-modal').style.display = 'none';
+        editingGoalId = null;
+        loadGoals();
+    };
+
+    window.promptAddGoal = function() { openGoalForm(); };
+
+    window.loadGoals = function() {
+        const container = document.getElementById('goals-list');
+        if (!container) return;
+        const all = (LocalDB.get('nexus_goals') || []).filter(t => !t.is_deleted);
+        const active = all.filter(t => t.status !== 'achieved');
+        const archived = all.filter(t => t.status === 'achieved');
+        container.innerHTML = active.length ? active.map(t => `
+            <div class="list-item glass" onclick="openGoalForm(${t.id})" style="cursor:pointer">
+                <div class="item-main"><span class="item-title">${escapeHtml(t.name)}</span>
+                <span class="item-subtitle">${t.progress || 0}% · ${t.description || ''}</span></div>
+            </div>`).join('') : '<div style="text-align:center;color:var(--text-secondary);padding:20px">Sem metas ativas.<button onclick="openGoalForm()" style="margin-top:12px;background:var(--accent-primary);border:none;color:white;padding:10px 18px;border-radius:8px">Criar meta</button></div>';
+        const archSec = document.getElementById('goals-archived-section');
+        const archList = document.getElementById('goals-archived-list');
+        if (archived.length && archSec && archList) {
+            archSec.style.display = 'block';
+            archList.innerHTML = archived.map(t => `<div class="list-item glass" onclick="openGoalForm(${t.id})" style="opacity:0.7;cursor:pointer"><div class="item-main"><span class="item-title">${escapeHtml(t.name)}</span></div></div>`).join('');
+        } else if (archSec) archSec.style.display = 'none';
+    };
+
+    // --- Workout form ---
+    let editingWorkoutId = null;
+    window.openWorkoutForm = function(workoutId) {
+        editingWorkoutId = workoutId || null;
+        const workouts = LocalDB.get('fitness_workouts') || [];
+        const w = workoutId ? workouts.find(x => String(x.id) === String(workoutId)) : null;
+        document.getElementById('workout-form-title').textContent = w ? 'Editar Treino' : 'Novo Treino';
+        document.getElementById('workout-form-name').value = w ? (w.name || '') : '';
+        document.getElementById('workout-form-muscle').value = w ? (w.muscle_group || '') : '';
+        document.getElementById('workout-form-date').value = w ? (w.date || todayISO()) : todayISO();
+        document.getElementById('workout-form-duration').value = w ? (w.duration_minutes || '') : '';
+        document.getElementById('workout-form-calories').value = w ? (w.calories || '') : '';
+        document.getElementById('workout-form-notes').value = w ? (w.notes || '') : '';
+        renderWorkoutExercises(w ? (w.exercises || []) : []);
+        document.getElementById('workout-form-delete-btn').style.display = w ? 'block' : 'none';
+        document.getElementById('workout-form-modal').style.display = 'flex';
+    };
+
+    window.openWorkoutBuilder = function() { openWorkoutForm(); };
+
+    function renderWorkoutExercises(exs) {
+        const list = document.getElementById('workout-exercises-list');
+        if (!list) return;
+        window._workoutExercises = exs || [];
+        list.innerHTML = window._workoutExercises.map((e, i) => `
+            <div style="display:flex;gap:8px;align-items:center;background:rgba(255,255,255,0.04);padding:8px;border-radius:8px">
+                <span style="flex:1;font-size:0.85rem">${escapeHtml(e.name || e)}</span>
+                <button onclick="removeWorkoutExercise(${i})" style="background:none;border:none;color:var(--text-secondary)"><i class="fa-solid fa-xmark"></i></button>
+            </div>`).join('');
+    }
+
+    window.addWorkoutExercise = function() {
+        const name = prompt('Nome do exercicio:');
+        if (!name) return;
+        window._workoutExercises = window._workoutExercises || [];
+        window._workoutExercises.push({ name: name.trim() });
+        renderWorkoutExercises(window._workoutExercises);
+    };
+
+    window.removeWorkoutExercise = function(i) {
+        window._workoutExercises.splice(i, 1);
+        renderWorkoutExercises(window._workoutExercises);
+    };
+
+    window.saveWorkoutForm = function() {
+        const name = document.getElementById('workout-form-name')?.value?.trim();
+        if (!name) return;
+        const payload = {
+            name,
+            muscle_group: document.getElementById('workout-form-muscle')?.value || '',
+            date: document.getElementById('workout-form-date')?.value || todayISO(),
+            duration_minutes: parseInt(document.getElementById('workout-form-duration')?.value || '0', 10) || null,
+            calories: parseInt(document.getElementById('workout-form-calories')?.value || '0', 10) || null,
+            notes: document.getElementById('workout-form-notes')?.value || '',
+            exercises: window._workoutExercises || []
+        };
+        if (editingWorkoutId) {
+            const workouts = LocalDB.get('fitness_workouts');
+            const idx = workouts.findIndex(w => String(w.id) === String(editingWorkoutId));
+            if (idx !== -1) { workouts[idx] = { ...workouts[idx], ...payload }; LocalDB.set('fitness_workouts', workouts); }
+        } else {
+            LocalDB.upsert('fitness_workouts', { id: Date.now(), ...payload, created_at: new Date().toISOString() });
+            awardXP(25, 'Treino registrado');
+        }
+        document.getElementById('workout-form-modal').style.display = 'none';
+        editingWorkoutId = null;
+        loadFitness();
+    };
+
+    window.deleteWorkoutForm = function() {
+        if (!editingWorkoutId) return;
+        const workouts = LocalDB.get('fitness_workouts');
+        const idx = workouts.findIndex(w => String(w.id) === String(editingWorkoutId));
+        if (idx !== -1) { workouts[idx].is_deleted = true; LocalDB.set('fitness_workouts', workouts); }
+        document.getElementById('workout-form-modal').style.display = 'none';
+        editingWorkoutId = null;
+        loadFitness();
+    };
+
+    window.loadFitness = function() {
+        const container = document.getElementById('fitness-list');
+        if (!container) return;
+        updateFitnessStats();
+        const data = (LocalDB.get('fitness_workouts') || []).filter(t => !t.is_deleted)
+            .sort((a, b) => (b.date || b.created_at || '').localeCompare(a.date || a.created_at || ''));
+        container.innerHTML = data.length ? data.slice(0, 15).map(t => `
+            <div class="list-item glass" onclick="openWorkoutForm(${t.id})" style="cursor:pointer">
+                <div class="item-main"><span class="item-title">${escapeHtml(t.name || 'Treino')}</span>
+                <span class="item-subtitle">${escapeHtml(t.muscle_group || '')} · ${t.duration_minutes || ''} min</span></div>
+            </div>`).join('') : '<div style="text-align:center;color:var(--text-secondary);margin-top:20px;">Nenhum treino.</div>';
+    };
+
+    // --- Studies: subjects grid ---
+    function loadSubjectsGrid() {
+        const grid = document.getElementById('subjects-grid');
+        if (!grid) return;
+        const notebooks = LocalDB.get('study_notebooks') || [];
+        const notes = (LocalDB.get('study_notes') || []).filter(n => !n.is_deleted);
+        if (!notebooks.length) {
+            grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--text-secondary);padding:20px">Sem materias. Crie a primeira!</div>';
+            return;
+        }
+        grid.innerHTML = notebooks.map(nb => {
+            const count = notes.filter(n => String(n.notebook_id) === String(nb.id)).length;
+            const coverStyle = nb.cover_image ? `background-image:url('${nb.cover_image}')` : 'background:linear-gradient(135deg,#6c5ce7,#a29bfe)';
+            return `<div class="subject-card" onclick="openSubjectDetail('${nb.id}')">
+                <div class="subject-card-cover" style="${coverStyle}"></div>
+                <div class="subject-card-body"><div class="subject-card-name">${nb.icon || ''} ${escapeHtml(nb.name)}</div>
+                <div class="subject-card-count">${count} nota${count !== 1 ? 's' : ''}</div></div>
+            </div>`;
+        }).join('');
+    }
+
+    window.openSubjectForm = function() {
+        document.getElementById('subject-form-modal').style.display = 'flex';
+        document.getElementById('subject-form-name').value = '';
+        document.getElementById('subject-form-icon').value = '📚';
+        document.getElementById('subject-form-cover').value = '';
+    };
+
+    window.saveSubjectForm = function() {
+        const name = document.getElementById('subject-form-name')?.value?.trim();
+        if (!name) return;
+        const nb = {
+            id: Date.now().toString(),
+            name,
+            icon: document.getElementById('subject-form-icon')?.value || '📚',
+            cover_image: document.getElementById('subject-form-cover')?.value || null,
+            created_at: new Date().toISOString()
+        };
+        const notebooks = LocalDB.get('study_notebooks') || [];
+        notebooks.push(nb);
+        LocalDB.set('study_notebooks', notebooks);
+        document.getElementById('subject-form-modal').style.display = 'none';
+        loadStudies();
+    };
+
+    window.openNewNotebook = window.openSubjectForm;
+
+    window.openSubjectDetail = function(notebookId) {
+        currentNotebookId = notebookId;
+        const nb = (LocalDB.get('study_notebooks') || []).find(n => String(n.id) === String(notebookId));
+        const view = document.getElementById('subject-detail-view');
+        if (!view || !nb) return;
+        document.getElementById('subject-detail-title').textContent = (nb.icon || '') + ' ' + nb.name;
+        view.style.display = 'block';
+        const notes = (LocalDB.get('study_notes') || []).filter(n => !n.is_deleted && String(n.notebook_id) === String(notebookId));
+        const list = document.getElementById('subject-notes-list');
+        list.innerHTML = notes.length ? notes.map(n => renderNoteCard(n)).join('') : '<div style="text-align:center;padding:30px;color:var(--text-secondary)">Sem notas</div>';
+    };
+
+    window.closeSubjectDetail = function() {
+        document.getElementById('subject-detail-view').style.display = 'none';
+        currentNotebookId = null;
+    };
+
+    window.openSubjectMenu = function(ev) {
+        ev.stopPropagation();
+        const popup = document.getElementById('subject-menu-popup');
+        if (popup) {
+            popup.style.display = 'block';
+            popup.style.top = (ev.clientY + 10) + 'px';
+            popup.style.left = (ev.clientX - 120) + 'px';
+        }
+        setTimeout(() => document.addEventListener('click', closeSubjectMenu, { once: true }), 50);
+    };
+
+    function closeSubjectMenu() {
+        const popup = document.getElementById('subject-menu-popup');
+        if (popup) popup.style.display = 'none';
+    }
+
+    window.changeSubjectCover = function() {
+        const url = prompt('URL da imagem de capa:');
+        if (!url || !currentNotebookId) return;
+        const notebooks = LocalDB.get('study_notebooks') || [];
+        const idx = notebooks.findIndex(n => String(n.id) === String(currentNotebookId));
+        if (idx !== -1) { notebooks[idx].cover_image = url; LocalDB.set('study_notebooks', notebooks); loadStudies(); openSubjectDetail(currentNotebookId); }
+        closeSubjectMenu();
+    };
+
+    window.renameSubject = function() {
+        const name = prompt('Novo nome:');
+        if (!name || !currentNotebookId) return;
+        const notebooks = LocalDB.get('study_notebooks') || [];
+        const idx = notebooks.findIndex(n => String(n.id) === String(currentNotebookId));
+        if (idx !== -1) { notebooks[idx].name = name.trim(); LocalDB.set('study_notebooks', notebooks); loadStudies(); openSubjectDetail(currentNotebookId); }
+        closeSubjectMenu();
+    };
+
+    window.deleteSubject = function() {
+        if (!currentNotebookId || !confirm('Excluir materia e manter notas sem caderno?')) return;
+        const notebooks = LocalDB.get('study_notebooks') || [];
+        const filtered = notebooks.filter(n => String(n.id) !== String(currentNotebookId));
+        LocalDB.set('study_notebooks', filtered);
+        closeSubjectDetail();
+        loadStudies();
+        closeSubjectMenu();
+    };
+
+    function extractNoteTitleFromEditor() {
+        const editor = document.getElementById('note-content-rich');
+        if (!editor) return 'Sem titulo';
+        const h1 = editor.querySelector('h1');
+        if (h1 && h1.textContent.trim()) return h1.textContent.trim();
+        const text = (editor.innerText || '').trim().split('\n').find(l => l.trim());
+        return text ? text.substring(0, 80) : 'Sem titulo';
+    }
+
+    window.saveNote = function() {
+        const editor = document.getElementById('note-content-rich');
+        const hidden = document.getElementById('note-content');
+        if (editor && hidden) hidden.value = editor.innerHTML;
+        const title = extractNoteTitleFromEditor();
+        const content = hidden ? hidden.value : '';
+        const tags = document.getElementById('note-tags')?.value || '';
+        const subject = document.getElementById('note-subject')?.value || '';
+        const notebookId = document.getElementById('note-notebook')?.value || currentNotebookId || '';
+        if (!title && !content) { showInAppNotification('Escreva algo primeiro!', 'warn'); return; }
+        const notes = LocalDB.get('study_notes') || [];
+        const now = new Date().toISOString();
+        if (editingNoteId) {
+            const idx = notes.findIndex(n => String(n.id) === String(editingNoteId));
+            if (idx !== -1) notes[idx] = { ...notes[idx], title, content, tags, subject, notebook_id: notebookId, updated_at: now };
+        } else {
+            notes.push({ id: Date.now().toString(), title, content, tags, subject, notebook_id: notebookId, created_at: now, updated_at: now });
+            awardXP(15, 'Nova nota');
+        }
+        LocalDB.set('study_notes', notes);
+        if (window._tempCoverImage || window._tempIcon) {
+            const saved = editingNoteId ? notes.find(n => String(n.id) === String(editingNoteId)) : notes[notes.length - 1];
+            if (saved) {
+                if (window._tempCoverImage) { saved.cover_image = window._tempCoverImage; window._tempCoverImage = null; }
+                if (window._tempIcon) { saved.icon = window._tempIcon; window._tempIcon = null; }
+                LocalDB.set('study_notes', notes);
+            }
+        }
+        closeNoteEditor();
+        loadStudies();
+        showInAppNotification('Nota salva!', 'success');
+    };
+
+    window.insertYouTubeEmbed = function() {
+        const url = document.getElementById('yt-url-input')?.value?.trim();
+        if (!url) return;
+        const videoId = extractYouTubeId(url);
+        if (!videoId) { alert('URL invalida'); return; }
+        closeYouTubeModal();
+        const editor = document.getElementById('note-content-rich');
+        if (!editor) return;
+        editor.focus();
+        const embedHTML = `<div class="yt-embed-block" contenteditable="false">
+            <iframe src="https://www.youtube.com/embed/${videoId}?rel=0" referrerpolicy="strict-origin-when-cross-origin"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen loading="lazy"></iframe>
+            <a class="yt-fallback-btn" href="https://www.youtube.com/watch?v=${videoId}" target="_blank" rel="noopener">Abrir no YouTube</a>
+        </div><p><br></p>`;
+        document.execCommand('insertHTML', false, embedHTML);
+        saveNoteDebounced();
+    };
+
+    window.filterNoteLinkList = function(query) {
+        const container = document.getElementById('note-link-list');
+        if (!container) return;
+        const notes = LocalDB.getAll('study_notes') || [];
+        const filtered = query ? notes.filter(n => (n.title || '').toLowerCase().includes(query.toLowerCase())) : notes;
+        container.innerHTML = filtered.length ? filtered.map(note => `
+            <div class="slash-item" onclick="openNoteById('${note.id}')"><span class="slash-icon">📎</span><div><b>${escapeHtml(note.title || 'Sem titulo')}</b></div></div>`).join('') : '<div style="padding:20px;text-align:center;color:var(--text-secondary)">Nenhuma nota</div>';
+    };
+
+    window.openNoteById = function(id) {
+        const notes = LocalDB.getAll('study_notes') || [];
+        const note = notes.find(n => String(n.id) === String(id));
+        if (note) openNoteEditor(note.id, note.notebook_id || null);
+    };
+
+    function renderBacklinksFixed(noteId) {
+        const panel = document.getElementById('backlinks-panel');
+        const list = document.getElementById('backlinks-list');
+        if (!panel || !list || !noteId) { if (panel) panel.style.display = 'none'; return; }
+        const notes = LocalDB.getAll('study_notes') || [];
+        const backlinks = notes.filter(n => String(n.id) !== String(noteId) && n.content && n.content.includes(String(noteId)));
+        if (!backlinks.length) { panel.style.display = 'none'; return; }
+        panel.style.display = 'block';
+        list.innerHTML = backlinks.map(bl => `<div style="padding:10px;background:rgba(255,255,255,0.05);border-radius:8px;cursor:pointer" onclick="openNoteById('${bl.id}')">${escapeHtml(bl.title || 'Nota')}</div>`).join('');
+    }
+    window.renderBacklinks = renderBacklinksFixed;
+
+    window.toggleToolbarOverflow = function(ev) {
+        ev.stopPropagation();
+        const menu = document.getElementById('rt-overflow-menu');
+        if (menu) menu.style.display = menu.style.display === 'none' ? 'flex' : 'none';
+    };
+
+    const _loadStudiesOrig = window.loadStudies;
+    window.loadStudies = function() {
+        if (typeof _loadStudiesOrig === 'function') _loadStudiesOrig();
+        loadSubjectsGrid();
+        if (typeof loadNotebooksGrid === 'function') loadNotebooksGrid();
+        if (typeof ensureChartJs === 'function') ensureChartJs().then(() => setTimeout(renderStudyCharts, 100));
+    };
+
+    window.openFinanceOverflow = function(ev) {
+        ev.stopPropagation();
+        showToast('Mais acoes de financas em breve');
+    };
+
+    // Boot: sync reminders + load budget
+    document.addEventListener('DOMContentLoaded', () => {
+        const budgetEl = document.getElementById('nexus_daily_budget');
+        const stored = localStorage.getItem('nexus_daily_budget');
+        if (budgetEl && stored) budgetEl.value = stored;
+        syncTaskReminders();
+        syncHabitReminders();
+        NexusCalendar.updateDateLabels();
+    });
+
+    setInterval(checkPendingReminders, 30000);
+
+})();
