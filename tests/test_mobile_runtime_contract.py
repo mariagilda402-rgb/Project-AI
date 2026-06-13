@@ -225,9 +225,50 @@ def test_mobile_quiz_enem_exposed():
 
 def test_mobile_loaders_guard_missing_containers():
     app_js = read_app_js()
-    for loader in ["loadVideos", "loadShop", "loadGoals", "loadFitness"]:
-        block = re.search(rf"function {loader}\(\)\s*\{{", app_js)
+    for loader in ["loadVideos", "loadShop", "loadGoals", "loadFitness", "loadCleaner"]:
+        block = re.search(rf"(?:function|window\.)({loader})\s*=\s*function|function {loader}\(\)\s*\{{", app_js)
         assert block, f"function {loader} not found"
         start = block.start()
-        snippet = app_js[start:start + 400]
+        snippet = app_js[start:start + 500]
+        if loader == "loadCleaner":
+            assert "scanPhoneStorage" in snippet
+            continue
         assert re.search(r"if\s*\(\s*!container\s*\)\s*return", snippet), f"{loader} missing container guard"
+
+
+def test_mobile_has_cleaner_view():
+    html = read_index_html()
+    assert 'id="view-cleaner"' in html
+    assert 'id="cleaner-scan-results"' in html
+    assert 'runQuickClean' in html
+    assert 'runDeepClean' in html
+
+
+def test_mobile_exposes_cleaner_handlers():
+    app_js = read_app_js()
+    required = [
+        "window.scanPhoneStorage",
+        "window.runQuickClean",
+        "window.runDeepClean",
+        "window.loadCleaner",
+        "window.openCleanerView",
+        "window.getCleanerSuggestions",
+        "window.requestCleanerAiAdvice",
+    ]
+    for name in required:
+        assert name in app_js, f"Missing {name}"
+
+
+def test_mobile_cleaner_module_toggle():
+    html = read_index_html()
+    assert 'id="toggle-cleaner"' in html
+    assert "toggleModule('cleaner')" in html
+    assert 'data-target="view-cleaner"' in html
+
+
+def test_mobile_apk_has_storage_clean_bridge():
+    main = (ROOT / "mobile-apk" / "app" / "src" / "main" / "java" / "com" / "nexus" / "mobile" / "MainActivity.java").read_text(encoding="utf-8")
+    assert "getStorageStats" in main
+    assert "getDeviceDiagnostics" in main
+    assert "clearAppCache" in main
+    assert "runNativeClean" in main

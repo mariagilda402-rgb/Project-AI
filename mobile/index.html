@@ -66,6 +66,10 @@
                 title="Puxar atualização da interface"><i class="fa-solid fa-rotate"></i></button>
             <button class="icon-btn" aria-label="Atualizar APK Completo" onclick="updateNativeApk()"
                 title="Atualizar aplicativo Android"><i class="fa-brands fa-android"></i></button>
+            <button class="icon-btn" aria-label="Limpeza" onclick="navigateTo('view-cleaner')" title="Limpeza do celular" style="position:relative">
+                <i class="fa-solid fa-broom"></i>
+                <span id="storage-warning-badge" class="storage-warn-badge" style="display:none"></span>
+            </button>
             <button class="icon-btn" aria-label="Configurações" onclick="openSettingsModal()"><i
                     class="fa-solid fa-gear"></i></button>
         </div>
@@ -148,6 +152,8 @@
                     <button class="action-bubble"
                         onclick="document.querySelector('.nav-item[data-target=\'view-studies\']').click();"><i
                             class="fa-solid fa-brain"></i><br>Flashcard</button>
+                    <button class="action-bubble" onclick="navigateTo('view-cleaner')"><i
+                            class="fa-solid fa-broom"></i><br>Limpar</button>
                 </div>
                 <!-- Chat Interface -->
                 <div id="home-chat-container" class="glass"
@@ -1010,6 +1016,71 @@
             </div>
         </div>
 
+        <!-- PHONE CLEANER VIEW -->
+        <div id="view-cleaner" class="view">
+            <div class="view-header">
+                <h2 class="page-title" style="margin-bottom:0">Limpeza</h2>
+                <div class="view-header-actions">
+                    <button class="icon-btn" onclick="scanPhoneStorage()" title="Escanear"><i class="fa-solid fa-magnifying-glass"></i></button>
+                </div>
+            </div>
+
+            <div class="glass cleaner-stats-card" style="padding:16px;border-radius:16px;margin-bottom:16px">
+                <div class="cleaner-stats-grid">
+                    <div class="cleaner-stat">
+                        <span class="cleaner-stat-label">Armazenamento</span>
+                        <span class="cleaner-stat-value" id="cleaner-storage-used">—</span>
+                        <span class="cleaner-stat-sub" id="cleaner-storage-free">livre</span>
+                    </div>
+                    <div class="cleaner-stat">
+                        <span class="cleaner-stat-label">Cache App</span>
+                        <span class="cleaner-stat-value" id="cleaner-cache-size">—</span>
+                    </div>
+                    <div class="cleaner-stat">
+                        <span class="cleaner-stat-label">RAM</span>
+                        <span class="cleaner-stat-value" id="cleaner-ram-info">—</span>
+                    </div>
+                    <div class="cleaner-stat">
+                        <span class="cleaner-stat-label">Processos</span>
+                        <span class="cleaner-stat-value" id="cleaner-process-count">—</span>
+                    </div>
+                </div>
+                <div class="cleaner-storage-bar-wrap">
+                    <div class="cleaner-storage-bar" id="cleaner-storage-bar" style="width:0%"></div>
+                </div>
+            </div>
+
+            <div id="cleaner-scan-results" class="cleaner-categories" style="margin-bottom:16px"></div>
+
+            <div class="cleaner-actions">
+                <button class="cleaner-btn cleaner-btn-quick" onclick="runQuickClean()">
+                    <i class="fa-solid fa-bolt"></i> Limpeza Rapida
+                </button>
+                <button class="cleaner-btn cleaner-btn-deep" onclick="runDeepClean()">
+                    <i class="fa-solid fa-broom"></i> Limpeza Profunda
+                </button>
+            </div>
+
+            <div id="cleaner-progress" class="glass cleaner-progress" style="display:none;padding:16px;border-radius:16px;margin-top:16px">
+                <div class="cleaner-progress-label" id="cleaner-progress-label">Limpando...</div>
+                <div class="cleaner-progress-bar-wrap"><div class="cleaner-progress-bar" id="cleaner-progress-bar"></div></div>
+            </div>
+
+            <div id="cleaner-results" class="glass cleaner-results" style="display:none;padding:16px;border-radius:16px;margin-top:16px">
+                <h3 style="margin:0 0 10px;font-size:0.95rem"><i class="fa-solid fa-check-circle" style="color:var(--accent-green)"></i> Resultado</h3>
+                <p id="cleaner-results-text" style="margin:0;font-size:0.9rem;color:var(--text-secondary)"></p>
+            </div>
+
+            <div class="glass" style="padding:16px;border-radius:16px;margin-top:16px">
+                <h3 class="section-title" style="margin-bottom:10px"><i class="fa-solid fa-lightbulb"></i> Dicas</h3>
+                <div id="cleaner-tips-list" class="cleaner-tips-list"></div>
+                <button onclick="requestCleanerAiAdvice()" id="cleaner-ai-btn" class="cleaner-ai-btn" style="margin-top:12px">
+                    <i class="fa-solid fa-robot"></i> Analise com Jarvis (Wi-Fi)
+                </button>
+                <p id="cleaner-ai-advice" style="margin:12px 0 0;font-size:0.85rem;color:var(--text-secondary);line-height:1.45;display:none"></p>
+            </div>
+        </div>
+
         <!-- SETTINGS VIEW -->
         <div id="view-settings" class="view">
             <h2 class="page-title">Configurações</h2>
@@ -1094,6 +1165,19 @@
                 <button onclick="changeThemeColor('#fdcb6e')" style="width:40px;height:40px;border-radius:50%;background:#fdcb6e;border:2px solid white;cursor:pointer"></button>
             </div>
 
+            <!-- Phone optimization -->
+            <h3 class="section-title">Otimizacao</h3>
+            <div class="glass settings-card" style="margin-bottom:20px;padding:15px;border-radius:16px">
+                <p style="color:var(--text-secondary);font-size:0.85rem;margin:0 0 12px;line-height:1.45">Libera cache, arquivos temporarios e dados orfaos do app para deixar o Nexus mais rapido.</p>
+                <button onclick="runQuickClean()" style="background:rgba(0,184,148,0.2);color:var(--accent-green);border:1px solid var(--accent-green);padding:12px 20px;border-radius:8px;font-weight:bold;font-size:0.95rem;cursor:pointer;width:100%;margin-bottom:8px">
+                    <i class="fa-solid fa-bolt"></i> Otimizar App (Rapida)
+                </button>
+                <button onclick="navigateTo('view-cleaner');runDeepClean()" style="background:rgba(108,92,231,0.15);color:var(--accent-purple);border:1px solid var(--accent-purple);padding:12px 20px;border-radius:8px;font-weight:bold;font-size:0.95rem;cursor:pointer;width:100%">
+                    <i class="fa-solid fa-broom"></i> Limpeza Profunda
+                </button>
+                <p id="settings-storage-hint" style="color:var(--text-secondary);font-size:0.8rem;margin:10px 0 0;text-align:center">Cache: —</p>
+            </div>
+
             <!-- Local Data Section -->
             <h3 class="section-title">Dados Locais</h3>
             <div class="glass" style="margin-bottom:20px;padding:15px;border-radius:16px;display:flex;flex-direction:column;gap:10px">
@@ -1172,6 +1256,10 @@
         <a href="#" class="nav-item" data-target="view-journal" id="nav-journal">
             <i class="fa-solid fa-book-open"></i>
             <span>Diário</span>
+        </a>
+        <a href="#" class="nav-item" data-target="view-cleaner" id="nav-cleaner">
+            <i class="fa-solid fa-broom"></i>
+            <span>Limpar</span>
         </a>
     </nav>
 
@@ -1293,6 +1381,11 @@
                 <div class="toggle-row">
                     <span>Treinos</span>
                     <label class="switch"><input type="checkbox" id="toggle-fitness" onchange="toggleModule('fitness')"
+                            checked><span class="slider"></span></label>
+                </div>
+                <div class="toggle-row">
+                    <span>Limpeza</span>
+                    <label class="switch"><input type="checkbox" id="toggle-cleaner" onchange="toggleModule('cleaner')"
                             checked><span class="slider"></span></label>
                 </div>
             </div>

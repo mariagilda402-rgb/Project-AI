@@ -48,6 +48,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import android.os.StatFs;
+import android.app.ActivityManager;
+import android.os.Environment;
+
+import org.json.JSONObject;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -642,6 +648,139 @@ public class MainActivity extends Activity {
                 webView.evaluateJavascript(jsCode, null);
             });
         }
+
+        @JavascriptInterface
+        public String getStorageStats() {
+            try {
+                File dataDir = getFilesDir();
+                File cacheDir = getCacheDir();
+                File extCache = getExternalCacheDir();
+                long cacheBytes = dirSize(cacheDir) + (extCache != null ? dirSize(extCache) : 0);
+                long tempBytes = dirSize(new File(cacheDir, "temp"));
+                long bundleBytes = dirSize(new File(dataDir, BUNDLE_DIR_NAME));
+
+                StatFs statFs = new StatFs(Environment.getDataDirectory().getPath());
+                long blockSize = statFs.getBlockSizeLong();
+                long totalBytes = statFs.getBlockCountLong() * blockSize;
+                long freeBytes = statFs.getAvailableBlocksLong() * blockSize;
+                long usedBytes = Math.max(0, totalBytes - freeBytes);
+
+                JSONObject json = new JSONObject();
+                json.put("totalBytes", totalBytes);
+                json.put("freeBytes", freeBytes);
+                json.put("usedBytes", usedBytes);
+                json.put("cacheBytes", cacheBytes);
+                json.put("tempBytes", tempBytes);
+                json.put("bundleBytes", bundleBytes);
+                json.put("appDataBytes", dirSize(dataDir));
+                return json.toString();
+            } catch (Exception e) {
+                return "{\"error\":\"" + e.getMessage().replace("\"", "'") + "\"}";
+            }
+        }
+
+        @JavascriptInterface
+        public String getDeviceDiagnostics() {
+            try {
+                ActivityManager am = (ActivityManager) getSystemService(ACTIVITY_SERVICE);
+                JSONObject json = new JSONObject();
+                if (am != null) {
+                    ActivityManager.MemoryInfo mem = new ActivityManager.MemoryInfo();
+                    am.getMemoryInfo(mem);
+                    json.put("totalRamBytes", mem.totalMem);
+                    json.put("availRamBytes", mem.availMem);
+                    json.put("lowMemory", mem.lowMemory);
+                    json.put("runningProcesses", am.getRunningAppProcesses() != null
+                        ? am.getRunningAppProcesses().size() : 0);
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                    android.os.BatteryManager bm = (android.os.BatteryManager) getSystemService(BATTERY_SERVICE);
+                    if (bm != null) {
+                        int level = bm.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY);
+                        json.put("batteryPercent", level);
+                    }
+                }
+                return json.toString();
+            } catch (Exception e) {
+                return "{\"error\":\"" + e.getMessage().replace("\"", "'") + "\"}";
+            }
+        }
+
+        @JavascriptInterface
+        public long clearAppCache() {
+            final long[] freed = {0};
+            runOnUiThread(() -> {
+                try {
+                    if (webView != null) webView.clearCache(true);
+                    CookieManager.getInstance().removeAllCookies(null);
+                    CookieManager.getInstance().flush();
+                } catch (Exception ignored) {}
+            });
+            File cacheDir = getCacheDir();
+            freed[0] += clearDirectoryContents(cacheDir, true);
+            File extCache = getExternalCacheDir();
+            if (extCache != null) freed[0] += clearDirectoryContents(extCache, true);
+            return freed[0];
+        }
+
+        @JavascriptInterface
+        public long clearTempFiles() {
+            long freed = 0;
+            File cacheDir = getCacheDir();
+            freed += clearDirectoryContents(new File(cacheDir, "temp"), true);
+            File updatesDir = new File(getExternalFilesDir(null), "updates");
+            freed += clearDirectoryContents(updatesDir, true);
+            return freed;
+        }
+
+        @JavascriptInterface
+        public String runNativeClean(String mode) {
+            try {
+                long cacheFreed = clearAppCache();
+                long tempFreed = clearTempFiles();
+                long total = cacheFreed + tempFreed;
+                if ("deep".equals(mode)) {
+                    File staging = new File(getFilesDir(), BUNDLE_DIR_NAME + "_next");
+                    total += clearDirectoryContents(staging, true);
+                }
+                JSONObject json = new JSONObject();
+                json.put("cacheFreed", cacheFreed);
+                json.put("tempFreed", tempFreed);
+                json.put("totalFreed", total);
+                json.put("mode", mode != null ? mode : "quick");
+                return json.toString();
+            } catch (Exception e) {
+                return "{\"error\":\"" + e.getMessage().replace("\"", "'") + "\"}";
+            }
+        }
+    }
+
+    private long dirSize(File file) {
+        if (file == null || !file.exists()) return 0;
+        if (file.isFile()) return file.length();
+        long sum = 0;
+        File[] children = file.listFiles();
+        if (children != null) {
+            for (File child : children) sum += dirSize(child);
+        }
+        return sum;
+    }
+
+    private long clearDirectoryContents(File dir, boolean keepDir) {
+        if (dir == null || !dir.exists()) return 0;
+        long freed = 0;
+        File[] files = dir.listFiles();
+        if (files != null) {
+            for (File f : files) {
+                if (f.isDirectory()) freed += clearDirectoryContents(f, false);
+                else {
+                    freed += f.length();
+                    if (!f.delete()) freed -= f.length();
+                }
+            }
+        }
+        if (!keepDir) dir.delete();
+        return freed;
     }
 
 }
