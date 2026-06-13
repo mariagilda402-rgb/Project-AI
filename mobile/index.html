@@ -51,7 +51,7 @@
                     class="avatar">
             </div>
             <div class="user-info">
-                <h1 class="greeting">OlÃ¡, <span id="user-name">Comandante</span></h1>
+                <h1 class="greeting">Olá, <span id="user-name">Comandante</span></h1>
                 <div
                     style="background: red; color: white; padding: 5px; border-radius: 5px; font-weight: bold; margin-top: 5px;">
                     BUILD V1.3 - VERSÃO NATIVA</div>
@@ -60,10 +60,10 @@
         </div>
         <div class="top-actions">
             <button class="icon-btn" aria-label="Atualizar Interface Web" onclick="forceOTAUpdate()"
-                title="Puxar atualizaÃ§Ã£o da interface"><i class="fa-solid fa-rotate"></i></button>
+                title="Puxar atualização da interface"><i class="fa-solid fa-rotate"></i></button>
             <button class="icon-btn" aria-label="Atualizar APK Completo" onclick="updateNativeApk()"
                 title="Atualizar aplicativo Android"><i class="fa-brands fa-android"></i></button>
-            <button class="icon-btn" aria-label="ConfiguraÃ§Ãµes" onclick="openSettingsModal()"><i
+            <button class="icon-btn" aria-label="Configurações" onclick="openSettingsModal()"><i
                     class="fa-solid fa-gear"></i></button>
         </div>
     </header>
@@ -116,7 +116,7 @@
 
             <!-- Quick Action Area -->
             <section class="quick-actions">
-                <h3 class="section-title">AÃ§Ãµes RÃ¡pidas</h3>
+                <h3 class="section-title">Ações Rápidas</h3>
                 <div class="actions-scroll">
                     <button class="action-bubble" onclick="openCreateModal()"><i
                             class="fa-solid fa-plus"></i><br>Hábito</button>
@@ -317,6 +317,20 @@
                         <button onclick="closeTaskDetail()" style="flex:3;background:var(--accent-primary);border:none;color:white;padding:14px;border-radius:12px;font-weight:700">Fechar</button>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <div id="view-videos" class="view">
+            <h2 class="page-title">Vídeos</h2>
+            <div id="videos-list" class="list-container">
+                <div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> Carregando...</div>
+            </div>
+        </div>
+
+        <div id="view-shop" class="view">
+            <h2 class="page-title">Loja</h2>
+            <div id="shop-list" class="list-container">
+                <div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> Carregando...</div>
             </div>
         </div>
 
@@ -979,15 +993,15 @@
     <nav class="bottom-nav">
         <a href="#" class="nav-item active" data-target="view-home">
             <i class="fa-solid fa-house"></i>
-            <span>InÃ­cio</span>
+            <span>Início</span>
         </a>
         <a href="#" class="nav-item" data-target="view-habits">
             <i class="fa-solid fa-check-double"></i>
-            <span>HÃ¡bitos</span>
+            <span>Hábitos</span>
         </a>
         <a href="#" class="nav-item" data-target="view-finance">
             <i class="fa-solid fa-chart-pie"></i>
-            <span>FinanÃ§as</span>
+            <span>Finanças</span>
         </a>
                 <a href="#" class="nav-item" data-target="view-routines">
             <i class="fa-solid fa-clock-rotate-left"></i>
@@ -999,7 +1013,7 @@
         </a>
         <a href="#" class="nav-item" data-target="view-videos">
             <i class="fa-solid fa-play"></i>
-            <span>VÃ­deos</span>
+            <span>Vídeos</span>
         </a>
         <a href="#" class="nav-item" data-target="view-shop">
             <i class="fa-solid fa-store"></i>
@@ -1087,17 +1101,17 @@
     <div id="settings-modal" class="modal-overlay">
         <div class="modal-content glass">
             <div class="modal-header">
-                <h2 class="modal-title">MÃ³dulos do App</h2>
+                <h2 class="modal-title">Módulos do App</h2>
                 <button class="close-btn" onclick="closeSettingsModal()"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <div class="modal-body">
                 <div class="toggle-row">
-                    <span>HÃ¡bitos</span>
+                    <span>Hábitos</span>
                     <label class="switch"><input type="checkbox" id="toggle-habits" onchange="toggleModule('habits')"
                             checked><span class="slider"></span></label>
                 </div>
                 <div class="toggle-row">
-                    <span>FinanÃ§as</span>
+                    <span>Finanças</span>
                     <label class="switch"><input type="checkbox" id="toggle-finance" onchange="toggleModule('finance')"
                             checked><span class="slider"></span></label>
                 </div>
@@ -1107,7 +1121,7 @@
                             checked><span class="slider"></span></label>
                 </div>
                 <div class="toggle-row">
-                    <span>VÃ­deos</span>
+                    <span>Vídeos</span>
                     <label class="switch"><input type="checkbox" id="toggle-videos" onchange="toggleModule('videos')"
                             checked><span class="slider"></span></label>
                 </div>
@@ -1136,20 +1150,12 @@
                             checked><span class="slider"></span></label>
                 </div>
                 <div class="toggle-row">
-                    <span>Diario</span>
-                    <label class="switch"><input type="checkbox" id="toggle-journal" onchange="toggleModule('journal')" checked><span class="slider"></span></label>
-                </div>
-                <div class="toggle-row">
-                    <span>Diario</span>
-                    <label class="switch"><input type="checkbox" id="toggle-journal" onchange="toggleModule('journal')" checked><span class="slider"></span></label>
-                </div>
-                <div class="toggle-row">
-                    <span>Diario</span>
+                    <span>Diário</span>
                     <label class="switch"><input type="checkbox" id="toggle-journal" onchange="toggleModule('journal')" checked><span class="slider"></span></label>
                 </div>
                 <div class="toggle-row">
                     <span>Treinos</span>
-                    <label class="switch"><input type="checkbox" id="toggle-fitness" checked checked checked onchange="toggleModule('fitness')"
+                    <label class="switch"><input type="checkbox" id="toggle-fitness" onchange="toggleModule('fitness')"
                             checked><span class="slider"></span></label>
                 </div>
             </div>
@@ -1197,12 +1203,12 @@
 
         function updateNativeApk() {
             if (window.NexusAndroid && typeof window.NexusAndroid.installNativeApk === 'function') {
-                if (confirm("Isso farÃ¡ o download da Ãºltima versÃ£o completa do APK para instalar funcionalidades nativas. Deseja prosseguir?")) {
+                if (confirm("Isso fará o download da última versão completa do APK para instalar funcionalidades nativas. Deseja prosseguir?")) {
                     const apkUrl = 'https://github.com/mariagilda402-rgb/Project-AI/releases/latest/download/app-debug.apk';
                     window.NexusAndroid.installNativeApk(apkUrl);
                 }
             } else {
-                alert("AtualizaÃ§Ã£o nativa sÃ³ funciona no aplicativo Android.");
+                alert("Atualização nativa só funciona no aplicativo Android.");
             }
         }
     </script>

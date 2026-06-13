@@ -6,9 +6,9 @@ window.onerror = function(msg, url, line, col, error) {
 // Supabase Configuration
 const supabaseUrl = 'https://oxwpwfhjyiiwdhcggtlt.supabase.co';
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im94d3B3ZmhqeWlpd2RoY2dndGx0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODExMzA3NjAsImV4cCI6MjA5NjcwNjc2MH0.mIOis8ugOlubw2P6Z8_TuNeLukvltsXAlPb-ttaaOpY';
-let supabase = null;
-if (window.supabase) {
-    supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+window.nexusSupabase = null;
+if (window.supabase && typeof window.supabase.createClient === 'function') {
+    window.nexusSupabase = window.supabase.createClient(supabaseUrl, supabaseKey);
 } else {
     console.warn("Supabase client not loaded. Running in full offline mode.");
 }
@@ -19,8 +19,9 @@ if (window.supabase) {
 class LocalDB {
     static get(table) {
         try {
-            const data = JSON.parse(localStorage.getItem(`nexus_${table}`) || '[]');
-            return Array.isArray(data) ? data : [];
+            const raw = localStorage.getItem(`nexus_${table}`);
+            if (raw === null) return [];
+            return JSON.parse(raw);
         } catch(e) {
             return [];
         }
@@ -28,12 +29,19 @@ class LocalDB {
     static set(table, data) {
         localStorage.setItem(`nexus_${table}`, JSON.stringify(data));
     }
-    static getSingle(table, id) {
+    static getAll(table) {
         const rows = this.get(table);
+        return Array.isArray(rows) ? rows : [];
+    }
+    static saveAll(table, data) {
+        this.set(table, data);
+    }
+    static getSingle(table, id) {
+        const rows = this.getAll(table);
         return rows.find(r => r.id === id);
     }
     static upsert(table, record) {
-        const rows = this.get(table);
+        const rows = this.getAll(table);
         const idx = rows.findIndex(r => r.id === record.id);
         record.updated_at = new Date().toISOString();
         if (idx > -1) {
@@ -47,11 +55,108 @@ class LocalDB {
     }
 }
 
+function setTextIfPresent(id, value) {
+    const el = document.getElementById(id);
+    if (el) el.innerText = value;
+}
+
+function showToast(message, duration = 2500) {
+    let toast = document.getElementById('nexus-toast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'nexus-toast';
+        toast.style.cssText = 'position:fixed;left:16px;right:16px;bottom:164px;z-index:99999;background:rgba(15,15,25,.96);color:#fff;border:1px solid rgba(255,255,255,.18);border-radius:12px;padding:12px 14px;text-align:center;font-size:.92rem;box-shadow:0 12px 30px rgba(0,0,0,.35);opacity:0;transition:opacity .2s ease;pointer-events:none';
+        document.body.appendChild(toast);
+    }
+    toast.textContent = String(message || '');
+    toast.style.opacity = '1';
+    clearTimeout(showToast._timer);
+    showToast._timer = setTimeout(() => { toast.style.opacity = '0'; }, duration);
+}
+
+function showInAppNotification(message, type = 'info') {
+    showToast(message);
+    if (window.AndroidNative && typeof window.AndroidNative.showNotification === 'function') {
+        try {
+            window.AndroidNative.showNotification(type === 'success' ? 'Nexus' : 'Nexus Mobile', String(message || ''));
+        } catch (e) {
+            console.warn('Native notification failed:', e);
+        }
+    }
+}
+
+window.showToast = window.showToast || showToast;
+window.showInAppNotification = window.showInAppNotification || showInAppNotification;
+
+let jarvisCallActive = false;
+let jarvisCallStartedAt = 0;
+let jarvisCallTimerId = null;
+
+function updateJarvisCallTimer() {
+    const timer = document.getElementById('jarvis-call-timer');
+    if (!timer || !jarvisCallStartedAt) return;
+    const elapsed = Math.floor((Date.now() - jarvisCallStartedAt) / 1000);
+    const minutes = String(Math.floor(elapsed / 60)).padStart(2, '0');
+    const seconds = String(elapsed % 60).padStart(2, '0');
+    timer.textContent = `${minutes}:${seconds}`;
+}
+
+window.toggleJarvisCall = function() {
+    if (jarvisCallActive) {
+        window.endJarvisCall();
+        return;
+    }
+    jarvisCallActive = true;
+    jarvisCallStartedAt = Date.now();
+    const banner = document.getElementById('jarvis-call-banner');
+    const fab = document.getElementById('nexus-ai-fab');
+    if (banner) banner.style.display = 'flex';
+    if (fab) fab.classList.add('active');
+    updateJarvisCallTimer();
+    jarvisCallTimerId = setInterval(updateJarvisCallTimer, 1000);
+    if (window.AndroidNative && typeof window.AndroidNative.startJarvisCall === 'function') {
+        window.AndroidNative.startJarvisCall();
+    } else {
+        showToast('Ligacao Jarvis indisponivel no modo web.');
+    }
+};
+
+window.endJarvisCall = function() {
+    jarvisCallActive = false;
+    jarvisCallStartedAt = 0;
+    clearInterval(jarvisCallTimerId);
+    jarvisCallTimerId = null;
+    const banner = document.getElementById('jarvis-call-banner');
+    const fab = document.getElementById('nexus-ai-fab');
+    const timer = document.getElementById('jarvis-call-timer');
+    if (banner) banner.style.display = 'none';
+    if (fab) fab.classList.remove('active');
+    if (timer) timer.textContent = '00:00';
+    if (window.AndroidNative && typeof window.AndroidNative.stopJarvisCall === 'function') {
+        window.AndroidNative.stopJarvisCall();
+    }
+};
+
+window.requestJarvisVision = function() {
+    if (window.AndroidNative && typeof window.AndroidNative.captureScreenAndClipboard === 'function') {
+        window.AndroidNative.captureScreenAndClipboard();
+    } else {
+        showToast('Visao nativa indisponivel neste ambiente.');
+    }
+};
+
+window.receiveNativeVision = function(text) {
+    if (typeof openJarvisPanel === 'function') openJarvisPanel('summarize_text');
+    const prompt = document.getElementById('jarvis-prompt');
+    if (prompt) prompt.value = text || '';
+};
+
 // ----------------------------------------------------
 // Sync Engine
 // ----------------------------------------------------
 async function backgroundSync() {
-    if (!navigator.onLine || !supabase) return;
+    const supabaseClient = window.nexusSupabase;
+    if (!navigator.onLine || !supabaseClient) return;
     try {
         const tables = ['nexus_user', 'habits', 'tasks', 'finance_transactions', 'nexus_rewards', 'study_notes', 'nexus_goals', 'fitness_workouts'];
         let lastSync = localStorage.getItem('nexus_last_sync') || '1970-01-01T00:00:00Z';
@@ -59,7 +164,7 @@ async function backgroundSync() {
 
         for (let table of tables) {
             // Pull
-            const { data: remoteData, error } = await supabase.from(table).select('*').gt('updated_at', lastSync).order('updated_at', { ascending: true });
+            const { data: remoteData, error } = await supabaseClient.from(table).select('*').gt('updated_at', lastSync).order('updated_at', { ascending: true });
             if (remoteData && remoteData.length > 0) {
                 remoteData.forEach(remoteRow => {
                     const localRow = LocalDB.getSingle(table, remoteRow.id);
@@ -79,7 +184,7 @@ async function backgroundSync() {
             for (let localRow of localData) {
                 // Remove UI-only fields if necessary
                 const cleanRow = Object.assign({}, localRow);
-                const { error: pushErr } = await supabase.from(table).upsert(cleanRow);
+                const { error: pushErr } = await supabaseClient.from(table).upsert(cleanRow);
                 if (!pushErr) {
                     if (localRow.updated_at > newSyncTime) newSyncTime = localRow.updated_at;
                 }
@@ -111,18 +216,25 @@ document.querySelectorAll('.nav-item').forEach(item => {
         item.classList.add('active');
         
         const targetId = item.getAttribute('data-target');
+        const targetView = document.getElementById(targetId);
+        if (!targetView) {
+            console.warn("Missing mobile view:", targetId);
+            return;
+        }
         document.querySelectorAll('.view').forEach(view => view.classList.remove('active-view'));
-        document.getElementById(targetId).classList.add('active-view');
+        targetView.classList.add('active-view');
         
-        if(targetId === 'view-habits') loadHabits();
-        if(targetId === 'view-finance') loadFinances();
-        if(targetId === 'view-tasks') loadTasks();
-        if(targetId === 'view-videos') loadVideos();
-        if(targetId === 'view-shop') loadShop();
-        if(targetId === 'view-iot') discoverIoT();
-        if(targetId === 'view-studies') loadStudies();
-        if(targetId === 'view-goals') loadGoals();
-        if(targetId === 'view-fitness') loadFitness();
+        if(targetId === 'view-habits' && typeof loadHabits === 'function') loadHabits();
+        if(targetId === 'view-finance' && typeof loadFinances === 'function') loadFinances();
+        if(targetId === 'view-tasks' && typeof loadTasks === 'function') loadTasks();
+        if(targetId === 'view-videos' && typeof loadVideos === 'function') loadVideos();
+        if(targetId === 'view-shop' && typeof loadShop === 'function') loadShop();
+        if(targetId === 'view-iot' && typeof discoverIoT === 'function') discoverIoT();
+        if(targetId === 'view-studies' && typeof loadStudies === 'function') loadStudies();
+        if(targetId === 'view-goals' && typeof loadGoals === 'function') loadGoals();
+        if(targetId === 'view-fitness' && typeof loadFitness === 'function') loadFitness();
+        if(targetId === 'view-routines' && typeof loadRoutines === 'function') loadRoutines();
+        if(targetId === 'view-journal' && typeof loadJournal === 'function') loadJournal();
     });
 });
 
@@ -139,6 +251,11 @@ async function requestNotificationPermission() {
 }
 
 function sendLocalNotification(title, body) {
+    if (window.AndroidNative && typeof window.AndroidNative.showNotification === 'function') {
+        window.AndroidNative.showNotification(title, body);
+        return;
+    }
+    if (!("Notification" in window) || !navigator.serviceWorker) return;
     if (Notification.permission === "granted") {
         navigator.serviceWorker.ready.then(registration => {
             registration.showNotification(title, {
@@ -156,15 +273,17 @@ function sendLocalNotification(title, body) {
 
 function loadUserStats() {
     const user = LocalDB.getSingle('nexus_user', 1) || { xp: 0, level: 1, points: 0 };
-    document.getElementById('user-level').innerText = user.level;
-    document.getElementById('val-xp').innerText = user.xp;
-    document.getElementById('val-points').innerText = user.points;
+    setTextIfPresent('user-level', user.level);
+    setTextIfPresent('val-xp', user.xp);
+    setTextIfPresent('val-points', user.points);
+    setTextIfPresent('stat-xp', user.xp);
+    setTextIfPresent('stat-points', user.points);
 }
 
 function loadVideos() {
     const container = document.getElementById('videos-list');
     const data = LocalDB.get('nexus_videos');
-    container.innerHTML = data.length ? '' : '<div style="text-align:center; color:var(--text-secondary); margin-top:20px;">Nenhum vÃ­deo salvo offline.</div>';
+    container.innerHTML = data.length ? '' : '<div style="text-align:center; color:var(--text-secondary); margin-top:20px;">Nenhum vídeo salvo offline.</div>';
     data.forEach(v => {
         const el = document.createElement('div');
         el.className = 'list-item glass';
@@ -185,7 +304,7 @@ function loadHabits() {
     const container = document.getElementById('habits-list');
     const data = LocalDB.get('habits').filter(h => h.active === 1 && !h.is_deleted);
     
-    container.innerHTML = data.length ? '' : '<div style="text-align:center; color:var(--text-secondary); margin-top:20px;">Nenhum hÃ¡bito cadastrado.</div>';
+    container.innerHTML = data.length ? '' : '<div style="text-align:center; color:var(--text-secondary); margin-top:20px;">Nenhum hábito cadastrado.</div>';
     data.forEach(habit => {
         const el = document.createElement('div');
         el.className = 'list-item glass';
@@ -193,7 +312,7 @@ function loadHabits() {
         el.innerHTML = `
             <div class="item-main">
                 <span class="item-title">${habit.name}</span>
-                <span class="item-subtitle">Streak: ðŸ”¥ ${habit.current_streak}</span>
+                <span class="item-subtitle">Streak: 🔥 ${habit.current_streak}</span>
             </div>
             <button class="item-action ${isDone ? 'done' : ''}" onclick="toggleHabit(${habit.id}, this)">
                 <i class="fa-solid fa-check"></i>
@@ -208,7 +327,7 @@ window.toggleHabit = function(id, btn) {
     if (navigator.vibrate) navigator.vibrate(50);
     
     if (btn.classList.contains('done')) {
-        sendLocalNotification('HÃ¡bito ConcluÃ­do!', 'VocÃª ganhou pontos de experiÃªncia!');
+        sendLocalNotification('Hábito Concluído!', 'Você ganhou pontos de experiência!');
         
         // Update user stats offline
         const user = LocalDB.getSingle('nexus_user', 1) || { id: 1, xp: 0, points: 0, level: 1 };
@@ -259,11 +378,11 @@ function loadFinances() {
     const container = document.getElementById('finance-list');
     const data = LocalDB.get('finance_transactions').filter(t => !t.is_deleted).sort((a,b) => (b.occurred_at || b.created_at || '').localeCompare(a.occurred_at || a.created_at || ''));
     
-    container.innerHTML = data.length ? '' : '<div style="text-align:center; color:var(--text-secondary); margin-top:20px;">Sem transaÃ§Ãµes.</div>';
+    container.innerHTML = data.length ? '' : '<div style="text-align:center; color:var(--text-secondary); margin-top:20px;">Sem transações.</div>';
     data.slice(0, 15).forEach(t => {
         const el = document.createElement('div');
         el.className = 'list-item glass';
-        el.innerHTML = `<div class="item-main"><span class="item-title">${t.description || 'TransaÃ§Ã£o'}</span><span class="item-subtitle" style="color:${t.type==='income'?'#00b894':'#fd79a8'}">${t.type==='income'?'+':'-'} $${t.amount}</span></div>`;
+        el.innerHTML = `<div class="item-main"><span class="item-title">${t.description || 'Transação'}</span><span class="item-subtitle" style="color:${t.type==='income'?'#00b894':'#fd79a8'}">${t.type==='income'?'+':'-'} $${t.amount}</span></div>`;
         container.appendChild(el);
     });
 }
@@ -361,6 +480,15 @@ function loadFitness() {
     });
 }
 
+window.loadVideos = window.loadVideos || loadVideos;
+window.loadTasks = window.loadTasks || loadTasks;
+window.loadFinances = window.loadFinances || loadFinances;
+window.loadFinance = window.loadFinance || loadFinances;
+window.loadShop = window.loadShop || loadShop;
+window.loadStudies = window.loadStudies || loadStudies;
+window.loadGoals = window.loadGoals || loadGoals;
+window.loadFitness = window.loadFitness || loadFitness;
+
 window.discoverIoT = async function() {
     const container = document.getElementById('iot-list');
     container.innerHTML = '<div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> Buscando...</div>';
@@ -394,8 +522,9 @@ window.discoverIoT = async function() {
 // Realtime Subscription
 // ----------------------------------------------------
 function setupRealtime() {
-    if (!supabase) return;
-    supabase.channel('custom-all-channel')
+    const supabaseClient = window.nexusSupabase;
+    if (!supabaseClient) return;
+    supabaseClient.channel('custom-all-channel')
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'nexus_user' },
@@ -1224,12 +1353,15 @@ function escapeHtml(str) {
 const _origLocalDB_get = LocalDB.get.bind(LocalDB);
 const _newDefaults = {
     study_notebooks: [], pomo_sessions: [], journal_entries: [], 
-    diet_meals: [], body_measures: [], xp_log: [], user_stats: null
+    diet_meals: [], body_measures: [], xp_log: [],
+    user_stats: { xp: 0, points: 0, level: 1, xp_today: 0, last_xp_date: '' }
 };
 const _origGet = LocalDB.get;
 LocalDB.get = function(key) {
     const val = _origGet.call(this, key);
-    if (val === null || val === undefined) return _newDefaults[key] !== undefined ? (_newDefaults[key] === null ? null : JSON.parse(JSON.stringify(_newDefaults[key]))) : val;
+    if (val === null || val === undefined || (Array.isArray(val) && val.length === 0 && _newDefaults[key] && !Array.isArray(_newDefaults[key]))) {
+        return _newDefaults[key] !== undefined ? JSON.parse(JSON.stringify(_newDefaults[key])) : val;
+    }
     return val;
 };
 
@@ -2952,7 +3084,7 @@ function checkPendingFlashcards() {
     const due = getDueFlashcards();
     if (due.length > 0) {
         showToast(`📚 Você tem ${due.length} flashcards pendentes para revisar!`, 5000);
-        if (Notification.permission === 'granted') {
+        if ("Notification" in window && Notification.permission === 'granted') {
             new Notification('Nexus Studies', { body: `Você tem ${due.length} flashcards para revisar hoje!` });
         }
     }
@@ -2963,7 +3095,7 @@ document.addEventListener('DOMContentLoaded', () => {
     insertGenerateFlashcardsButton();
     
     // Request notification permission if not asked
-    if (Notification.permission === 'default') {
+    if ("Notification" in window && Notification.permission === 'default') {
         Notification.requestPermission();
     }
     
@@ -3671,8 +3803,8 @@ window.loadStudies = function() {
 let currentUser = null;
 
 // Listen for auth changes
-if (supabase) {
-    supabase.auth.onAuthStateChange((event, session) => {
+if (window.nexusSupabase) {
+    window.nexusSupabase.auth.onAuthStateChange((event, session) => {
         currentUser = session ? session.user : null;
         updateSettingsUI();
         if (event === 'SIGNED_IN') {
@@ -3681,7 +3813,7 @@ if (supabase) {
     });
     
     // Initial check
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    window.nexusSupabase.auth.getSession().then(({ data: { session } }) => {
         currentUser = session ? session.user : null;
         updateSettingsUI();
     });
@@ -3712,11 +3844,11 @@ function updateSettingsUI() {
 }
 
 async function loginWithGoogle() {
-    if (!supabase) {
+    if (!window.nexusSupabase) {
         alert("Servidor indisponível (Offline).");
         return;
     }
-    const { data, error } = await supabase.auth.signInWithOAuth({
+    const { data, error } = await window.nexusSupabase.auth.signInWithOAuth({
         provider: 'google',
         options: { redirectTo: window.location.origin + window.location.pathname }
     });
@@ -3726,8 +3858,8 @@ async function loginWithGoogle() {
 }
 
 async function logoutGoogle() {
-    if (!supabase) return;
-    const { error } = await supabase.auth.signOut();
+    if (!window.nexusSupabase) return;
+    const { error } = await window.nexusSupabase.auth.signOut();
     if (!error) {
         currentUser = null;
         updateSettingsUI();
@@ -3738,7 +3870,8 @@ async function logoutGoogle() {
 // Intercept pushChangesToSupabase to inject user_id
 const _origPushChanges = window.pushChangesToSupabase;
 window.pushChangesToSupabase = async function() {
-    if (!supabase || !navigator.onLine || !currentUser) return; // Only push if logged in
+    const supabaseClient = window.nexusSupabase;
+    if (!supabaseClient || !navigator.onLine || !currentUser) return; // Only push if logged in
     
     try {
         const syncTables = ['habits', 'tasks', 'finance_transactions', 'study_notes', 'nexus_user', 'nexus_videos', 'nexus_rewards', 'nexus_goals', 'fitness_workouts'];
@@ -3753,7 +3886,7 @@ window.pushChangesToSupabase = async function() {
                     if (cleanRow.id && typeof cleanRow.id === 'string') delete cleanRow.id;
                     return cleanRow;
                 });
-                const { error } = await supabase.from(table).upsert(cleanData);
+                const { error } = await supabaseClient.from(table).upsert(cleanData);
                 if (!error) {
                     data.forEach(d => { if (toPush.find(t => t === d)) d.sync_status = 'synced'; });
                     LocalDB.saveAll(table, data);
