@@ -29,6 +29,10 @@ import android.webkit.WebViewClient;
 import android.widget.ProgressBar;
 import android.widget.Toast;
 
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+
 import android.content.Intent;
 import androidx.core.content.FileProvider;
 
