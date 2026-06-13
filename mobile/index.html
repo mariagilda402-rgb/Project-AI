@@ -11,9 +11,10 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script>
-        window.onerror = function (msg, url, line, col, error) {
-            alert("ERRO GLOBAL: " + msg + " (" + url + ":" + line + ")");
-            return false;
+        window.onerror = function (msg, url, line) {
+            console.error("Global error:", msg, url, line);
+            if (typeof showToast === 'function') showToast("Erro: " + msg);
+            return true;
         };
         // alert("WebView Info: " + navigator.userAgent);
     </script>
@@ -52,10 +53,11 @@
             </div>
             <div class="user-info">
                 <h1 class="greeting">Olá, <span id="user-name">Comandante</span></h1>
-                <div
-                    style="background: red; color: white; padding: 5px; border-radius: 5px; font-weight: bold; margin-top: 5px;">
-                    BUILD V1.3 - VERSÃO NATIVA</div>
                 <div class="level-badge"><i class="fa-solid fa-star"></i> Nv. <span id="user-level">--</span></div>
+                <button id="sync-status-chip" onclick="openSettingsView()" type="button"
+                    style="margin-top:6px;background:rgba(255,255,255,0.08);border:1px solid var(--border-glass);color:var(--text-secondary);padding:4px 10px;border-radius:12px;font-size:0.7rem;cursor:pointer;font-family:inherit">
+                    <i class="fa-solid fa-cloud"></i> <span id="sync-status-text">Offline</span>
+                </button>
             </div>
         </div>
         <div class="top-actions">
@@ -99,7 +101,7 @@
             <div class="stat-card glass">
                 <div class="stat-icon" style="background:rgba(0,184,148,0.2);color:var(--accent-green)"><i class="fa-solid fa-check-double"></i></div>
                 <div>
-                    <div class="stat-label">Habitos Hoje</div>
+                    <div class="stat-label">Hábitos Hoje</div>
                     <div class="stat-value" id="stat-habits-today">0/0</div>
                     <div style="margin-top:6px;font-size:0.75rem;color:var(--text-secondary)" id="habits-streak-label">&#128293; 0 dias</div>
                 </div>
@@ -185,7 +187,7 @@
             <!-- Habit filters -->
             <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:10px;margin-bottom:10px;scrollbar-width:none" class="habit-filters-scroll">
                 <button class="study-chip active" data-filter="all" onclick="filterHabits('all',this)">Todos</button>
-                <button class="study-chip" data-filter="morning" onclick="filterHabits('morning',this)"><i class="fa-solid fa-sun"></i> Manha</button>
+                <button class="study-chip" data-filter="morning" onclick="filterHabits('morning',this)"><i class="fa-solid fa-sun"></i> Manhã</button>
                 <button class="study-chip" data-filter="afternoon" onclick="filterHabits('afternoon',this)"><i class="fa-solid fa-cloud-sun"></i> Tarde</button>
                 <button class="study-chip" data-filter="night" onclick="filterHabits('night',this)"><i class="fa-solid fa-moon"></i> Noite</button>
             </div>
@@ -266,7 +268,7 @@
                 <button class="study-chip active" data-filter="all" onclick="filterTasks('all',this)">Todas</button>
                 <button class="study-chip" data-filter="today" onclick="filterTasks('today',this)">Hoje</button>
                 <button class="study-chip" data-filter="high" onclick="filterTasks('high',this)"><i class="fa-solid fa-fire" style="color:var(--accent-pink)"></i> Alta</button>
-                <button class="study-chip" data-filter="done" onclick="filterTasks('done',this)">Concluidas</button>
+                <button class="study-chip" data-filter="done" onclick="filterTasks('done',this)">Concluídas</button>
             </div>
 
             <!-- LIST VIEW -->
@@ -709,7 +711,7 @@
         <!-- JOURNAL / MOOD VIEW (dedicated, separate from studies) -->
         <div id="view-journal" class="view">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-                <h2 class="page-title" style="margin-bottom:0">Diario</h2>
+                <h2 class="page-title" style="margin-bottom:0">Diário</h2>
                 <button class="icon-btn" onclick="openJournalEntry()"><i class="fa-solid fa-plus"></i></button>
             </div>
 
@@ -724,7 +726,7 @@
 
             <!-- Today's mood picker -->
             <div class="glass" id="today-mood-card" style="padding:16px;border-radius:14px;margin-bottom:16px">
-                <p style="margin:0 0 12px;font-weight:600;font-size:0.95rem">Como voce esta se sentindo hoje?</p>
+                <p style="margin:0 0 12px;font-weight:600;font-size:0.95rem">Como você está se sentindo hoje?</p>
                 <div style="display:flex;justify-content:space-around">
                     <button class="mood-btn" data-mood="1" onclick="setTodayMood(1)" title="Pessimo">&#128531;</button>
                     <button class="mood-btn" data-mood="2" onclick="setTodayMood(2)" title="Ruim">&#128533;</button>
@@ -790,7 +792,8 @@
                 </div>
             </div>
         </div>
-\n        <div id="view-goals" class="view">
+
+        <div id="view-goals" class="view">
             <h2 class="page-title">Metas</h2>
 
             <div class="actions-scroll" style="margin-bottom: 15px;">
@@ -806,7 +809,7 @@
         <!-- Fitness View -->
         <div id="view-fitness" class="view">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-                <h2 class="page-title" style="margin-bottom:0">Saude & Fitness</h2>
+                <h2 class="page-title" style="margin-bottom:0">Saúde & Fitness</h2>
                 <button class="icon-btn" onclick="openWorkoutBuilder()"><i class="fa-solid fa-plus"></i></button>
             </div>
 
@@ -851,7 +854,7 @@
                     <!-- Macros -->
                     <div style="display:flex;gap:10px;margin-top:14px">
                         <div style="flex:1;text-align:center">
-                            <div style="font-size:0.7rem;color:var(--accent-pink);font-weight:700;margin-bottom:4px">PROTEINA</div>
+                            <div style="font-size:0.7rem;color:var(--accent-pink);font-weight:700;margin-bottom:4px">PROTEÍNA</div>
                             <div id="diet-protein" style="font-weight:800;font-size:1rem">0g</div>
                         </div>
                         <div style="flex:1;text-align:center">
@@ -864,7 +867,7 @@
                         </div>
                     </div>
                 </div>
-                <button onclick="openMealLogger()" style="width:100%;background:var(--accent-primary);border:none;color:white;padding:14px;border-radius:12px;font-size:1rem;font-weight:700;cursor:pointer;margin-bottom:16px;font-family:inherit"><i class="fa-solid fa-utensils"></i> Registrar Refeicao</button>
+                <button onclick="openMealLogger()" style="width:100%;background:var(--accent-primary);border:none;color:white;padding:14px;border-radius:12px;font-size:1rem;font-weight:700;cursor:pointer;margin-bottom:16px;font-family:inherit"><i class="fa-solid fa-utensils"></i> Registrar Refeição</button>
                 <div id="diet-meals-list" class="list-container"></div>
             </div>
 
@@ -891,6 +894,50 @@
             </div>
         </div>
 
+        <!-- IoT / Casa View -->
+        <div id="view-iot" class="view">
+            <h2 class="page-title">Casa</h2>
+            <div class="glass" style="padding:16px;border-radius:14px;margin-bottom:16px">
+                <p style="margin:0;font-size:0.9rem;color:var(--text-secondary)">
+                    <i class="fa-solid fa-house-signal"></i> Controle dispositivos IoT quando o Nexus desktop estiver na mesma rede. Funciona offline com lista vazia.
+                </p>
+            </div>
+            <div id="iot-list" class="list-container">
+                <div style="text-align:center;color:var(--text-secondary);margin-top:20px;padding:20px">
+                    <i class="fa-solid fa-wifi" style="font-size:2rem;margin-bottom:10px;opacity:0.5"></i>
+                    <p>Nenhum dispositivo encontrado.<br>Conecte-se à rede do Nexus desktop para descobrir lâmpadas e sensores.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ROUTINES -->
+        <div id="view-routines" class="view">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+                <h2 class="page-title" style="margin-bottom:0">Rotinas</h2>
+                <div style="display:flex;gap:8px">
+                    <button class="icon-btn" onclick="openNewRoutine()"><i class="fa-solid fa-plus"></i></button>
+                </div>
+            </div>
+
+            <div class="glass" style="padding:16px;border-radius:14px;margin-bottom:20px">
+                <p style="margin:0;font-size:0.9rem;color:var(--text-secondary)"><i class="fa-solid fa-clock-rotate-left"></i> Rotinas são conjuntos de ações com lembretes. Ex: Rotina Matinal às 07:00.</p>
+            </div>
+
+            <div id="routines-list" class="list-container" style="padding-bottom:80px"></div>
+
+            <!-- Routine Runner Modal -->
+            <div id="routine-runner-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:var(--bg-base);z-index:200;padding:20px;flex-direction:column">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:30px">
+                    <button onclick="closeRoutineRunner()" style="background:none;border:none;color:white;font-size:1.5rem"><i class="fa-solid fa-arrow-left"></i></button>
+                    <h3 id="runner-title" style="margin:0;color:white">Rotina Matinal</h3>
+                    <span style="width:24px"></span>
+                </div>
+
+                <div id="runner-steps" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:12px"></div>
+
+                <button onclick="finishRoutine()" style="width:100%;background:linear-gradient(135deg,var(--accent-green),var(--accent-blue));border:none;color:white;padding:16px;border-radius:16px;font-size:1.1rem;font-weight:800;margin-top:20px">Finalizar Rotina</button>
+            </div>
+        </div>
 
         <!-- SETTINGS VIEW -->
         <div id="view-settings" class="view">
@@ -919,7 +966,7 @@
                 <button onclick="forceSyncData()" style="background:var(--accent-primary);color:white;border:none;padding:12px 20px;border-radius:8px;font-weight:bold;font-size:1rem;cursor:pointer;width:100%;margin-bottom:10px">
                     <i class="fa-solid fa-rotate"></i> Forçar Sincronização
                 </button>
-                <p style="color:var(--text-secondary);font-size:0.8rem;text-align:center;margin:0">O aplicativo sincroniza automaticamente a cada 20 segundos em segundo plano.</p>
+                <p style="color:var(--text-secondary);font-size:0.8rem;text-align:center;margin:0">O aplicativo sincroniza automaticamente a cada 60 segundos quando online.</p>
             </div>
 
             <!-- Appearance Section -->
@@ -961,35 +1008,6 @@
     </button>
 
     <!-- Bottom Navigation -->
-            <!-- FASE 7: ROUTINES -->
-        <div id="view-routines" class="view">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-                <h2 class="page-title" style="margin-bottom:0">Rotinas</h2>
-                <div style="display:flex;gap:8px">
-                    <button class="icon-btn" onclick="openNewRoutine()"><i class="fa-solid fa-plus"></i></button>
-                </div>
-            </div>
-            
-            <div class="glass" style="padding:16px;border-radius:14px;margin-bottom:20px">
-                <p style="margin:0;font-size:0.9rem;color:var(--text-secondary)"><i class="fa-solid fa-clock-rotate-left"></i> Rotinas sao conjuntos de acoes com lembretes. Ex: Rotina Matinal as 07:00.</p>
-            </div>
-            
-            <div id="routines-list" class="list-container" style="padding-bottom:80px"></div>
-            
-            <!-- Routine Runner Modal -->
-            <div id="routine-runner-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:var(--bg-base);z-index:200;padding:20px;flex-direction:column">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:30px">
-                    <button onclick="closeRoutineRunner()" style="background:none;border:none;color:white;font-size:1.5rem"><i class="fa-solid fa-arrow-left"></i></button>
-                    <h3 id="runner-title" style="margin:0;color:white">Rotina Matinal</h3>
-                    <span style="width:24px"></span>
-                </div>
-                
-                <div id="runner-steps" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:12px"></div>
-                
-                <button onclick="finishRoutine()" style="width:100%;background:linear-gradient(135deg,var(--accent-green),var(--accent-blue));border:none;color:white;padding:16px;border-radius:16px;font-size:1.1rem;font-weight:800;margin-top:20px">Finalizar Rotina</button>
-            </div>
-        </div>
-
     <nav class="bottom-nav">
         <a href="#" class="nav-item active" data-target="view-home">
             <i class="fa-solid fa-house"></i>
@@ -1105,6 +1123,9 @@
                 <button class="close-btn" onclick="closeSettingsModal()"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <div class="modal-body">
+                <button onclick="openSettingsView()" style="width:100%;background:rgba(108,92,231,0.15);border:1px solid var(--accent-purple);color:var(--accent-purple);padding:12px;border-radius:10px;font-weight:700;cursor:pointer;margin-bottom:16px;font-family:inherit">
+                    <i class="fa-solid fa-cloud"></i> Conta &amp; Sincronização
+                </button>
                 <div class="toggle-row">
                     <span>Hábitos</span>
                     <label class="switch"><input type="checkbox" id="toggle-habits" onchange="toggleModule('habits')"

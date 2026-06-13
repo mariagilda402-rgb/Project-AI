@@ -1,6 +1,7 @@
-window.onerror = function(msg, url, line, col, error) {
-    alert("ERRO JS: " + msg + " na linha " + line);
-    return false;
+window.onerror = function(msg, url, line) {
+    console.error("JS Error:", msg, "at", url, "line", line);
+    if (typeof showToast === 'function') showToast("Erro: " + msg);
+    return true;
 };
 
 // Supabase Configuration
@@ -43,11 +44,15 @@ class LocalDB {
     static upsert(table, record) {
         const rows = this.getAll(table);
         const idx = rows.findIndex(r => r.id === record.id);
-        record.updated_at = new Date().toISOString();
+        const now = new Date().toISOString();
+        record.updated_at = now;
+        if (!record.created_at) record.created_at = now;
+        if (!record.client_id) record.client_id = String(record.id || ('c_' + Date.now()));
+        if (record.sync_status !== 'synced') record.sync_status = 'pending';
         if (idx > -1) {
             rows[idx] = { ...rows[idx], ...record };
         } else {
-            if (!record.id) record.id = Date.now(); // pseudo-id for new local records
+            if (!record.id) record.id = Date.now();
             rows.push(record);
         }
         this.set(table, rows);
@@ -152,58 +157,144 @@ window.receiveNativeVision = function(text) {
 };
 
 // ----------------------------------------------------
-// Sync Engine
+// Sync Engine (unified offline-first)
 // ----------------------------------------------------
-async function backgroundSync() {
+const SYNC_TABLES = [
+    'nexus_user', 'habits', 'tasks', 'finance_transactions',
+    'nexus_rewards', 'study_notes', 'nexus_goals', 'fitness_workouts', 'nexus_videos'
+];
+let syncInProgress = false;
+
+function updateSyncIndicator(status, detail) {
+    const textEl = document.getElementById('sync-status-text');
+    const chip = document.getElementById('sync-status-chip');
+    if (!textEl) return;
+    const labels = {
+        offline: 'Offline',
+        syncing: 'Sincronizando...',
+        synced: detail || 'Sincronizado',
+        error: 'Erro de sync',
+        conflicts: detail || 'Conflitos'
+    };
+    textEl.textContent = labels[status] || detail || 'Offline';
+    if (chip) {
+        chip.style.color = status === 'synced' ? 'var(--accent-green)'
+            : status === 'syncing' ? 'var(--accent-blue)'
+            : status === 'error' ? '#ff4757'
+            : 'var(--text-secondary)';
+    }
+}
+
+function mergeRemoteRow(table, remoteRow, localRows) {
+    const idx = localRows.findIndex(r => r.id === remoteRow.id);
+    const localRow = idx > -1 ? localRows[idx] : null;
+    if (remoteRow.is_deleted) {
+        if (idx > -1) localRows.splice(idx, 1);
+        return localRows;
+    }
+    const remoteTs = remoteRow.updated_at || '';
+    const localTs = localRow?.updated_at || '';
+    if (!localRow) {
+        localRows.push({ ...remoteRow, sync_status: 'synced' });
+    } else if (remoteTs > localTs) {
+        if (localRow.sync_status === 'pending' && localTs >= remoteTs) {
+            return localRows;
+        }
+        localRows[idx] = { ...localRow, ...remoteRow, sync_status: 'synced' };
+    }
+    return localRows;
+}
+
+async function syncData() {
+    if (syncInProgress) return;
     const supabaseClient = window.nexusSupabase;
-    if (!navigator.onLine || !supabaseClient) return;
+    if (!navigator.onLine || !supabaseClient) {
+        updateSyncIndicator('offline');
+        return;
+    }
+    syncInProgress = true;
+    updateSyncIndicator('syncing');
     try {
-        const tables = ['nexus_user', 'habits', 'tasks', 'finance_transactions', 'nexus_rewards', 'study_notes', 'nexus_goals', 'fitness_workouts'];
         let lastSync = localStorage.getItem('nexus_last_sync') || '1970-01-01T00:00:00Z';
         let newSyncTime = lastSync;
+        let conflictCount = 0;
 
-        for (let table of tables) {
-            // Pull
-            const { data: remoteData, error } = await supabaseClient.from(table).select('*').gt('updated_at', lastSync).order('updated_at', { ascending: true });
-            if (remoteData && remoteData.length > 0) {
+        for (const table of SYNC_TABLES) {
+            const { data: remoteData } = await supabaseClient
+                .from(table).select('*').gt('updated_at', lastSync).order('updated_at', { ascending: true });
+            if (remoteData?.length) {
+                let localRows = LocalDB.get(table);
                 remoteData.forEach(remoteRow => {
-                    const localRow = LocalDB.getSingle(table, remoteRow.id);
-                    if (!localRow || remoteRow.updated_at > (localRow.updated_at || '')) {
-                        const rows = LocalDB.get(table);
-                        const idx = rows.findIndex(r => r.id === remoteRow.id);
-                        if (idx > -1) Object.assign(rows[idx], remoteRow);
-                        else rows.push(remoteRow);
-                        LocalDB.set(table, rows);
-                        if (remoteRow.updated_at > newSyncTime) newSyncTime = remoteRow.updated_at;
-                    }
+                    const before = localRows.length;
+                    localRows = mergeRemoteRow(table, remoteRow, localRows);
+                    if (remoteRow.updated_at > newSyncTime) newSyncTime = remoteRow.updated_at;
                 });
+                LocalDB.set(table, localRows);
             }
 
-            // Push
-            const localData = LocalDB.get(table).filter(r => (r.updated_at || '') > lastSync);
-            for (let localRow of localData) {
-                // Remove UI-only fields if necessary
-                const cleanRow = Object.assign({}, localRow);
+            let localRows = LocalDB.get(table);
+            const toPush = localRows.filter(r =>
+                (r.sync_status === 'pending' || (r.updated_at || '') > lastSync) && !r.is_deleted
+            );
+            for (const localRow of toPush) {
+                const cleanRow = { ...localRow };
+                delete cleanRow.sync_status;
+                if (currentUser?.id) cleanRow.user_id = currentUser.id;
+                if (cleanRow.id && typeof cleanRow.id === 'string' && isNaN(Number(cleanRow.id))) {
+                    delete cleanRow.id;
+                }
                 const { error: pushErr } = await supabaseClient.from(table).upsert(cleanRow);
                 if (!pushErr) {
-                    if (localRow.updated_at > newSyncTime) newSyncTime = localRow.updated_at;
+                    const idx = localRows.findIndex(r => r.id === localRow.id || r.client_id === localRow.client_id);
+                    if (idx > -1) {
+                        localRows[idx].sync_status = 'synced';
+                        if (localRow.updated_at > newSyncTime) newSyncTime = localRow.updated_at;
+                    }
+                } else {
+                    console.error('Push error', table, pushErr);
                 }
             }
+            LocalDB.set(table, localRows);
+
+            const tombstones = localRows.filter(r => r.is_deleted && r.sync_status === 'pending');
+            for (const row of tombstones) {
+                const cleanRow = { ...row, is_deleted: 1 };
+                delete cleanRow.sync_status;
+                const { error } = await supabaseClient.from(table).upsert(cleanRow);
+                if (!error) row.sync_status = 'synced';
+            }
+            if (tombstones.length) LocalDB.set(table, localRows);
         }
+
+        const conflicts = JSON.parse(localStorage.getItem('nexus_sync_conflicts') || '[]');
+        conflictCount = conflicts.length;
         localStorage.setItem('nexus_last_sync', newSyncTime);
-        
-        // Refresh UI if necessary
+        const timeLabel = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        updateSyncIndicator(conflictCount ? 'conflicts' : 'synced', conflictCount ? `${conflictCount} conflito(s)` : `Sync ${timeLabel}`);
+
         const activeView = document.querySelector('.active-view');
-        if(activeView) {
-            if(activeView.id === 'view-habits') loadHabits();
-            if(activeView.id === 'view-finance') loadFinances();
-            if(activeView.id === 'view-tasks') loadTasks();
+        if (activeView) {
+            if (activeView.id === 'view-habits') loadHabits();
+            if (activeView.id === 'view-finance') loadFinances();
+            if (activeView.id === 'view-tasks') loadTasks();
+            if (activeView.id === 'view-videos') loadVideos();
+            if (activeView.id === 'view-shop') loadShop();
         }
         loadUserStats();
     } catch (e) {
-        console.error("Sync error:", e);
+        console.error('Sync error:', e);
+        updateSyncIndicator('error');
+    } finally {
+        syncInProgress = false;
     }
 }
+
+async function backgroundSync() {
+    return syncData();
+}
+
+window.syncData = syncData;
+window.backgroundSync = backgroundSync;
 
 // ----------------------------------------------------
 // UI Logic
@@ -272,17 +363,34 @@ function sendLocalNotification(title, body) {
 // ----------------------------------------------------
 
 function loadUserStats() {
-    const user = LocalDB.getSingle('nexus_user', 1) || { xp: 0, level: 1, points: 0 };
+    const user = LocalDB.getSingle('nexus_user', 1) || { xp: 0, level: 1, points: 0, name: 'Comandante' };
     setTextIfPresent('user-level', user.level);
+    setTextIfPresent('user-name', user.name || 'Comandante');
     setTextIfPresent('val-xp', user.xp);
     setTextIfPresent('val-points', user.points);
     setTextIfPresent('stat-xp', user.xp);
     setTextIfPresent('stat-points', user.points);
+    setTextIfPresent('xp-level-label', 'Nível ' + (user.level || 1));
+
+    const today = new Date().toISOString().split('T')[0];
+    const habits = LocalDB.get('habits').filter(h => h.active === 1 && !h.is_deleted);
+    const logs = LocalDB.get('habit_logs').filter(l => l.date === today);
+    const doneToday = logs.filter(l => habits.some(h => h.id === l.habit_id)).length;
+    setTextIfPresent('stat-habits-today', doneToday + '/' + habits.length);
+
+    const tasks = LocalDB.get('tasks').filter(t => !t.is_deleted && !t.done_at);
+    setTextIfPresent('stat-tasks-pending', tasks.length);
+
+    const xpForLevel = (user.level || 1) * 100;
+    const xpPct = Math.min(100, Math.round(((user.xp || 0) % xpForLevel) / xpForLevel * 100));
+    const bar = document.getElementById('xp-progress-bar');
+    if (bar) bar.style.width = xpPct + '%';
 }
 
 function loadVideos() {
     const container = document.getElementById('videos-list');
-    const data = LocalDB.get('nexus_videos');
+    if (!container) return;
+    const data = LocalDB.get('nexus_videos').filter(v => !v.is_deleted);
     container.innerHTML = data.length ? '' : '<div style="text-align:center; color:var(--text-secondary); margin-top:20px;">Nenhum vídeo salvo offline.</div>';
     data.forEach(v => {
         const el = document.createElement('div');
@@ -394,6 +502,8 @@ function loadFinances() {
 
 function loadShop() {
     const container = document.getElementById('shop-list');
+    if (!container) return;
+    ensureDefaultRewards();
     const data = LocalDB.get('nexus_rewards').filter(r => !r.is_deleted);
     if(data.length) {
         container.innerHTML = '';
@@ -412,7 +522,7 @@ function loadShop() {
             container.appendChild(el);
         });
     } else {
-        container.innerHTML = '<div style="text-align:center; color:var(--text-secondary); margin-top:20px;">Nenhuma recompensa offline. Sincronize para puxar itens.</div>';
+        container.innerHTML = '<div style="text-align:center; color:var(--text-secondary); margin-top:20px; padding:20px;"><i class="fa-solid fa-store" style="font-size:2rem;opacity:0.4;margin-bottom:10px;display:block"></i>Nenhuma recompensa ainda.<br><button onclick="ensureDefaultRewards();loadShop()" style="margin-top:12px;background:var(--accent-primary);border:none;color:white;padding:10px 18px;border-radius:8px;cursor:pointer;font-family:inherit">Carregar recompensas padrão</button></div>';
     }
 }
 
@@ -458,14 +568,39 @@ function loadGoals() {
     const container = document.getElementById('goals-list');
     if(!container) return;
     const data = LocalDB.get('nexus_goals').filter(t => !t.is_deleted && t.status !== 'achieved');
-    container.innerHTML = data.length ? '' : '<div style="text-align:center; color:var(--text-secondary); margin-top:20px;">Sem metas ativas.</div>';
+    container.innerHTML = data.length ? '' : '<div style="text-align:center; color:var(--text-secondary); margin-top:20px; padding:20px;"><i class="fa-solid fa-bullseye" style="font-size:2rem;opacity:0.4;margin-bottom:10px;display:block"></i>Sem metas ativas.<br><button onclick="promptAddGoal()" style="margin-top:12px;background:var(--accent-primary);border:none;color:white;padding:10px 18px;border-radius:8px;cursor:pointer;font-family:inherit">Criar primeira meta</button></div>';
     data.forEach(t => {
         const el = document.createElement('div');
         el.className = 'list-item glass';
-        el.innerHTML = `<div class="item-main"><span class="item-title">${t.name}</span><span class="item-subtitle">Progresso: ${t.progress || 0}%</span></div>`;
+        el.innerHTML = `<div class="item-main"><span class="item-title">${t.name}</span><span class="item-subtitle">Progresso: ${t.progress || 0}%</span></div>
+            <button class="item-action" style="width:auto;padding:0 12px" onclick="updateGoalProgress(${t.id})">+10%</button>`;
         container.appendChild(el);
     });
 }
+
+window.promptAddGoal = function() {
+    const name = prompt('Nome da meta:');
+    if (!name || !name.trim()) return;
+    LocalDB.upsert('nexus_goals', {
+        id: Date.now(),
+        name: name.trim(),
+        progress: 0,
+        status: 'active'
+    });
+    loadGoals();
+    showToast('Meta criada!');
+};
+
+window.updateGoalProgress = function(id) {
+    const goals = LocalDB.get('nexus_goals');
+    const goal = goals.find(g => g.id === id);
+    if (!goal) return;
+    goal.progress = Math.min(100, (goal.progress || 0) + 10);
+    if (goal.progress >= 100) goal.status = 'achieved';
+    LocalDB.upsert('nexus_goals', goal);
+    loadGoals();
+    showToast('Progresso atualizado!');
+};
 
 function loadFitness() {
     const container = document.getElementById('fitness-list');
@@ -489,14 +624,31 @@ window.loadStudies = window.loadStudies || loadStudies;
 window.loadGoals = window.loadGoals || loadGoals;
 window.loadFitness = window.loadFitness || loadFitness;
 
+window.ensureDefaultRewards = function() {
+    const rewards = LocalDB.get('nexus_rewards').filter(r => !r.is_deleted);
+    if (rewards.length > 0) return;
+    const now = new Date().toISOString();
+    LocalDB.set('nexus_rewards', [
+        { id: 1, name: 'Pausa Café', cost: 50, description: '15 min de descanso merecido', created_at: now, updated_at: now, sync_status: 'pending' },
+        { id: 2, name: 'Episódio Série', cost: 100, description: 'Assistir um episódio favorito', created_at: now, updated_at: now, sync_status: 'pending' },
+        { id: 3, name: 'Jantar Especial', cost: 200, description: 'Comida favorita no fim de semana', created_at: now, updated_at: now, sync_status: 'pending' }
+    ]);
+};
+
 window.discoverIoT = async function() {
     const container = document.getElementById('iot-list');
+    if (!container) return;
+    const offlineMsg = '<div style="text-align:center;color:var(--text-secondary);margin-top:20px;padding:20px"><i class="fa-solid fa-house-signal" style="font-size:2rem;opacity:0.4;margin-bottom:10px;display:block"></i>Casa IoT requer o Nexus desktop na mesma rede.<br>Use o app desktop para controlar lâmpadas e sensores.</div>';
+    if (!navigator.onLine || window.location.protocol === 'file:') {
+        container.innerHTML = offlineMsg;
+        return;
+    }
     container.innerHTML = '<div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> Buscando...</div>';
     try {
         const res = await fetch('/api/nexus/iot/discover');
         const data = await res.json();
         if (data && data.devices) {
-            container.innerHTML = data.devices.length ? '' : '<div style="text-align:center; color:var(--text-secondary); margin-top:20px;">Nenhum dispositivo encontrado.</div>';
+            container.innerHTML = data.devices.length ? '' : offlineMsg;
             data.devices.forEach(dev => {
                 const el = document.createElement('div');
                 el.className = 'list-item glass';
@@ -512,10 +664,16 @@ window.discoverIoT = async function() {
                 `;
                 container.appendChild(el);
             });
+        } else {
+            container.innerHTML = offlineMsg;
         }
     } catch (e) {
-        container.innerHTML = '<div style="text-align:center; color:red; margin-top:20px;">Erro ao buscar dispositivos.</div>';
+        container.innerHTML = offlineMsg;
     }
+};
+
+window.toggleIoT = function(ip, turnOn) {
+    showToast('IoT disponível apenas com Nexus desktop na mesma rede.');
 };
 
 // ----------------------------------------------------
@@ -1047,6 +1205,41 @@ window.loadUserStats = function() {
 
 let selectedEditorMood = 0;
 let editingJournalId = null;
+
+window.startJournalDictation = function() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const status = document.getElementById('journal-mic-status');
+    const textarea = document.getElementById('journal-content');
+    if (!textarea) return;
+    if (!SpeechRecognition) {
+        if (status) status.textContent = 'Ditado indisponível neste dispositivo';
+        showToast('Ditado não suportado no WebView');
+        return;
+    }
+    const rec = new SpeechRecognition();
+    rec.lang = 'pt-BR';
+    rec.interimResults = false;
+    rec.maxAlternatives = 1;
+    if (status) status.textContent = 'Ouvindo... fale agora';
+    rec.onresult = (e) => {
+        const text = e.results[0][0].transcript;
+        textarea.value = (textarea.value ? textarea.value + ' ' : '') + text;
+        if (status) status.textContent = 'Texto adicionado!';
+    };
+    rec.onerror = () => {
+        if (status) status.textContent = 'Erro no ditado — tente novamente';
+        showToast('Erro no reconhecimento de voz');
+    };
+    rec.onend = () => {
+        if (status && status.textContent === 'Ouvindo... fale agora') {
+            status.textContent = 'Pressione para ditar';
+        }
+    };
+    try { rec.start(); } catch (e) {
+        if (status) status.textContent = 'Microfone indisponível';
+        showToast('Permissão de microfone necessária');
+    }
+};
 
 window.loadJournal = function() {
     loadMoodCalendarStrip();
@@ -1927,23 +2120,35 @@ window.initTheme = function() {
 
 document.addEventListener('DOMContentLoaded', () => {
     // Initial UI load from LocalStorage
+    ensureDefaultRewards();
     loadUserStats();
     loadHabits();
+    applyUiPrefs();
+    updateSyncIndicator(navigator.onLine && window.nexusSupabase ? 'synced' : 'offline');
     
     // Background tasks
     setTimeout(requestNotificationPermission, 2000);
-    setTimeout(backgroundSync, 1000); // Initial sync on boot
+    setTimeout(backgroundSync, 1000);
     setupRealtime();
     
-    // Poll sync every minute if online
     setInterval(backgroundSync, 60000);
 });
 
 // ----------------------------------------------------
 // UI Preferences & Module Toggling
 // ----------------------------------------------------
+window.openSettingsView = function() {
+    if (typeof closeSettingsModal === 'function') closeSettingsModal();
+    document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
+    document.querySelectorAll('.view').forEach(view => view.classList.remove('active-view'));
+    const view = document.getElementById('view-settings');
+    if (view) view.classList.add('active-view');
+    if (typeof updateSettingsUI === 'function') updateSettingsUI();
+};
+
 window.openSettingsModal = () => {
-    document.getElementById('settings-modal').classList.add('show');
+    const modal = document.getElementById('settings-modal');
+    if (modal) modal.classList.add('show');
 };
 
 window.closeSettingsModal = () => {
@@ -1963,7 +2168,7 @@ function applyUiPrefs() {
     try {
         prefs = JSON.parse(localStorage.getItem('nexus_ui_prefs')) || {};
     } catch(e) {}
-    const modules = ['habits', 'finance', 'tasks', 'videos', 'shop', 'iot', 'studies', 'goals', 'fitness'];
+    const modules = ['habits', 'finance', 'tasks', 'videos', 'shop', 'iot', 'studies', 'goals', 'fitness', 'journal', 'routines'];
     
     modules.forEach(mod => {
         const isEnabled = prefs[mod] !== false; // Default true
@@ -3845,15 +4050,18 @@ function updateSettingsUI() {
 
 async function loginWithGoogle() {
     if (!window.nexusSupabase) {
-        alert("Servidor indisponível (Offline).");
+        showToast("Servidor indisponível (Offline).");
         return;
     }
-    const { data, error } = await window.nexusSupabase.auth.signInWithOAuth({
+    const redirectTo = (window.location.protocol === 'file:')
+        ? 'com.nexus.mobile://auth/callback'
+        : (window.location.origin + window.location.pathname);
+    const { error } = await window.nexusSupabase.auth.signInWithOAuth({
         provider: 'google',
-        options: { redirectTo: window.location.origin + window.location.pathname }
+        options: { redirectTo }
     });
     if (error) {
-        alert("Erro no login: " + error.message);
+        showToast("Erro no login: " + error.message);
     }
 }
 
@@ -3867,48 +4075,20 @@ async function logoutGoogle() {
     }
 }
 
-// Intercept pushChangesToSupabase to inject user_id
-const _origPushChanges = window.pushChangesToSupabase;
-window.pushChangesToSupabase = async function() {
-    const supabaseClient = window.nexusSupabase;
-    if (!supabaseClient || !navigator.onLine || !currentUser) return; // Only push if logged in
-    
-    try {
-        const syncTables = ['habits', 'tasks', 'finance_transactions', 'study_notes', 'nexus_user', 'nexus_videos', 'nexus_rewards', 'nexus_goals', 'fitness_workouts'];
-        for (let table of syncTables) {
-            const data = LocalDB.getAll(table) || [];
-            const toPush = data.filter(d => !d.sync_status || d.sync_status === 'pending');
-            if (toPush.length > 0) {
-                // Attach user_id for RLS
-                const cleanData = toPush.map(row => {
-                    let cleanRow = { ...row, user_id: currentUser.id };
-                    delete cleanRow.sync_status;
-                    if (cleanRow.id && typeof cleanRow.id === 'string') delete cleanRow.id;
-                    return cleanRow;
-                });
-                const { error } = await supabaseClient.from(table).upsert(cleanData);
-                if (!error) {
-                    data.forEach(d => { if (toPush.find(t => t === d)) d.sync_status = 'synced'; });
-                    LocalDB.saveAll(table, data);
-                } else {
-                    console.error("Push error:", error);
-                }
-            }
-        }
-        LocalDB.saveAll('last_push', new Date().toISOString());
-    } catch (e) {
-        console.error("Sync error:", e);
-    }
-};
+// Intercept pushChangesToSupabase — unified via syncData
+window.pushChangesToSupabase = syncData;
 
 function forceSyncData() {
     showToast("Sincronizando com a Nuvem...");
-    if (typeof syncData === 'function') {
-        syncData().then(() => {
-            showToast("Sincronização Concluída!");
-        });
-    }
+    syncData().then(() => {
+        showToast("Sincronização concluída!");
+    }).catch(() => {
+        showToast("Sincronização indisponível — modo offline ativo.");
+    });
 }
+
+window.forceSyncData = forceSyncData;
+window.loginWithGoogle = loginWithGoogle;
 
 // ─── Settings: Appearance & Local Data ───────────────────────────
 

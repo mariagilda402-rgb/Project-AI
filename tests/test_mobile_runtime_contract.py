@@ -71,3 +71,47 @@ def test_mobile_visible_labels_are_utf8_not_mojibake():
     assert "Módulos do App" in text
     for mojibake in ["Ă", "Â", "Ã¡", "Ã©", "Ã­", "Ã³", "Ãº", "Ã§", "ðŸ", "â€", "â"]:
         assert mojibake not in text
+
+
+def test_mobile_nav_targets_all_have_matching_views():
+    html = read_index_html()
+    targets = re.findall(r'data-target="(view-[^"]+)"', html)
+    for target in set(targets):
+        assert f'id="{target}"' in html, f"Missing view for nav target {target}"
+
+
+def test_mobile_exposes_critical_window_handlers():
+    app_js = read_app_js()
+    required = [
+        "window.syncData",
+        "window.toggleIoT",
+        "window.promptAddGoal",
+        "window.startJournalDictation",
+        "window.openSettingsView",
+        "window.discoverIoT",
+    ]
+    for name in required:
+        assert name in app_js, f"Missing {name}"
+
+
+def test_mobile_view_routines_inside_main():
+    html = read_index_html()
+    main_start = html.index("<main")
+    main_end = html.index("</main>")
+    main_content = html[main_start:main_end]
+    assert 'id="view-routines"' in main_content
+
+
+def test_mobile_no_literal_backslash_n_in_html():
+    html = read_index_html()
+    assert "\\n        <div" not in html
+
+
+def test_mobile_loaders_guard_missing_containers():
+    app_js = read_app_js()
+    for loader in ["loadVideos", "loadShop", "loadGoals", "loadFitness"]:
+        block = re.search(rf"function {loader}\(\)\s*\{{", app_js)
+        assert block, f"function {loader} not found"
+        start = block.start()
+        snippet = app_js[start:start + 400]
+        assert re.search(r"if\s*\(\s*!container\s*\)\s*return", snippet), f"{loader} missing container guard"
