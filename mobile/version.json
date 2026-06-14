@@ -1,10 +1,13 @@
-{
-  "version": "2026.05.29.1",
-  "files": [
-    "index.html",
-    "style.css",
-    "app.js",
-    "manifest.json",
-    "sw.js"
-  ]
-}
+{
+  "version": "2026.06.14.7",
+  "files": [
+    "index.html",
+    "style.css",
+    "app.js",
+    "nexus-audio.js",
+    "nexus-phase15.js",
+    "youtube-player.html",
+    "manifest.json",
+    "sw.js"
+  ]
+}

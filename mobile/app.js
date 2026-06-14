@@ -42,12 +42,12 @@ function isWifiConnected() {
 }
 
 function isJarvisCloudReady() {
-    return isWifiConnected() && !!window.nexusSupabase;
+    return isNetworkOnline() && !!window.nexusSupabase;
 }
 
 function requireWifiForJarvis(label) {
-    if (isWifiConnected()) return true;
-    showToast('Conecte-se ao Wi-Fi para usar o Jarvis' + (label ? ' (' + label + ')' : '') + '.');
+    if (isNetworkOnline()) return true;
+    showToast('Sem internet para usar o Jarvis' + (label ? ' (' + label + ')' : '') + '.');
     updateJarvisFabState();
     return false;
 }
@@ -55,10 +55,12 @@ function requireWifiForJarvis(label) {
 function updateJarvisFabState() {
     const fab = document.getElementById('nexus-ai-fab');
     if (!fab) return;
-    const ok = isWifiConnected();
+    const homeActive = !!document.getElementById('view-home')?.classList.contains('active-view');
+    const ok = isNetworkOnline();
+    fab.style.display = homeActive ? 'flex' : 'none';
     fab.classList.toggle('jarvis-disabled', !ok);
     fab.setAttribute('aria-disabled', ok ? 'false' : 'true');
-    fab.title = ok ? 'Ligar para o Jarvis' : 'Wi-Fi necessário';
+    fab.title = ok ? 'Ligar para o Jarvis' : 'Internet necessária';
 }
 
 function updateNetworkSettingsUI() {
@@ -185,6 +187,14 @@ class LocalDB {
         this.set(table, rows);
         return record;
     }
+    static patchRow(table, id, changes) {
+        const existing = this.getSingle(table, id);
+        if (!existing) return null;
+        return this.upsert(table, { ...existing, ...changes });
+    }
+    static deleteRow(table, id) {
+        return this.patchRow(table, id, { is_deleted: 1 });
+    }
 }
 
 function setTextIfPresent(id, value) {
@@ -202,6 +212,11 @@ function showToast(message, duration = 2500) {
     }
     toast.textContent = String(message || '');
     toast.style.opacity = '1';
+    if (window.NexusAudio) {
+        const msg = String(message || '').toLowerCase();
+        if (msg.includes('erro') || msg.includes('falha')) window.NexusAudio.play('error');
+        else window.NexusAudio.play('tap');
+    }
     clearTimeout(showToast._timer);
     showToast._timer = setTimeout(() => { toast.style.opacity = '0'; }, duration);
 }
@@ -225,6 +240,7 @@ function closeTransientMobileSurfaces() {
         'goal-form-modal',
         'workout-form-modal',
         'subject-form-modal',
+        'study-entity-edit-modal',
         'subtask-inline-modal',
         'habit-detail-modal',
         'task-detail-modal',
@@ -263,53 +279,17 @@ let jarvisCallTimerId = null;
 
 function updateJarvisCallTimer() {
     const timer = document.getElementById('jarvis-call-timer');
-    if (!timer || !jarvisCallStartedAt) return;
+    const timerOverlay = document.getElementById('jarvis-call-timer-overlay');
+    if (!jarvisCallStartedAt) return;
     const elapsed = Math.floor((Date.now() - jarvisCallStartedAt) / 1000);
     const minutes = String(Math.floor(elapsed / 60)).padStart(2, '0');
     const seconds = String(elapsed % 60).padStart(2, '0');
-    timer.textContent = `${minutes}:${seconds}`;
+    const label = `${minutes}:${seconds}`;
+    if (timer) timer.textContent = label;
+    if (timerOverlay) timerOverlay.textContent = label;
 }
 
-window.toggleJarvisCall = function() {
-    if (jarvisCallActive) {
-        window.endJarvisCall();
-        return;
-    }
-    if (!requireWifiForJarvis('ligação')) return;
-    if (!window.nexusSupabase) {
-        showToast('Entre com Google nas configurações para usar o Jarvis.');
-        return;
-    }
-    jarvisCallActive = true;
-    jarvisCallStartedAt = Date.now();
-    const banner = document.getElementById('jarvis-call-banner');
-    const fab = document.getElementById('nexus-ai-fab');
-    if (banner) banner.style.display = 'flex';
-    if (fab) fab.classList.add('active');
-    updateJarvisCallTimer();
-    jarvisCallTimerId = setInterval(updateJarvisCallTimer, 1000);
-    if (window.AndroidNative && typeof window.AndroidNative.startJarvisCall === 'function') {
-        window.AndroidNative.startJarvisCall();
-    } else {
-        showToast('Ligacao Jarvis indisponivel no modo web.');
-    }
-};
-
-window.endJarvisCall = function() {
-    jarvisCallActive = false;
-    jarvisCallStartedAt = 0;
-    clearInterval(jarvisCallTimerId);
-    jarvisCallTimerId = null;
-    const banner = document.getElementById('jarvis-call-banner');
-    const fab = document.getElementById('nexus-ai-fab');
-    const timer = document.getElementById('jarvis-call-timer');
-    if (banner) banner.style.display = 'none';
-    if (fab) fab.classList.remove('active');
-    if (timer) timer.textContent = '00:00';
-    if (window.AndroidNative && typeof window.AndroidNative.stopJarvisCall === 'function') {
-        window.AndroidNative.stopJarvisCall();
-    }
-};
+// toggleJarvisCall / endJarvisCall — implementados em nexus-phase15.js (overlay + voz)
 
 window.requestJarvisVision = function() {
     if (window.AndroidNative && typeof window.AndroidNative.captureScreenAndClipboard === 'function') {
@@ -329,10 +309,12 @@ window.receiveNativeVision = function(text) {
 // Sync Engine (unified offline-first)
 // ----------------------------------------------------
 const SYNC_TABLES = [
-    'nexus_user', 'habits', 'habit_logs', 'tasks', 'finance_transactions',
+    'nexus_user', 'habits', 'habit_logs', 'tasks', 'finance_transactions', 'finance_investments',
     'nexus_rewards', 'study_notes', 'study_notebooks', 'flashcards', 'nexus_goals',
     'fitness_workouts', 'nexus_videos', 'routines', 'journal_entries',
-    'pomo_sessions', 'reading_books', 'reading_sessions', 'quiz_attempts'
+    'pomo_sessions', 'reading_books', 'reading_sessions', 'quiz_attempts',
+    'jarvis_chat_messages', 'jarvis_call_sessions', 'jarvis_call_turns',
+    'nexus_alarms', 'nexus_user_settings', 'iot_devices'
 ];
 let syncInProgress = false;
 
@@ -444,13 +426,7 @@ async function syncData() {
         updateSyncIndicator(conflictCount ? 'conflicts' : 'synced', conflictCount ? `${conflictCount} conflito(s)` : `Sync ${timeLabel}`);
 
         const activeView = document.querySelector('.active-view');
-        if (activeView) {
-            if (activeView.id === 'view-habits') loadHabits();
-            if (activeView.id === 'view-finance') loadFinances();
-            if (activeView.id === 'view-tasks') loadTasks();
-            if (activeView.id === 'view-videos') loadVideos();
-            if (activeView.id === 'view-shop') loadShop();
-        }
+        if (activeView && typeof refreshViewContent === 'function') refreshViewContent(activeView.id);
         loadUserStats();
     } catch (e) {
         console.error('Sync error:', e);
@@ -468,39 +444,127 @@ window.syncData = syncData;
 window.backgroundSync = backgroundSync;
 
 // ----------------------------------------------------
-// UI Logic
+// UI Logic — central view refresh (all modules)
 // ----------------------------------------------------
-document.querySelectorAll('.nav-item').forEach(item => {
-    item.addEventListener('click', (e) => {
-        e.preventDefault();
-        closeTransientMobileSurfaces();
-        
-        document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
-        item.classList.add('active');
-        
-        const targetId = item.getAttribute('data-target');
-        const targetView = document.getElementById(targetId);
-        if (!targetView) {
-            console.warn("Missing mobile view:", targetId);
-            return;
+window.refreshViewContent = function(viewId) {
+    if (!viewId) return;
+    try {
+        switch (viewId) {
+            case 'view-home':
+                if (typeof loadTodayDashboard === 'function') loadTodayDashboard();
+                break;
+            case 'view-habits':
+                if (typeof loadHabits === 'function') loadHabits();
+                break;
+            case 'view-finance':
+                if (typeof loadFinances === 'function') loadFinances();
+                break;
+            case 'view-tasks':
+                if (typeof loadTasks === 'function') loadTasks();
+                break;
+            case 'view-videos':
+                if (typeof loadVideos === 'function') loadVideos();
+                break;
+            case 'view-shop':
+                if (typeof loadShop === 'function') loadShop();
+                break;
+            case 'view-studies':
+                if (typeof loadStudies === 'function') loadStudies();
+                break;
+            case 'view-goals':
+                if (typeof loadGoals === 'function') loadGoals();
+                break;
+            case 'view-fitness':
+                if (typeof switchFitnessTab === 'function') {
+                    const treinosBtn = document.querySelector('#view-fitness .fitness-tab');
+                    switchFitnessTab('treinos', treinosBtn);
+                } else if (typeof loadFitness === 'function') {
+                    loadFitness();
+                }
+                break;
+            case 'view-routines':
+                if (typeof loadRoutines === 'function') loadRoutines();
+                break;
+            case 'view-journal':
+                if (typeof loadJournal === 'function') loadJournal();
+                break;
+            case 'view-alarms':
+                if (typeof loadAlarms === 'function') loadAlarms();
+                break;
+            case 'view-iot':
+                if (typeof discoverIoT === 'function') discoverIoT();
+                break;
+            case 'view-cleaner':
+                if (typeof loadCleaner === 'function') loadCleaner();
+                break;
+            case 'view-jarvis-history':
+                if (typeof loadJarvisPersistentHistory === 'function') loadJarvisPersistentHistory();
+                break;
+            case 'view-jarvis-calls':
+                if (typeof loadJarvisCallHistory === 'function') loadJarvisCallHistory();
+                break;
+            case 'view-settings':
+                if (typeof initAppPreferences === 'function') initAppPreferences();
+                if (typeof updateSettingsUI === 'function') updateSettingsUI();
+                break;
+            default:
+                break;
         }
-        document.querySelectorAll('.view').forEach(view => view.classList.remove('active-view'));
-        targetView.classList.add('active-view');
-        
-        if(targetId === 'view-habits' && typeof loadHabits === 'function') loadHabits();
-        if(targetId === 'view-finance' && typeof loadFinances === 'function') loadFinances();
-        if(targetId === 'view-tasks' && typeof loadTasks === 'function') loadTasks();
-        if(targetId === 'view-videos' && typeof loadVideos === 'function') loadVideos();
-        if(targetId === 'view-shop' && typeof loadShop === 'function') loadShop();
-        if(targetId === 'view-iot' && typeof discoverIoT === 'function') discoverIoT();
-        if(targetId === 'view-studies' && typeof loadStudies === 'function') loadStudies();
-        if(targetId === 'view-goals' && typeof loadGoals === 'function') loadGoals();
-        if(targetId === 'view-fitness' && typeof loadFitness === 'function') loadFitness();
-        if(targetId === 'view-routines' && typeof loadRoutines === 'function') loadRoutines();
-        if(targetId === 'view-journal' && typeof loadJournal === 'function') loadJournal();
-        if(targetId === 'view-cleaner' && typeof loadCleaner === 'function') loadCleaner();
+    } catch (err) {
+        console.error('[refreshViewContent]', viewId, err);
+        if (typeof showToast === 'function') showToast('Erro ao carregar conteúdo da tela');
+    }
+};
+
+const MODULE_NAV_KEYS = ['habits', 'finance', 'routines', 'tasks', 'videos', 'shop', 'studies', 'goals', 'fitness', 'iot', 'journal', 'alarms', 'cleaner'];
+
+window.ensureModuleNavVisible = function() {
+    let prefs = {};
+    try { prefs = JSON.parse(localStorage.getItem('nexus_ui_prefs') || '{}'); } catch (_) {}
+    const hidden = MODULE_NAV_KEYS.filter(mod => {
+        const navItem = document.querySelector('.nav-item[data-target="view-' + mod + '"]');
+        return navItem && navItem.style.display === 'none';
     });
-});
+    if (hidden.length >= MODULE_NAV_KEYS.length - 1) {
+        MODULE_NAV_KEYS.forEach(mod => { prefs[mod] = true; });
+        localStorage.setItem('nexus_ui_prefs', JSON.stringify(prefs));
+        if (typeof showToast === 'function') showToast('Módulos restaurados na barra inferior.');
+    }
+    if (typeof applyModuleOrderAndVisibility === 'function') applyModuleOrderAndVisibility();
+    else if (typeof applyUiPrefs === 'function') applyUiPrefs();
+};
+
+function activateMobileView(viewId, navItem) {
+    if (typeof closeTransientMobileSurfaces === 'function') closeTransientMobileSurfaces();
+    document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
+    if (navItem) navItem.classList.add('active');
+    document.querySelectorAll('.view').forEach(view => view.classList.remove('active-view'));
+    const targetView = document.getElementById(viewId);
+    if (!targetView) {
+        console.warn('Missing mobile view:', viewId);
+        if (typeof showToast === 'function') showToast('Tela não encontrada: ' + viewId);
+        return false;
+    }
+    targetView.classList.add('active-view');
+    if (typeof updateJarvisFabState === 'function') updateJarvisFabState();
+    refreshViewContent(viewId);
+    requestAnimationFrame(() => refreshViewContent(viewId));
+    if (window.NexusAudio && typeof window.NexusAudio.play === 'function') window.NexusAudio.play('nav');
+    return true;
+}
+
+function bindMobileNavItems() {
+    document.querySelectorAll('.nav-item').forEach(item => {
+        if (item.dataset.navBound) return;
+        item.dataset.navBound = '1';
+        item.addEventListener('click', (e) => {
+            e.preventDefault();
+            if (typeof closeTransientMobileSurfaces === 'function') closeTransientMobileSurfaces();
+            activateMobileView(item.getAttribute('data-target'), item);
+        });
+    });
+}
+bindMobileNavItems();
 
 // ----------------------------------------------------
 // Notifications
@@ -514,7 +578,13 @@ async function requestNotificationPermission() {
     }
 }
 
+function notificationsEnabled() {
+    return localStorage.getItem('nexus_notifications') !== 'false';
+}
+window.notificationsEnabled = notificationsEnabled;
+
 function sendLocalNotification(title, body) {
+    if (!notificationsEnabled()) return;
     if (window.AndroidNative && typeof window.AndroidNative.showNotification === 'function') {
         window.AndroidNative.showNotification(title, body);
         return;
@@ -552,7 +622,34 @@ function loadUserStats() {
     setTextIfPresent('user-name', user.name || 'Comandante');
     setTextIfPresent('val-xp', stats.xp);
     setTextIfPresent('val-points', stats.points);
+    updateAppVersionDebug();
 }
+
+window.updateAppVersionDebug = function() {
+    const el = document.getElementById('app-version-debug');
+    if (!el) return;
+    let webVer = '—';
+    try {
+        const raw = localStorage.getItem('nexus_web_version');
+        if (raw) webVer = JSON.parse(raw).version || raw;
+    } catch (_) {}
+    if (webVer === '—') {
+        fetch('version.json').then(r => r.json()).then(j => {
+            webVer = j.version || '—';
+            localStorage.setItem('nexus_web_version', JSON.stringify(j));
+            el.textContent = 'web ' + webVer + ' · apk ' + (window.__nexusApkVersion || '—');
+        }).catch(() => {});
+    }
+    let apkVer = window.__nexusApkVersion || '—';
+    if (window.AndroidNative && typeof window.AndroidNative.getAppInfo === 'function') {
+        try {
+            const info = JSON.parse(window.AndroidNative.getAppInfo());
+            apkVer = info.versionName || info.version || apkVer;
+            window.__nexusApkVersion = apkVer;
+        } catch (_) {}
+    }
+    el.textContent = 'web ' + webVer + ' · apk ' + apkVer;
+};
 
 function loadVideos() {
     const container = document.getElementById('videos-list');
@@ -618,17 +715,184 @@ window.completeTask = function(id, btn) {
 };
 
 function loadFinances() {
+    renderFinanceSummary();
     const container = document.getElementById('finance-list');
-    const data = LocalDB.get('finance_transactions').filter(t => !t.is_deleted).sort((a,b) => (b.occurred_at || b.created_at || '').localeCompare(a.occurred_at || a.created_at || ''));
+    if (!container) return;
+    const data = LocalDB.get('finance_transactions').filter(t => !t.is_deleted)
+        .sort((a,b) => (b.occurred_at || b.created_at || '').localeCompare(a.occurred_at || a.created_at || ''));
     
     container.innerHTML = data.length ? '' : '<div style="text-align:center; color:var(--text-secondary); margin-top:20px;">Sem transações.</div>';
-    data.slice(0, 15).forEach(t => {
+    const catLabels = { food: 'Alimentação', transport: 'Transporte', health: 'Saúde', leisure: 'Lazer', bills: 'Contas', salary: 'Salário', other: 'Outros' };
+    data.slice(0, 30).forEach(t => {
         const el = document.createElement('div');
         el.className = 'list-item glass';
-        el.innerHTML = `<div class="item-main"><span class="item-title">${t.description || 'Transação'}</span><span class="item-subtitle" style="color:${t.type==='income'?'#00b894':'#fd79a8'}">${t.type==='income'?'+':'-'} $${t.amount}</span></div>`;
+        el.style.cursor = 'pointer';
+        el.onclick = () => { if (typeof openFinanceForm === 'function') openFinanceForm(t.id); };
+        const isIncome = t.type === 'income';
+        const dateStr = (t.occurred_at || t.created_at || '').slice(0, 10).split('-').reverse().join('/');
+        el.innerHTML = `<div class="item-main"><span class="item-title">${escapeHtml(t.description || 'Transação')}</span>
+            <span class="item-subtitle">${catLabels[t.category] || t.category || 'Outros'} · ${dateStr}</span></div>
+            <span style="font-weight:700;color:${isIncome?'#34d399':'#fb7185'}">${isIncome?'+':'−'} R$ ${Number(t.amount).toFixed(2)}</span>`;
         container.appendChild(el);
     });
+    if (typeof ensureChartJs === 'function') ensureChartJs().then(() => setTimeout(renderFinanceCharts, 80));
+    if (typeof renderCategoryBudgets === 'function') renderCategoryBudgets();
+    if (typeof loadInvestments === 'function') loadInvestments();
 }
+
+function renderFinanceSummary() {
+    const month = new Date().toISOString().slice(0, 7);
+    const txs = (LocalDB.get('finance_transactions') || []).filter(t => !t.is_deleted);
+    const inMonth = txs.filter(t => (t.occurred_at || t.created_at || '').slice(0, 7) === month);
+    const income = inMonth.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount || 0), 0);
+    const expense = inMonth.filter(t => t.type !== 'income').reduce((s, t) => s + Number(t.amount || 0), 0);
+    const balance = income - expense;
+    const fmt = v => 'R$ ' + v.toFixed(2).replace('.', ',');
+    const balEl = document.getElementById('finance-balance-month');
+    const incEl = document.getElementById('finance-income-month');
+    const expEl = document.getElementById('finance-expense-month');
+    if (balEl) { balEl.textContent = fmt(balance); balEl.style.color = balance >= 0 ? 'var(--accent-green)' : '#fb7185'; }
+    if (incEl) incEl.textContent = fmt(income);
+    if (expEl) expEl.textContent = fmt(expense);
+}
+
+window.switchFinanceTab = function(tab, btn) {
+    ['transactions', 'investments', 'budgets'].forEach(t => {
+        const panel = document.getElementById('finance-panel-' + t);
+        if (panel) panel.style.display = t === tab ? 'block' : 'none';
+    });
+    document.querySelectorAll('#view-finance .fitness-tab').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    if (tab === 'investments' && typeof loadInvestments === 'function') loadInvestments();
+    if (tab === 'budgets' && typeof renderCategoryBudgets === 'function') renderCategoryBudgets();
+};
+
+window.closeFinanceOverflow = function() {
+    const p = document.getElementById('finance-overflow-popup');
+    if (p) p.style.display = 'none';
+};
+
+const FINANCE_CATEGORY_LABELS = { food: 'Alimentação', transport: 'Transporte', health: 'Saúde', leisure: 'Lazer', bills: 'Contas', salary: 'Salário', other: 'Outros' };
+
+function getCategoryBudgets() {
+    try { return JSON.parse(localStorage.getItem('nexus_category_budgets') || '{}'); } catch (_) { return {}; }
+}
+
+window.renderCategoryBudgets = function() {
+    const list = document.getElementById('finance-budgets-list');
+    if (!list) return;
+    const budgets = getCategoryBudgets();
+    const month = new Date().toISOString().slice(0, 7);
+    const spent = {};
+    (LocalDB.get('finance_transactions') || []).filter(t => !t.is_deleted && t.type !== 'income')
+        .filter(t => (t.occurred_at || '').slice(0, 7) === month)
+        .forEach(t => { spent[t.category || 'other'] = (spent[t.category || 'other'] || 0) + Number(t.amount || 0); });
+    list.innerHTML = Object.keys(FINANCE_CATEGORY_LABELS).map(cat => {
+        const limit = budgets[cat] || 0;
+        const used = spent[cat] || 0;
+        const pct = limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
+        const warn = limit > 0 && pct >= 80;
+        return `<div class="glass" style="padding:12px;border-radius:12px;margin-bottom:10px">
+            <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+                <span style="font-weight:600">${FINANCE_CATEGORY_LABELS[cat]}</span>
+                <span style="font-size:0.8rem;color:${warn?'#fb7185':'var(--text-secondary)'}">R$ ${used.toFixed(0)}${limit ? ' / R$ ' + limit : ''}</span>
+            </div>
+            <input type="number" min="0" step="50" value="${limit || ''}" placeholder="Limite mensal"
+                onchange="saveCategoryBudget('${cat}', this.value)"
+                style="width:100%;padding:8px;border-radius:8px;background:rgba(0,0,0,0.35);color:white;border:1px solid var(--border-glass);font-family:inherit">
+            ${limit ? `<div style="margin-top:6px;background:rgba(255,255,255,0.08);border-radius:4px;height:6px"><div style="height:100%;width:${pct}%;border-radius:4px;background:${warn?'#fb7185':'var(--accent-primary)'}"></div></div>` : ''}
+        </div>`;
+    }).join('');
+};
+
+window.saveCategoryBudget = function(cat, val) {
+    const budgets = getCategoryBudgets();
+    const n = parseFloat(val);
+    if (n > 0) budgets[cat] = n; else delete budgets[cat];
+    localStorage.setItem('nexus_category_budgets', JSON.stringify(budgets));
+    renderCategoryBudgets();
+};
+
+let editingInvestmentId = null;
+window.loadInvestments = function() {
+    const list = document.getElementById('finance-investments-list');
+    const totalEl = document.getElementById('finance-investments-total');
+    if (!list) return;
+    const items = (LocalDB.get('finance_investments') || []).filter(i => !i.is_deleted);
+    const typeIcons = { crypto: '₿', stock: '📈', cdb: '🏦', fund: '📊', other: '💼' };
+    let total = 0;
+    list.innerHTML = items.length ? items.map(i => {
+        const price = Number(i.current_price || i.avg_price || 0);
+        const qty = Number(i.quantity || 0);
+        const value = price * qty;
+        total += value;
+        return `<div class="list-item glass" onclick="openInvestmentForm('${i.id}')" style="cursor:pointer">
+            <div class="item-main"><span class="item-title">${typeIcons[i.type] || '💼'} ${escapeHtml(i.name)}</span>
+            <span class="item-subtitle">${i.quantity} un · médio R$ ${Number(i.avg_price||0).toFixed(2)}</span></div>
+            <span style="font-weight:700;color:var(--accent-blue)">R$ ${value.toFixed(2)}</span></div>`;
+    }).join('') : '<div style="text-align:center;color:var(--text-secondary);padding:20px">Nenhum ativo. Toque em + Ativo.</div>';
+    if (totalEl) totalEl.textContent = 'R$ ' + total.toFixed(2).replace('.', ',');
+};
+
+window.openInvestmentForm = function(id) {
+    editingInvestmentId = id || null;
+    const items = LocalDB.get('finance_investments') || [];
+    const i = id ? items.find(x => String(x.id) === String(id)) : null;
+    document.getElementById('investment-form-title').textContent = i ? 'Editar ativo' : 'Novo ativo';
+    document.getElementById('investment-form-name').value = i?.name || '';
+    document.getElementById('investment-form-type').value = i?.type || 'stock';
+    document.getElementById('investment-form-qty').value = i?.quantity || '';
+    document.getElementById('investment-form-price').value = i?.avg_price || '';
+    document.getElementById('investment-form-current').value = i?.current_price || '';
+    document.getElementById('investment-form-delete-btn').style.display = i ? 'block' : 'none';
+    document.getElementById('investment-form-modal').style.display = 'flex';
+};
+
+window.closeInvestmentForm = function() {
+    document.getElementById('investment-form-modal').style.display = 'none';
+    editingInvestmentId = null;
+};
+
+window.saveInvestmentForm = function() {
+    const name = document.getElementById('investment-form-name')?.value?.trim();
+    const qty = parseFloat(document.getElementById('investment-form-qty')?.value || '0');
+    const avg = parseFloat(document.getElementById('investment-form-price')?.value || '0');
+    if (!name || !qty) { showToast('Nome e quantidade são obrigatórios.'); return; }
+    LocalDB.upsert('finance_investments', {
+        id: editingInvestmentId || Date.now(),
+        name,
+        type: document.getElementById('investment-form-type')?.value || 'other',
+        quantity: qty,
+        avg_price: avg,
+        current_price: parseFloat(document.getElementById('investment-form-current')?.value || '0') || avg,
+        updated_at: new Date().toISOString()
+    });
+    closeInvestmentForm();
+    loadInvestments();
+    if (typeof backgroundSync === 'function') backgroundSync();
+    showToast('Ativo salvo.');
+};
+
+window.deleteInvestmentForm = function() {
+    if (!editingInvestmentId || !confirm('Excluir este ativo?')) return;
+    LocalDB.deleteRow('finance_investments', editingInvestmentId);
+    closeInvestmentForm();
+    loadInvestments();
+};
+
+window.exportFinanceCsv = function() {
+    const txs = (LocalDB.get('finance_transactions') || []).filter(t => !t.is_deleted);
+    const rows = [['data', 'tipo', 'categoria', 'descricao', 'valor'].join(',')];
+    txs.forEach(t => {
+        rows.push([(t.occurred_at||'').slice(0,10), t.type, t.category, '"' + (t.description||'').replace(/"/g,'""') + '"', t.amount].join(','));
+    });
+    const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'nexus-financas-' + todayISO() + '.csv';
+    a.click();
+    showToast('CSV exportado.');
+};
 
 // ----------------------------------------------------
 // ----------------------------------------------------
@@ -794,6 +1058,9 @@ window.loadShop = window.loadShop || loadShop;
 window.loadStudies = window.loadStudies || loadStudies;
 window.loadGoals = window.loadGoals || loadGoals;
 window.loadFitness = window.loadFitness || loadFitness;
+window.loadJournal = window.loadJournal || loadJournal;
+window.loadRoutines = window.loadRoutines || loadRoutines;
+window.loadCleaner = window.loadCleaner || loadCleaner;
 
 window.ensureDefaultRewards = function() {
     const rewards = LocalDB.get('nexus_rewards').filter(r => !r.is_deleted);
@@ -809,39 +1076,88 @@ window.ensureDefaultRewards = function() {
 window.discoverIoT = async function() {
     const container = document.getElementById('iot-list');
     if (!container) return;
-    const offlineMsg = '<div style="text-align:center;color:var(--text-secondary);margin-top:20px;padding:20px"><i class="fa-solid fa-house-signal" style="font-size:2rem;opacity:0.4;margin-bottom:10px;display:block"></i>Casa IoT requer o Nexus desktop na mesma rede.<br>Use o app desktop para controlar lâmpadas e sensores.</div>';
-    if (!navigator.onLine || window.location.protocol === 'file:') {
-        container.innerHTML = offlineMsg;
+    container.innerHTML = '<div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> Buscando Bluetooth e Wi‑Fi...</div>';
+
+    const manual = (LocalDB.get('iot_devices') || []).filter(d => !d.is_deleted);
+    const devices = manual.map(d => ({ ...d, source: 'manual' }));
+
+    if (window.AndroidNative && typeof AndroidNative.scanNearbyDevices === 'function') {
+        try {
+            const raw = AndroidNative.scanNearbyDevices();
+            const scanned = typeof raw === 'string' ? JSON.parse(raw) : raw;
+            if (Array.isArray(scanned)) scanned.forEach(d => devices.push(d));
+        } catch (_) {}
+    }
+
+    if (isNetworkOnline() && window.location.protocol !== 'file:') {
+        try {
+            const res = await fetch('/api/nexus/iot/discover');
+            const data = await res.json();
+            if (data?.devices) data.devices.forEach(d => devices.push({ ...d, source: 'desktop' }));
+        } catch (_) {}
+    }
+
+    if (!devices.length) {
+        container.innerHTML = '<div style="text-align:center;color:var(--text-secondary);margin-top:20px;padding:20px"><i class="fa-solid fa-wifi" style="font-size:2rem;margin-bottom:10px;opacity:0.5"></i><p>Nenhum dispositivo encontrado.<br>Toque + para adicionar manualmente ou ative Bluetooth/Wi‑Fi.</p></div>';
         return;
     }
-    container.innerHTML = '<div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> Buscando...</div>';
-    try {
-        const res = await fetch('/api/nexus/iot/discover');
-        const data = await res.json();
-        if (data && data.devices) {
-            container.innerHTML = data.devices.length ? '' : offlineMsg;
-            data.devices.forEach(dev => {
-                const el = document.createElement('div');
-                el.className = 'list-item glass';
-                const is_on = dev.status === "LIGADO";
-                el.innerHTML = `
-                    <div class="item-main">
-                        <span class="item-title">${dev.name}</span>
-                        <span class="item-subtitle">IP: ${dev.ip}</span>
-                    </div>
-                    <button class="item-action ${is_on ? 'done' : ''}" style="width:auto; padding: 0 15px;" onclick="toggleIoT('${dev.ip}', ${!is_on})">
-                        ${is_on ? 'Desligar' : 'Ligar'}
-                    </button>
-                `;
-                container.appendChild(el);
-            });
-        } else {
-            container.innerHTML = offlineMsg;
-        }
-    } catch (e) {
-        container.innerHTML = offlineMsg;
-    }
+
+    const typeIcons = { light: '💡', plug: '🔌', sensor: '📡', speaker: '🔊', bluetooth: '📶', wifi: '📡' };
+    container.innerHTML = devices.map((dev, idx) => {
+        const id = dev.id || dev.address || dev.ip || ('dev-' + idx);
+        const name = dev.name || dev.title || 'Dispositivo';
+        const addr = dev.address || dev.ip || dev.mac || '';
+        const isOn = dev.status === 'LIGADO' || dev.on === true;
+        const icon = typeIcons[dev.type] || typeIcons[dev.source] || '🏠';
+        return `<div class="list-item glass">
+            <div class="item-main"><span class="item-title">${icon} ${escapeHtml(name)}</span>
+            <span class="item-subtitle">${escapeHtml(addr)} · ${dev.source || 'local'}</span></div>
+            <button class="icon-btn ${isOn ? 'done' : ''}" onclick="toggleIoTDevice('${String(id).replace(/'/g, '')}', ${!isOn})"><i class="fa-solid fa-power-off"></i></button>
+        </div>`;
+    }).join('');
 };
+
+window.openAddDeviceSheet = function() {
+    document.getElementById('device-form-name').value = '';
+    document.getElementById('device-form-address').value = '';
+    document.getElementById('add-device-modal').style.display = 'flex';
+};
+
+window.closeAddDeviceSheet = function() {
+    document.getElementById('add-device-modal').style.display = 'none';
+};
+
+window.saveManualDevice = function() {
+    const name = document.getElementById('device-form-name')?.value?.trim();
+    const address = document.getElementById('device-form-address')?.value?.trim();
+    if (!name) { showToast('Informe o nome do dispositivo.'); return; }
+    LocalDB.upsert('iot_devices', {
+        id: Date.now(),
+        name,
+        type: document.getElementById('device-form-type')?.value || 'other',
+        address: address || '',
+        status: 'DESLIGADO',
+        created_at: new Date().toISOString()
+    });
+    closeAddDeviceSheet();
+    discoverIoT();
+    showToast('Dispositivo adicionado.');
+};
+
+window.toggleIoTDevice = function(deviceId, turnOn) {
+    const devices = LocalDB.get('iot_devices') || [];
+    const d = devices.find(x => String(x.id) === String(deviceId) || String(x.address) === String(deviceId));
+    if (d) {
+        d.status = turnOn ? 'LIGADO' : 'DESLIGADO';
+        LocalDB.set('iot_devices', devices);
+        showToast((d.name || 'Dispositivo') + (turnOn ? ' ligado' : ' desligado'));
+        discoverIoT();
+        return;
+    }
+    showToast('Controle remoto requer Nexus desktop na mesma rede.');
+};
+
+window.toggleIoT = window.toggleIoTDevice;
 
 window.promptAddHabit = function() {
     const modal = document.getElementById('create-modal');
@@ -893,36 +1209,37 @@ function appendChatBubble(role, text, loading) {
 
 function tryLocalJarvisCommand(text) {
     const t = text.toLowerCase().trim();
-    if (/^(oi|olá|ola|hey|jarvis)/.test(t)) {
-        return 'Olá! Posso criar hábitos, tarefas, registrar treinos ou ajudar nos estudos. O que precisa?';
-    }
-    const habitMatch = t.match(/(?:criar|adicionar|novo)\s+h[aá]bito\s+(.+)/i) || t.match(/h[aá]bito:\s*(.+)/i);
-    if (habitMatch) {
-        const name = habitMatch[1].trim();
+    if (t.startsWith('/habito ') || t.startsWith('/hábito ')) {
+        const name = text.split(/\s+/).slice(1).join(' ').trim();
+        if (!name) return 'Use: /habito nome do hábito';
         LocalDB.upsert('habits', { id: Date.now(), name, active: 1, current_streak: 0, period: 'all' });
         loadHabits();
         backgroundSync();
-        return `Hábito "${name}" criado. Boa sorte mantendo a consistência!`;
+        return `Hábito "${name}" criado.`;
     }
-    const taskMatch = t.match(/(?:criar|adicionar|nova)\s+tarefa\s+(.+)/i) || t.match(/tarefa:\s*(.+)/i);
-    if (taskMatch) {
-        const title = taskMatch[1].trim();
+    if (t.startsWith('/tarefa ')) {
+        const title = text.split(/\s+/).slice(1).join(' ').trim();
+        if (!title) return 'Use: /tarefa nome da tarefa';
         LocalDB.upsert('tasks', { id: Date.now(), title, name: title, points_reward: 10 });
         loadTasks();
         backgroundSync();
-        return `Tarefa "${title}" adicionada à sua lista.`;
+        return `Tarefa "${title}" adicionada.`;
+    }
+    const goalMatch = t.match(/meta\s+(.+?)\s*([+-])\s*(\d+)/i);
+    if (goalMatch) {
+        const namePart = goalMatch[1].trim();
+        const delta = (goalMatch[2] === '-' ? -1 : 1) * parseInt(goalMatch[3], 10);
+        const goals = LocalDB.get('nexus_goals').filter(g => !g.is_deleted);
+        const goal = goals.find(g => (g.name || '').toLowerCase().includes(namePart.toLowerCase()));
+        if (goal && typeof adjustGoalProgress === 'function') {
+            adjustGoalProgress(goal.id, delta);
+            return `Progresso da meta "${goal.name}" ajustado em ${delta > 0 ? '+' : ''}${delta}%.`;
+        }
     }
     if (/quantos\s+cards|srs|flashcard/.test(t)) {
         const cards = LocalDB.get('flashcards').filter(c => !c.is_deleted);
         const due = cards.filter(c => !c.next_review || c.next_review <= new Date().toISOString()).length;
         return `Você tem ${due} flashcards para revisar hoje (${cards.length} no total).`;
-    }
-    if (/briefing|resumo\s+do\s+dia|hoje/.test(t)) {
-        const habits = LocalDB.get('habits').filter(h => h.active === 1 && !h.is_deleted);
-        const today = new Date().toISOString().split('T')[0];
-        const done = LocalDB.get('habit_logs').filter(l => l.date === today).length;
-        const tasks = LocalDB.get('tasks').filter(x => !x.done_at && !x.is_deleted).length;
-        return `Hoje: ${done}/${habits.length} hábitos feitos, ${tasks} tarefas pendentes. Foco no ENEM — revise seus cards SRS!`;
     }
     return null;
 }
@@ -961,33 +1278,26 @@ window.sendChatMessage = async function() {
         return;
     }
 
-    if (!isWifiConnected()) {
-        if (pending) pending.querySelector('p').textContent = 'Sem Wi-Fi. Comandos locais: "criar hábito X", "criar tarefa Y", "quantos cards", "briefing".';
+    if (!isNetworkOnline()) {
+        if (pending) pending.querySelector('p').textContent = 'Sem internet. Use /habito e /tarefa offline.';
         return;
     }
 
-    if (window.nexusSupabase && isNetworkOnline()) {
-        try {
-            const { data, error } = await window.nexusSupabase.from('nexus_commands').insert({
-                command: 'MOBILE_CHAT: ' + text,
-                source: 'mobile',
-                status: 'pending'
-            }).select('id').single();
-            if (!error && data?.id) {
-                const reply = await pollCommandResult(data.id, 25000);
-                if (reply) {
-                    if (pending) pending.querySelector('p').textContent = reply;
-                    backgroundSync();
-                    return;
-                }
-            }
-        } catch (e) {
-            console.warn('Chat queue error:', e);
+    if (typeof callJarvisChat === 'function') {
+        const history = [];
+        document.querySelectorAll('#chat-history .chat-message').forEach(el => {
+            const role = el.classList.contains('user-msg') ? 'user' : 'assistant';
+            const content = el.querySelector('p')?.textContent?.trim();
+            if (content && content !== 'Processando...') history.push({ role, content });
+        });
+        const reply = await callJarvisChat(text, history.slice(-8));
+        if (reply) {
+            if (pending) pending.querySelector('p').textContent = reply;
+            return;
         }
     }
 
-    const fallback = 'Jarvis offline. Comandos locais: "criar hábito X", "criar tarefa Y", "quantos cards". Com o PC ligado, processo ações completas.';
-    if (pending) pending.querySelector('p').textContent = fallback;
+    if (pending) pending.querySelector('p').textContent = 'Jarvis indisponível. Verifique login Google e conexão.';
 };
 
 window.requestMorningBriefing = function() {
@@ -998,7 +1308,7 @@ window.requestMorningBriefing = function() {
 
 window.navigateTo = function(viewId) {
     const nav = document.querySelector(`.nav-item[data-target="${viewId}"]`);
-    if (nav) nav.click();
+    activateMobileView(viewId, nav || null);
 };
 
 function loadTodayDashboard() {
@@ -1245,19 +1555,308 @@ function renderStudyNotesList(filter, query) {
     list.innerHTML = notes.map(renderNoteCard).join('');
 }
 
-function renderNoteCard(n) {
-    const tags = (n.tags||'').split('#').filter(t => t.trim()).map(t => `<span class="tag-badge">#${t.trim()}</span>`).join('');
-    const date = n.updated_at ? new Date(n.updated_at).toLocaleDateString('pt-BR', {day:'2-digit',month:'short'}) : '';
-    const pin = n.pinned ? '<i class="fa-solid fa-thumbtack" style="color:var(--accent-primary);font-size:0.7rem;margin-right:4px"></i>' : '';
-    return `
-    <div class="note-card ${n.pinned?'pinned':''}" onclick="openNoteEditor('${n.id}', '${n.notebook_id||''}')">
-        <div class="note-title">${pin}${escapeHtml(n.title||'Sem titulo')}</div>
-        <div class="note-excerpt">${escapeHtml((n.content||'').replace(/[#*`_>-]/g,'').trim())}</div>
-        <div class="note-meta">
-            <div class="note-tags">${tags}</div>
-            <span style="font-size:0.7rem;color:var(--text-secondary)">${date}</span>
+window.openSubjectForm = function() {
+    const modal = document.getElementById('subject-form-modal');
+    if (!modal) { showToast('Formulário de matéria indisponível'); return; }
+    document.getElementById('subject-form-name').value = '';
+    document.getElementById('subject-form-icon').value = '📚';
+    document.getElementById('subject-form-cover').value = '';
+    document.getElementById('subject-form-description').value = '';
+    document.getElementById('subject-form-color').value = '#6c5ce7';
+    modal.style.display = 'flex';
+};
+
+window.closeSubjectForm = function() {
+    const modal = document.getElementById('subject-form-modal');
+    if (modal) modal.style.display = 'none';
+};
+
+window.saveSubjectForm = function() {
+    const name = document.getElementById('subject-form-name')?.value?.trim();
+    if (!name) { showToast('Digite o nome da matéria'); return; }
+    const nb = {
+        id: Date.now().toString(),
+        name,
+        icon: document.getElementById('subject-form-icon')?.value || '📚',
+        cover_image: document.getElementById('subject-form-cover')?.value?.trim() || null,
+        description: document.getElementById('subject-form-description')?.value?.trim() || '',
+        color_bg: document.getElementById('subject-form-color')?.value || '#6c5ce7',
+        color_text: '#ffffff',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+    };
+    const notebooks = LocalDB.get('study_notebooks') || [];
+    notebooks.push(nb);
+    LocalDB.set('study_notebooks', notebooks);
+    closeSubjectForm();
+    if (typeof loadStudies === 'function') loadStudies();
+    showToast('Matéria criada!');
+};
+
+function formatStudyDate(iso) {
+    if (!iso) return '—';
+    try {
+        return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
+    } catch (_) { return '—'; }
+}
+
+function stripHtmlText(html) {
+    return String(html || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function inferJarvisNoteSubject(title, content, notebookId, excludeId) {
+    const text = (title + ' ' + stripHtmlText(content)).toLowerCase();
+    const keywords = text.split(/\W+/).filter(w => w.length > 3);
+    const notes = (LocalDB.get('study_notes') || []).filter(n =>
+        !n.is_deleted && String(n.notebook_id) === String(notebookId) && String(n.id) !== String(excludeId));
+    let bestSubject = null;
+    let bestScore = 0;
+    notes.forEach(n => {
+        const subj = (n.jarvis_subject || n.subject || '').trim();
+        if (!subj) return;
+        const subWords = subj.toLowerCase().split(/\W+/);
+        const score = keywords.filter(k => subWords.some(s => s.includes(k) || k.includes(s))).length;
+        if (score > bestScore) { bestScore = score; bestSubject = subj; }
+    });
+    if (bestScore >= 2) return bestSubject;
+    const fromTitle = (title || '').trim().split(/\s+/).slice(0, 5).join(' ');
+    return fromTitle || 'Geral';
+}
+
+function renderStudyNoteTile(n) {
+    const cover = n.cover_image
+        ? `<div class="study-note-cover" style="background-image:url('${escapeHtml(n.cover_image)}')"></div>`
+        : '';
+    const desc = n.description || stripHtmlText(n.content).substring(0, 120);
+    const created = formatStudyDate(n.created_at);
+    const updated = formatStudyDate(n.updated_at || n.created_at);
+    const jarvisSubject = n.jarvis_subject || n.subject || '';
+    return `<div class="study-note-tile glass" onclick="openNoteEditor('${n.id}','${n.notebook_id || ''}')">
+        ${cover}
+        <div class="study-note-tile-body">
+            <button type="button" class="card-menu-btn" onclick="openNoteMenu(event,'${n.id}')" aria-label="Opções"><i class="fa-solid fa-ellipsis-vertical"></i></button>
+            <div class="study-note-tile-title">${escapeHtml(n.title || 'Sem título')}</div>
+            ${desc ? `<div class="study-note-tile-desc">${escapeHtml(desc)}</div>` : ''}
+            <div class="study-note-tile-meta"><span>Criado ${created}</span><span>·</span><span>Editado ${updated}</span></div>
+            ${jarvisSubject ? `<div class="study-note-tile-subject" title="Assunto Jarvis">${escapeHtml(jarvisSubject)}</div>` : ''}
         </div>
     </div>`;
+}
+
+function renderSubjectFolderCard(nb) {
+    const notes = (LocalDB.get('study_notes') || []).filter(n => !n.is_deleted && String(n.notebook_id) === String(nb.id));
+    const bg = nb.color_bg || '#6c5ce7';
+    const fg = nb.color_text || '#ffffff';
+    const coverStyle = nb.cover_image
+        ? `background-image:url('${nb.cover_image}')`
+        : `background:linear-gradient(135deg,${bg},${bg}cc)`;
+    return `<div class="subject-folder-card glass" style="--folder-bg:${bg};--folder-fg:${fg}" onclick="openSubjectDetail('${nb.id}')">
+        <button type="button" class="card-menu-btn" onclick="openFolderMenu(event,'${nb.id}')" aria-label="Opções"><i class="fa-solid fa-ellipsis-vertical"></i></button>
+        <div class="subject-folder-cover" style="${coverStyle}"></div>
+        <div class="subject-folder-body">
+            <div class="subject-folder-name">${nb.icon || '📚'} ${escapeHtml(nb.name)}</div>
+            ${nb.description ? `<div class="subject-folder-desc">${escapeHtml(nb.description)}</div>` : ''}
+            <div class="subject-folder-count">${notes.length} nota${notes.length !== 1 ? 's' : ''}</div>
+        </div>
+    </div>`;
+}
+
+window.openFolderMenu = function(ev, notebookId) {
+    ev.stopPropagation();
+    window._menuFolderId = notebookId;
+    showStudyContextMenu('folder-menu-popup', ev);
+};
+
+window.openNoteMenu = function(ev, noteId) {
+    ev.stopPropagation();
+    window._menuNoteId = noteId;
+    showStudyContextMenu('note-menu-popup', ev);
+};
+
+function showStudyContextMenu(popupId, ev) {
+    const popup = document.getElementById(popupId);
+    if (!popup) return;
+    popup.style.display = 'block';
+    const x = Math.min(Math.max(12, ev.clientX - 100), window.innerWidth - 180);
+    const y = Math.min(Math.max(12, ev.clientY + 8), window.innerHeight - 200);
+    popup.style.left = x + 'px';
+    popup.style.top = y + 'px';
+    setTimeout(() => document.addEventListener('click', closeStudyContextMenus, { once: true }), 30);
+}
+
+function closeStudyContextMenus() {
+    ['folder-menu-popup', 'note-menu-popup', 'subject-menu-popup'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = 'none';
+    });
+}
+
+window.openStudyEditSheet = function(type, id) {
+    closeStudyContextMenus();
+    const sheet = document.getElementById('study-entity-edit-modal');
+    const title = document.getElementById('study-entity-edit-title');
+    if (!sheet) return;
+    window._studyEditType = type;
+    window._studyEditId = id;
+    const set = (fid, val) => { const el = document.getElementById(fid); if (el) el.value = val ?? ''; };
+    const show = (fid, on) => { const el = document.getElementById(fid); if (el) el.parentElement.style.display = on ? '' : 'none'; };
+    if (type === 'folder') {
+        const nb = (LocalDB.get('study_notebooks') || []).find(n => String(n.id) === String(id));
+        if (!nb) return;
+        title.textContent = 'Editar matéria';
+        set('study-edit-name', nb.name);
+        set('study-edit-cover', nb.cover_image || '');
+        set('study-edit-color', nb.color_bg || '#6c5ce7');
+        set('study-edit-description', nb.description || '');
+        set('study-edit-subject', '');
+        show('study-edit-name', true); show('study-edit-cover', true); show('study-edit-color', true);
+        show('study-edit-description', true); show('study-edit-subject', false);
+    } else {
+        const note = (LocalDB.get('study_notes') || []).find(n => String(n.id) === String(id));
+        if (!note) return;
+        title.textContent = 'Editar nota';
+        set('study-edit-name', note.title || '');
+        set('study-edit-cover', note.cover_image || '');
+        set('study-edit-description', note.description || stripHtmlText(note.content).substring(0, 200));
+        set('study-edit-subject', note.jarvis_subject || note.subject || '');
+        show('study-edit-name', true); show('study-edit-cover', true); show('study-edit-color', false);
+        show('study-edit-description', false); show('study-edit-subject', true);
+    }
+    sheet.style.display = 'flex';
+};
+
+window.closeStudyEditSheet = function() {
+    const sheet = document.getElementById('study-entity-edit-modal');
+    if (sheet) sheet.style.display = 'none';
+};
+
+window.saveStudyEditSheet = function() {
+    const type = window._studyEditType;
+    const id = window._studyEditId;
+    if (!type || !id) return;
+    const name = document.getElementById('study-edit-name')?.value?.trim();
+    if (type === 'folder') {
+        const notebooks = LocalDB.get('study_notebooks') || [];
+        const idx = notebooks.findIndex(n => String(n.id) === String(id));
+        if (idx === -1) return;
+        notebooks[idx] = {
+            ...notebooks[idx],
+            name: name || notebooks[idx].name,
+            cover_image: document.getElementById('study-edit-cover')?.value?.trim() || null,
+            color_bg: document.getElementById('study-edit-color')?.value || '#6c5ce7',
+            description: document.getElementById('study-edit-description')?.value?.trim() || '',
+            updated_at: new Date().toISOString()
+        };
+        LocalDB.set('study_notebooks', notebooks);
+        if (String(currentNotebookId) === String(id)) openSubjectDetail(id);
+    } else {
+        const notes = LocalDB.get('study_notes') || [];
+        const idx = notes.findIndex(n => String(n.id) === String(id));
+        if (idx === -1) return;
+        notes[idx] = {
+            ...notes[idx],
+            title: name || notes[idx].title,
+            cover_image: document.getElementById('study-edit-cover')?.value?.trim() || null,
+            jarvis_subject: document.getElementById('study-edit-subject')?.value?.trim() || notes[idx].jarvis_subject,
+            updated_at: new Date().toISOString()
+        };
+        LocalDB.set('study_notes', notes);
+        if (currentNotebookId) openSubjectDetail(currentNotebookId);
+    }
+    closeStudyEditSheet();
+    if (typeof loadStudies === 'function') loadStudies();
+};
+
+window.pickStudyCoverLocal = function(targetInputId) {
+    const inp = document.createElement('input');
+    inp.type = 'file';
+    inp.accept = 'image/*';
+    inp.onchange = (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+            const el = document.getElementById(targetInputId);
+            if (el) el.value = reader.result;
+        };
+        reader.readAsDataURL(file);
+    };
+    inp.click();
+};
+
+window.openSubjectDetail = function(notebookId) {
+    currentNotebookId = notebookId;
+    const nb = (LocalDB.get('study_notebooks') || []).find(n => String(n.id) === String(notebookId));
+    const view = document.getElementById('subject-detail-view');
+    if (!view || !nb) return;
+    document.getElementById('subject-detail-title').textContent = (nb.icon || '') + ' ' + nb.name;
+    view.style.display = 'block';
+    const notes = (LocalDB.get('study_notes') || []).filter(n => !n.is_deleted && String(n.notebook_id) === String(notebookId))
+        .sort((a, b) => (b.updated_at || b.created_at || '').localeCompare(a.updated_at || a.created_at || ''));
+    const list = document.getElementById('subject-notes-list');
+    list.className = 'notes-grid';
+    list.innerHTML = notes.length
+        ? notes.map(n => renderStudyNoteTile(n)).join('')
+        : '<div style="grid-column:1/-1;text-align:center;padding:30px;color:var(--text-secondary)">Sem notas nesta matéria.</div>';
+};
+
+window.deleteFolderFromMenu = function() {
+    const id = window._menuFolderId;
+    if (!id || !confirm('Excluir esta matéria?')) return;
+    const notebooks = (LocalDB.get('study_notebooks') || []).filter(n => String(n.id) !== String(id));
+    LocalDB.set('study_notebooks', notebooks);
+    if (String(currentNotebookId) === String(id)) closeSubjectDetail();
+    closeStudyContextMenus();
+    if (typeof loadStudies === 'function') loadStudies();
+};
+
+window.closeSubjectDetail = function() {
+    const view = document.getElementById('subject-detail-view');
+    if (view) view.style.display = 'none';
+    currentNotebookId = null;
+};
+
+function loadSubjectsGrid() {
+    const grid = document.getElementById('subjects-grid');
+    if (!grid) return;
+    const notebooks = LocalDB.get('study_notebooks') || [];
+    if (!notebooks.length) {
+        grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--text-secondary);padding:20px">Sem matérias. Toque em + para criar.</div>';
+        return;
+    }
+    grid.innerHTML = notebooks.map(nb => renderSubjectFolderCard(nb)).join('');
+}
+
+window.assignNoteToNotebookByJarvis = function(notePayload, notebookId) {
+    const notes = LocalDB.get('study_notes') || [];
+    const title = notePayload.title || 'Nova nota';
+    const content = notePayload.content || '';
+    const subject = inferJarvisNoteSubject(title, content, notebookId);
+    const existing = notes.find(n => !n.is_deleted && String(n.notebook_id) === String(notebookId)
+        && (n.jarvis_subject || n.subject) === subject && subject !== 'Geral');
+    if (existing && notePayload.merge !== false) {
+        existing.content = (existing.content || '') + '\n\n' + content;
+        existing.updated_at = new Date().toISOString();
+        LocalDB.set('study_notes', notes);
+        return existing.id;
+    }
+    const id = Date.now().toString();
+    notes.push({
+        id,
+        notebook_id: notebookId,
+        title,
+        content,
+        jarvis_subject: subject,
+        description: stripHtmlText(content).substring(0, 160),
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+    });
+    LocalDB.set('study_notes', notes);
+    return id;
+};
+
+function renderNoteCard(n) {
+    return renderStudyNoteTile(n);
 }
 
 window.filterNotes = function(filter, btn) {
@@ -1283,17 +1882,23 @@ window.searchNotes = function(query) {
 };
 
 window.openNoteEditor = function(noteId, notebookId) {
+    const nbId = notebookId || currentNotebookId;
+    if (!nbId && !noteId) {
+        showToast('Abra uma matéria e crie a nota dentro dela.');
+        return;
+    }
     const view = document.getElementById('note-editor-view');
     if (!view) return;
     view.style.display = 'flex';
     editingNoteId = noteId || null;
+    currentNotebookId = nbId || currentNotebookId;
     
-    // Populate notebook selector
+    // Populate notebook selector (hidden — notebook vem do grid atual)
     const sel = document.getElementById('note-notebook');
     if (sel) {
         const notebooks = LocalDB.get('study_notebooks');
         sel.innerHTML = '<option value="">Sem caderno...</option>' +
-            notebooks.map(nb => `<option value="${nb.id}" ${(nb.id === notebookId || nb.id === currentNotebookId) ? 'selected' : ''}>${nb.icon||''} ${escapeHtml(nb.name)}</option>`).join('');
+            notebooks.map(nb => `<option value="${nb.id}" ${String(nb.id) === String(nbId || currentNotebookId) ? 'selected' : ''}>${nb.icon||''} ${escapeHtml(nb.name)}</option>`).join('');
     }
     
     if (noteId) {
@@ -1520,7 +2125,10 @@ function awardXP(amount, reason) {
     
     if (leveledUp) {
         showInAppNotification('LEVEL UP! Voce chegou ao nivel ' + newLevel + '!', 'success');
+        if (window.NexusAudio) window.NexusAudio.play('complete');
         if (navigator.vibrate) navigator.vibrate([100, 50, 100, 50, 200]);
+    } else if (window.NexusAudio) {
+        window.NexusAudio.play('progress');
     }
     
     loadXPPanel();
@@ -2335,12 +2943,17 @@ window.toggleTaskDirect = function(taskId) {
 
 window.deleteCurrentTask = function() {
     if (!currentTaskId) return;
+    if (!confirm('Excluir esta tarefa?')) return;
     const tasks = LocalDB.get('tasks');
-    const t = tasks.find(x => x.id === currentTaskId);
+    const t = tasks.find(x => String(x.id) === String(currentTaskId));
     if (t) {
-        t.is_deleted = true;
+        t.is_deleted = 1;
         LocalDB.set('tasks', tasks);
+        if (typeof syncTaskReminders === 'function') syncTaskReminders();
+        if (typeof backgroundSync === 'function') backgroundSync();
         closeTaskDetail();
+        loadTasks();
+        loadXPPanel();
     }
 };
 
@@ -2523,15 +3136,23 @@ document.addEventListener('DOMContentLoaded', () => {
     loadUserStats();
     loadHabits();
     loadTodayDashboard();
+    if (typeof ensureModuleNavVisible === 'function') ensureModuleNavVisible();
     applyUiPrefs();
+    bindMobileNavItems();
     updateJarvisFabState();
     updateNetworkSettingsUI();
     updateSyncIndicator(isNetworkOnline() && window.nexusSupabase ? 'synced' : 'offline');
+    if (window.NexusAudio && typeof window.NexusAudio.initSettingsUI === 'function') window.NexusAudio.initSettingsUI();
 
     setTimeout(requestNotificationPermission, 2000);
     setTimeout(backgroundSync, 1000);
     setupRealtime();
     startSyncInterval();
+
+    setTimeout(() => {
+        const active = document.querySelector('.view.active-view');
+        if (active && typeof refreshViewContent === 'function') refreshViewContent(active.id);
+    }, 100);
 });
 
 // ----------------------------------------------------
@@ -2574,21 +3195,18 @@ function applyUiPrefs() {
     try {
         prefs = JSON.parse(localStorage.getItem('nexus_ui_prefs')) || {};
     } catch(e) {}
-    const modules = ['habits', 'finance', 'tasks', 'videos', 'shop', 'iot', 'studies', 'goals', 'fitness', 'journal', 'routines', 'cleaner'];
+    const modules = ['habits', 'finance', 'tasks', 'videos', 'shop', 'iot', 'studies', 'goals', 'fitness', 'journal', 'routines', 'alarms', 'cleaner'];
     
     modules.forEach(mod => {
-        const isEnabled = prefs[mod] !== false; // Default true
-        
-        // Update checkbox
+        const isEnabled = prefs[mod] !== false;
         const cb = document.getElementById('toggle-' + mod);
         if (cb) cb.checked = isEnabled;
-        
-        // Hide/show nav item
         const navItem = document.querySelector(`.nav-item[data-target="view-${mod}"]`);
         if (navItem) {
             navItem.style.display = isEnabled ? 'flex' : 'none';
         }
     });
+    if (typeof applyModuleOrderAndVisibility === 'function') applyModuleOrderAndVisibility();
 }
 
 // Call applyUiPrefs on boot
@@ -2816,6 +3434,8 @@ function initRichEditorKeyListeners() {
         updateToolbarState();
     });
 
+    editor.addEventListener('paste', handleNoteEditorPaste);
+
     // Prevent default tab behaviour
     editor.addEventListener('keydown', function(e) {
         if (e.key === 'Tab') {
@@ -2866,19 +3486,42 @@ function getYouTubeEmbedSrc(videoId) {
 }
 
 function insertYouTubeEmbed() {
-    const url = document.getElementById('yt-url-input')?.value?.trim();
-    if (!url) return;
-    const videoId = extractYouTubeId(url);
-    if (!videoId) {
+    const raw = document.getElementById('yt-url-input')?.value?.trim();
+    if (!raw) return;
+    const ids = extractAllYouTubeIds(raw);
+    if (!ids.length) {
+        const single = extractYouTubeId(raw);
+        if (single) ids.push(single);
+    }
+    if (!ids.length) {
         alert('URL do YouTube inválida!');
         return;
     }
     closeYouTubeModal();
-    const editor = document.getElementById('note-content-rich');
-    if (!editor) return;
-    editor.focus();
+    insertYouTubeEmbedsAtCursor(ids);
+}
+
+function extractAllYouTubeIds(text) {
+    const compact = String(text || '').replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ');
+    const patterns = [
+        /(?:https?:\/\/)?(?:www\.)?youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})/gi,
+        /(?:https?:\/\/)?youtu\.be\/([a-zA-Z0-9_-]{11})/gi,
+        /(?:https?:\/\/)?(?:www\.)?youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/gi,
+        /(?:https?:\/\/)?(?:www\.)?youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/gi,
+    ];
+    const ids = [];
+    patterns.forEach(p => {
+        let m;
+        while ((m = p.exec(compact)) !== null) {
+            if (!ids.includes(m[1])) ids.push(m[1]);
+        }
+    });
+    return ids;
+}
+
+function buildYouTubeEmbedHtml(videoId) {
     const embedSrc = getYouTubeEmbedSrc(videoId);
-    const embedHTML = `<div class="yt-embed-block" contenteditable="false">
+    return `<div class="yt-embed-block" contenteditable="false">
         <iframe
             src="${embedSrc}"
             title="YouTube video player"
@@ -2887,10 +3530,27 @@ function insertYouTubeEmbed() {
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
             allowfullscreen></iframe>
     </div><p><br></p>`;
-    document.execCommand('insertHTML', false, embedHTML);
+}
+
+function insertYouTubeEmbedsAtCursor(videoIds) {
+    const editor = document.getElementById('note-content-rich');
+    if (!editor || !videoIds.length) return;
+    editor.focus();
+    const html = videoIds.map(id => buildYouTubeEmbedHtml(id)).join('');
+    document.execCommand('insertHTML', false, html);
+    if (typeof saveNoteDebounced === 'function') saveNoteDebounced();
+}
+
+function handleNoteEditorPaste(e) {
+    const text = e.clipboardData?.getData('text/plain') || '';
+    const ids = extractAllYouTubeIds(text);
+    if (!ids.length) return;
+    e.preventDefault();
+    insertYouTubeEmbedsAtCursor(ids);
 }
 
 function extractYouTubeId(url) {
+    const compact = String(url || '').replace(/\s+/g, '');
     const patterns = [
         /(?:youtube\.com\/watch\?v=)([a-zA-Z0-9_-]{11})/,
         /(?:youtu\.be\/)([a-zA-Z0-9_-]{11})/,
@@ -2898,7 +3558,7 @@ function extractYouTubeId(url) {
         /(?:youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/,
     ];
     for (const p of patterns) {
-        const m = url.match(p);
+        const m = compact.match(p);
         if (m) return m[1];
     }
     return null;
@@ -3062,20 +3722,40 @@ async function runJarvisAction() {
         }
 
         let apiResponse = null;
-        try {
-            const res = await fetch('/api/nexus/jarvis/note-action', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
-                signal: AbortSignal.timeout(30000)
-            });
-            if (res.ok) {
-                const data = await res.json();
-                result = data.result || data.text || JSON.stringify(data);
-                apiResponse = data;
+        if (window.nexusSupabase && typeof window.nexusSupabase.functions?.invoke === 'function') {
+            try {
+                const { data, error } = await window.nexusSupabase.functions.invoke('jarvis-note-action', {
+                    body: payload
+                });
+                if (!error && data?.result) {
+                    result = data.result;
+                    apiResponse = data;
+                } else if (error) {
+                    console.warn('jarvis-note-action:', error);
+                }
+            } catch (fnErr) {
+                console.warn('jarvis-note-action invoke:', fnErr);
             }
-        } catch(fetchErr) {
-            result = 'Jarvis indisponível. Verifique Wi-Fi e se o Nexus desktop está ligado.';
+        }
+        if (!result) {
+            try {
+                const res = await fetch('/api/nexus/jarvis/note-action', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                    signal: AbortSignal.timeout(30000)
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    result = data.result || data.text || JSON.stringify(data);
+                    apiResponse = data;
+                }
+            } catch (fetchErr) {
+                console.warn('desktop jarvis API:', fetchErr);
+            }
+        }
+        if (!result) {
+            result = jarvisSimulate(_jarvisMode, prompt);
         }
 
         _jarvisLastResult = result;
@@ -3377,6 +4057,7 @@ window.resetPomodoro = () => {
 // Habit Alarms (Local checks)
 // ----------------------------------------------------
 function playBeep(freq, duration) {
+    if (!notificationsEnabled()) return;
     try {
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         const oscillator = audioCtx.createOscillator();
@@ -3410,8 +4091,10 @@ function checkHabitAlarms() {
     });
 }
 
-// Add alarm checker to main loop
-setInterval(checkHabitAlarms, 30000); // checks every 30 seconds
+// Habit/task alarm web fallback (native scheduling in syncHabitReminders)
+setInterval(function () {
+    if (typeof window.checkHabitAlarms === 'function') window.checkHabitAlarms();
+}, 30000);
 
 
 
@@ -4249,7 +4932,13 @@ function renderFinanceCharts() {
     if (typeof Chart === 'undefined') return;
     initChartDefaults();
     
-    const transactions = LocalDB.getAll('transactions') || [];
+    const raw = (LocalDB.get('finance_transactions') || []).filter(t => !t.is_deleted);
+    const txDate = t => (t.occurred_at || t.date || t.created_at || '').slice(0, 10);
+    const transactions = raw.map(t => ({
+        ...t,
+        date: txDate(t),
+        amount: Number(t.amount) || 0
+    }));
     
     // 1. PIE CHART: Expenses by Category (Current Month)
     const now = new Date();
@@ -4523,6 +5212,7 @@ function getOAuthRedirectUrl() {
 }
 
 window.handleOAuthCallback = async function(callbackUrl) {
+    closeOAuthOverlay();
     if (!window.nexusSupabase || !callbackUrl) return;
     try {
         const parsed = new URL(callbackUrl.replace('com.nexus.mobile://', 'https://local/'));
@@ -4563,22 +5253,58 @@ async function loginWithGoogle() {
         return;
     }
     const redirectTo = getOAuthRedirectUrl();
-    const useExternalBrowser = !!(window.NexusAndroid && typeof window.NexusAndroid.openOAuthUrl === 'function');
     const { data, error } = await window.nexusSupabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
             redirectTo,
-            skipBrowserRedirect: useExternalBrowser
+            skipBrowserRedirect: true
         }
     });
     if (error) {
         showToast("Erro no login: " + error.message);
         return;
     }
-    if (useExternalBrowser && data?.url) {
-        window.NexusAndroid.openOAuthUrl(data.url);
-        showToast("Complete o login no navegador...");
+    if (!data?.url) {
+        showToast("Não foi possível iniciar login Google.");
+        return;
     }
+    // Google bloqueia OAuth em WebView/iframe (erro 403). Abre Custom Tab / navegador e volta via deep link.
+    if (window.NexusAndroid && typeof window.NexusAndroid.openOAuthUrl === 'function') {
+        window.NexusAndroid.openOAuthUrl(data.url);
+        showToast("Complete o login na janela que abriu...");
+        return;
+    }
+    window.location.href = data.url;
+}
+
+function openOAuthOverlay(url) {
+    let overlay = document.getElementById('oauth-overlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'oauth-overlay';
+        overlay.className = 'oauth-overlay';
+        overlay.innerHTML = `
+            <div class="oauth-overlay-panel glass">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+                    <strong style="color:white">Entrar com Google</strong>
+                    <button type="button" class="icon-btn" id="oauth-overlay-close" aria-label="Fechar"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <iframe id="oauth-overlay-frame" title="Login Google" referrerpolicy="no-referrer-when-downgrade"></iframe>
+            </div>`;
+        document.body.appendChild(overlay);
+        overlay.querySelector('#oauth-overlay-close').onclick = closeOAuthOverlay;
+        overlay.addEventListener('click', (e) => { if (e.target === overlay) closeOAuthOverlay(); });
+    }
+    const frame = document.getElementById('oauth-overlay-frame');
+    if (frame) frame.src = url;
+    overlay.style.display = 'flex';
+}
+
+function closeOAuthOverlay() {
+    const overlay = document.getElementById('oauth-overlay');
+    if (overlay) overlay.style.display = 'none';
+    const frame = document.getElementById('oauth-overlay-frame');
+    if (frame) frame.src = 'about:blank';
 }
 
 async function logoutGoogle() {
@@ -5162,7 +5888,9 @@ function clearLocalDB() {
         if (btn) btn.classList.add('active');
         const container = document.getElementById('habits-list');
         if (!container) return;
-        let habits = (LocalDB.get('habits') || []).filter(h => h.active === 1 && !h.is_deleted);
+        let habits = (LocalDB.get('habits') || []).filter(h => !h.is_deleted);
+        if (filter === 'archived') habits = habits.filter(h => h.active === 0);
+        else habits = habits.filter(h => h.active === 1);
         if (filter === 'morning') habits = habits.filter(h => h.period === 'morning');
         else if (filter === 'afternoon') habits = habits.filter(h => h.period === 'afternoon');
         else if (filter === 'night') habits = habits.filter(h => h.period === 'night');
@@ -5174,13 +5902,47 @@ function clearLocalDB() {
         }
         container.innerHTML = habits.map(h => {
             const isDone = logs.some(l => String(l.habit_id) === String(h.id) && l.date === sel);
+            const streak = computeHabitStreak(h.id, logs);
+            const rate = computeHabitCompletionRate(h.id, logs, 30);
             return `<div class="list-item glass ${isDone ? 'done' : ''}" style="cursor:pointer" onclick="openHabitDetail('${h.id}')">
                 <div class="item-main"><div class="item-title">${escapeHtml(h.name)}</div>
-                <div class="item-subtitle">${sel === todayISO() ? 'Hoje' : sel}</div></div>
+                <div class="item-subtitle">🔥 ${streak} dias · ${rate}% (30d) · ${sel === todayISO() ? 'Hoje' : sel}</div></div>
+                <button class="icon-btn" onclick="event.stopPropagation();openHabitDetail('${h.id}')" aria-label="Editar"><i class="fa-solid fa-pen"></i></button>
+                <button class="icon-btn" onclick="event.stopPropagation();deleteHabitFromGrid('${h.id}')" aria-label="Excluir" style="color:var(--accent-pink)"><i class="fa-solid fa-trash"></i></button>
                 <button class="icon-btn ${isDone ? 'done' : ''}" onclick="event.stopPropagation();toggleHabitDirect('${h.id}')"><i class="fa-solid ${isDone ? 'fa-check' : 'fa-plus'}"></i></button>
             </div>`;
         }).join('');
     };
+
+    function computeHabitStreak(habitId, logs) {
+        logs = logs || LocalDB.get('habit_logs') || [];
+        let streak = 0;
+        const d = new Date();
+        for (let i = 0; i < 365; i++) {
+            const iso = d.toISOString().split('T')[0];
+            if (logs.some(l => String(l.habit_id) === String(habitId) && l.date === iso)) streak++;
+            else if (i > 0) break;
+            d.setDate(d.getDate() - 1);
+        }
+        return streak;
+    }
+
+    function computeHabitCompletionRate(habitId, logs, days) {
+        logs = logs || LocalDB.get('habit_logs') || [];
+        const habits = LocalDB.get('habits') || [];
+        const h = habits.find(x => String(x.id) === String(habitId));
+        let scheduled = 0, done = 0;
+        const d = new Date();
+        for (let i = 0; i < days; i++) {
+            const iso = d.toISOString().split('T')[0];
+            if (h && typeof habitScheduledOnDay === 'function' && habitScheduledOnDay(h, iso)) {
+                scheduled++;
+                if (logs.some(l => String(l.habit_id) === String(habitId) && l.date === iso)) done++;
+            }
+            d.setDate(d.getDate() - 1);
+        }
+        return scheduled ? Math.round((done / scheduled) * 100) : 0;
+    }
 
     function renderHabitChartsFixed() {
         if (typeof Chart === 'undefined') return;
@@ -5315,6 +6077,8 @@ function clearLocalDB() {
             const isDone = !!t.done_at;
             return `<div class="list-item glass" onclick="openTaskDetail('${t.id}')">
                 <div class="item-main"><div class="item-title" style="text-decoration:${isDone?'line-through':'none'}">${escapeHtml(t.name || t.title)}</div></div>
+                <button class="icon-btn" onclick="event.stopPropagation();openTaskDetail('${t.id}')" aria-label="Editar"><i class="fa-solid fa-pen"></i></button>
+                <button class="icon-btn" onclick="event.stopPropagation();deleteTaskFromGrid('${t.id}')" aria-label="Excluir" style="color:var(--accent-pink)"><i class="fa-solid fa-trash"></i></button>
                 <button class="icon-btn" onclick="event.stopPropagation();toggleTaskDirect('${t.id}')"><i class="fa-solid fa-check"></i></button>
             </div>`;
         }).join('');
@@ -5326,9 +6090,30 @@ function clearLocalDB() {
         closeHabitDetail();
     };
 
+    window.deleteHabitFromGrid = function(habitId) {
+        if (!confirm('Excluir este hábito?')) return;
+        const habits = LocalDB.get('habits') || [];
+        const h = habits.find(x => String(x.id) === String(habitId));
+        if (h) {
+            h.is_deleted = 1;
+            h.active = 0;
+            LocalDB.set('habits', habits);
+            if (typeof syncHabitReminders === 'function') syncHabitReminders();
+            if (typeof backgroundSync === 'function') backgroundSync();
+        }
+        if (typeof loadHabits === 'function') loadHabits();
+    };
+
+    window.deleteTaskFromGrid = function(taskId) {
+        currentTaskId = taskId;
+        if (typeof deleteCurrentTask === 'function') deleteCurrentTask();
+    };
+
     // --- Native reminders ---
-    function scheduleNativeReminder(id, title, body, triggerAtMs) {
-        if (window.AndroidNative && typeof AndroidNative.scheduleReminder === 'function') {
+    function scheduleNativeReminder(id, title, body, triggerAtMs, isAlarm) {
+        if (window.AndroidNative && typeof AndroidNative.scheduleAlarm === 'function') {
+            AndroidNative.scheduleAlarm(id, title, body, triggerAtMs, !!isAlarm, 5, 3);
+        } else if (window.AndroidNative && typeof AndroidNative.scheduleReminder === 'function') {
             AndroidNative.scheduleReminder(id, title, body, triggerAtMs);
         }
     }
@@ -5345,7 +6130,7 @@ function clearLocalDB() {
             const rid = parseInt(String(t.id).replace(/\D/g,'').slice(-7) || '0', 10) || Math.abs(Number(t.id) % 100000);
             if (t.notify_enabled && t.notify_at && !t.done_at) {
                 const ms = new Date(t.notify_at).getTime();
-                if (ms > Date.now()) scheduleNativeReminder(rid, t.name || 'Tarefa', t.description || 'Lembrete de tarefa', ms);
+                if (ms > Date.now()) scheduleNativeReminder(rid, t.name || 'Tarefa', t.description || 'Lembrete de tarefa', ms, false);
                 else cancelNativeReminder(rid);
             } else cancelNativeReminder(rid);
         });
@@ -5365,7 +6150,7 @@ function clearLocalDB() {
             const trigger = new Date();
             trigger.setHours(hh, mm, 0, 0);
             if (trigger.getTime() <= Date.now()) trigger.setDate(trigger.getDate() + 1);
-            scheduleNativeReminder(rid, 'Hora do Habito', h.name, trigger.getTime());
+            scheduleNativeReminder(rid, 'Hora do Habito', h.name, trigger.getTime(), false);
         });
     };
 
@@ -5384,13 +6169,19 @@ function clearLocalDB() {
     };
 
     function checkHabitAlarmsFixed() {
+        if (typeof notificationsEnabled === 'function' && !notificationsEnabled()) return;
         const now = new Date();
         const timeStr = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
         const td = todayISO();
+        const dow = now.getDay();
         const logs = LocalDB.get('habit_logs') || [];
         (LocalDB.get('habits') || []).filter(h => h.active === 1 && !h.is_deleted).forEach(habit => {
             const t = habit.alarm_time || habit.target_time;
             if (!t || t.substring(0, 5) !== timeStr) return;
+            let days = [0,1,2,3,4,5,6];
+            if (Array.isArray(habit.days_of_week)) days = habit.days_of_week;
+            else if (habit.days_of_week) { try { days = JSON.parse(habit.days_of_week); } catch (_) {} }
+            if (!days.includes(dow)) return;
             if (logs.some(l => String(l.habit_id) === String(habit.id) && l.date === td)) return;
             sendLocalNotification('Hora do Habito!', habit.name);
             playBeep(600, 300);
@@ -5460,6 +6251,12 @@ function clearLocalDB() {
         document.getElementById('goal-form-status').value = g ? (g.status || 'active') : 'active';
         document.getElementById('goal-form-delete-btn').style.display = g ? 'block' : 'none';
         document.getElementById('goal-form-modal').style.display = 'flex';
+    };
+
+    window.closeGoalForm = function() {
+        editingGoalId = null;
+        const modal = document.getElementById('goal-form-modal');
+        if (modal) modal.style.display = 'none';
     };
 
     window.saveGoalForm = function() {
@@ -5536,22 +6333,93 @@ function clearLocalDB() {
 
     window.openWorkoutBuilder = function() { openWorkoutForm(); };
 
+    window.closeWorkoutForm = function() {
+        document.getElementById('workout-form-modal').style.display = 'none';
+        editingWorkoutId = null;
+    };
+
+    let editingFinanceId = null;
+    window.openFinanceForm = function(txId) {
+        editingFinanceId = txId || null;
+        const txs = LocalDB.get('finance_transactions') || [];
+        const t = txId ? txs.find(x => String(x.id) === String(txId)) : null;
+        document.getElementById('finance-form-title').textContent = t ? 'Editar Transação' : 'Nova Transação';
+        document.getElementById('finance-form-desc').value = t ? (t.description || '') : '';
+        document.getElementById('finance-form-amount').value = t ? (t.amount || '') : '';
+        document.getElementById('finance-form-type').value = t ? (t.type || 'expense') : 'expense';
+        document.getElementById('finance-form-category').value = t ? (t.category || 'other') : 'other';
+        document.getElementById('finance-form-date').value = t
+            ? (t.occurred_at || t.created_at || '').split('T')[0]
+            : todayISO();
+        document.getElementById('finance-form-delete-btn').style.display = t ? 'block' : 'none';
+        document.getElementById('finance-form-modal').style.display = 'flex';
+    };
+
+    window.closeFinanceForm = function() {
+        document.getElementById('finance-form-modal').style.display = 'none';
+        editingFinanceId = null;
+    };
+
+    window.saveFinanceForm = function() {
+        const desc = document.getElementById('finance-form-desc')?.value?.trim();
+        const amount = parseFloat(document.getElementById('finance-form-amount')?.value || '0');
+        if (!desc || !amount) { showToast('Preencha descrição e valor.'); return; }
+        const payload = {
+            description: desc,
+            amount,
+            category: document.getElementById('finance-form-category')?.value || 'other',
+            type: document.getElementById('finance-form-type')?.value || 'expense',
+            occurred_at: (document.getElementById('finance-form-date')?.value || todayISO()) + 'T12:00:00'
+        };
+        if (editingFinanceId) {
+            const txs = LocalDB.get('finance_transactions');
+            const idx = txs.findIndex(x => String(x.id) === String(editingFinanceId));
+            if (idx !== -1) { txs[idx] = { ...txs[idx], ...payload }; LocalDB.set('finance_transactions', txs); }
+        } else {
+            LocalDB.upsert('finance_transactions', { id: Date.now(), ...payload, created_at: new Date().toISOString() });
+        }
+        closeFinanceForm();
+        loadFinances();
+        if (typeof backgroundSync === 'function') backgroundSync();
+    };
+
+    window.deleteFinanceForm = function() {
+        if (!editingFinanceId) return;
+        const txs = LocalDB.get('finance_transactions');
+        const idx = txs.findIndex(x => String(x.id) === String(editingFinanceId));
+        if (idx !== -1) { txs[idx].is_deleted = 1; LocalDB.set('finance_transactions', txs); }
+        closeFinanceForm();
+        loadFinances();
+    };
+
     function renderWorkoutExercises(exs) {
         const list = document.getElementById('workout-exercises-list');
         if (!list) return;
         window._workoutExercises = exs || [];
         list.innerHTML = window._workoutExercises.map((e, i) => `
-            <div style="display:flex;gap:8px;align-items:center;background:rgba(255,255,255,0.04);padding:8px;border-radius:8px">
-                <span style="flex:1;font-size:0.85rem">${escapeHtml(e.name || e)}</span>
-                <button onclick="removeWorkoutExercise(${i})" style="background:none;border:none;color:var(--text-secondary)"><i class="fa-solid fa-xmark"></i></button>
+            <div style="background:rgba(255,255,255,0.04);padding:10px;border-radius:8px;margin-bottom:6px">
+                <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+                    <span style="flex:1;font-size:0.85rem;font-weight:600">${escapeHtml(e.name || e)}</span>
+                    <button onclick="removeWorkoutExercise(${i})" style="background:none;border:none;color:var(--text-secondary)"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+                    <input type="number" min="1" placeholder="Séries" value="${e.sets || ''}" onchange="updateWorkoutExercise(${i},'sets',this.value)" style="padding:6px;border-radius:6px;background:rgba(0,0,0,0.3);color:white;border:1px solid var(--border-glass);font-size:0.8rem">
+                    <input type="number" min="1" placeholder="Reps" value="${e.reps || ''}" onchange="updateWorkoutExercise(${i},'reps',this.value)" style="padding:6px;border-radius:6px;background:rgba(0,0,0,0.3);color:white;border:1px solid var(--border-glass);font-size:0.8rem">
+                    <input type="number" min="0" step="0.5" placeholder="Kg" value="${e.weight || ''}" onchange="updateWorkoutExercise(${i},'weight',this.value)" style="padding:6px;border-radius:6px;background:rgba(0,0,0,0.3);color:white;border:1px solid var(--border-glass);font-size:0.8rem">
+                </div>
             </div>`).join('');
     }
+
+    window.updateWorkoutExercise = function(i, field, val) {
+        if (!window._workoutExercises || !window._workoutExercises[i]) return;
+        window._workoutExercises[i][field] = field === 'weight' ? parseFloat(val) : parseInt(val, 10);
+    };
 
     window.addWorkoutExercise = function() {
         const name = prompt('Nome do exercicio:');
         if (!name) return;
         window._workoutExercises = window._workoutExercises || [];
-        window._workoutExercises.push({ name: name.trim() });
+        window._workoutExercises.push({ name: name.trim(), sets: 3, reps: 10, weight: 0 });
         renderWorkoutExercises(window._workoutExercises);
     };
 
@@ -5598,6 +6466,7 @@ function clearLocalDB() {
     window.loadFitness = function() {
         const container = document.getElementById('fitness-list');
         if (!container) return;
+        if (typeof renderWorkoutTemplates === 'function') renderWorkoutTemplates();
         updateFitnessStats();
         const data = (LocalDB.get('fitness_workouts') || []).filter(t => !t.is_deleted)
             .sort((a, b) => (b.date || b.created_at || '').localeCompare(a.date || a.created_at || ''));
@@ -5608,112 +6477,44 @@ function clearLocalDB() {
             </div>`).join('') : '<div style="text-align:center;color:var(--text-secondary);margin-top:20px;">Nenhum treino.</div>';
     };
 
-    // --- Studies: subjects grid ---
-    function loadSubjectsGrid() {
-        const grid = document.getElementById('subjects-grid');
-        if (!grid) return;
-        const notebooks = LocalDB.get('study_notebooks') || [];
-        const notes = (LocalDB.get('study_notes') || []).filter(n => !n.is_deleted);
-        if (!notebooks.length) {
-            grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--text-secondary);padding:20px">Sem materias. Crie a primeira!</div>';
-            return;
-        }
-        grid.innerHTML = notebooks.map(nb => {
-            const count = notes.filter(n => String(n.notebook_id) === String(nb.id)).length;
-            const coverStyle = nb.cover_image ? `background-image:url('${nb.cover_image}')` : 'background:linear-gradient(135deg,#6c5ce7,#a29bfe)';
-            return `<div class="subject-card" onclick="openSubjectDetail('${nb.id}')">
-                <div class="subject-card-cover" style="${coverStyle}"></div>
-                <div class="subject-card-body"><div class="subject-card-name">${nb.icon || ''} ${escapeHtml(nb.name)}</div>
-                <div class="subject-card-count">${count} nota${count !== 1 ? 's' : ''}</div></div>
-            </div>`;
-        }).join('');
-    }
-
-    window.openSubjectForm = function() {
-        document.getElementById('subject-form-modal').style.display = 'flex';
-        document.getElementById('subject-form-name').value = '';
-        document.getElementById('subject-form-icon').value = '📚';
-        document.getElementById('subject-form-cover').value = '';
-    };
-
-    window.saveSubjectForm = function() {
-        const name = document.getElementById('subject-form-name')?.value?.trim();
-        if (!name) return;
-        const nb = {
-            id: Date.now().toString(),
-            name,
-            icon: document.getElementById('subject-form-icon')?.value || '📚',
-            cover_image: document.getElementById('subject-form-cover')?.value || null,
-            created_at: new Date().toISOString()
-        };
-        const notebooks = LocalDB.get('study_notebooks') || [];
-        notebooks.push(nb);
-        LocalDB.set('study_notebooks', notebooks);
-        document.getElementById('subject-form-modal').style.display = 'none';
-        loadStudies();
-    };
+    // --- Studies: subjects grid (usa funções globais renderSubjectFolderCard / openSubjectDetail) ---
+    window.loadSubjectsGrid = loadSubjectsGrid;
 
     window.openNewNotebook = window.openSubjectForm;
 
-    window.openSubjectDetail = function(notebookId) {
-        currentNotebookId = notebookId;
-        const nb = (LocalDB.get('study_notebooks') || []).find(n => String(n.id) === String(notebookId));
-        const view = document.getElementById('subject-detail-view');
-        if (!view || !nb) return;
-        document.getElementById('subject-detail-title').textContent = (nb.icon || '') + ' ' + nb.name;
-        view.style.display = 'block';
-        const notes = (LocalDB.get('study_notes') || []).filter(n => !n.is_deleted && String(n.notebook_id) === String(notebookId));
-        const list = document.getElementById('subject-notes-list');
-        list.innerHTML = notes.length ? notes.map(n => renderNoteCard(n)).join('') : '<div style="text-align:center;padding:30px;color:var(--text-secondary)">Sem notas</div>';
-    };
-
-    window.closeSubjectDetail = function() {
-        document.getElementById('subject-detail-view').style.display = 'none';
-        currentNotebookId = null;
-    };
-
     window.openSubjectMenu = function(ev) {
-        ev.stopPropagation();
-        const popup = document.getElementById('subject-menu-popup');
-        if (popup) {
-            popup.style.display = 'block';
-            popup.style.top = (ev.clientY + 10) + 'px';
-            popup.style.left = (ev.clientX - 120) + 'px';
-        }
-        setTimeout(() => document.addEventListener('click', closeSubjectMenu, { once: true }), 50);
+        if (!currentNotebookId) return;
+        openFolderMenu(ev, currentNotebookId);
     };
-
-    function closeSubjectMenu() {
-        const popup = document.getElementById('subject-menu-popup');
-        if (popup) popup.style.display = 'none';
-    }
 
     window.changeSubjectCover = function() {
-        const url = prompt('URL da imagem de capa:');
-        if (!url || !currentNotebookId) return;
-        const notebooks = LocalDB.get('study_notebooks') || [];
-        const idx = notebooks.findIndex(n => String(n.id) === String(currentNotebookId));
-        if (idx !== -1) { notebooks[idx].cover_image = url; LocalDB.set('study_notebooks', notebooks); loadStudies(); openSubjectDetail(currentNotebookId); }
-        closeSubjectMenu();
+        if (currentNotebookId) openStudyEditSheet('folder', currentNotebookId);
+        closeStudyContextMenus();
     };
 
     window.renameSubject = function() {
-        const name = prompt('Novo nome:');
-        if (!name || !currentNotebookId) return;
-        const notebooks = LocalDB.get('study_notebooks') || [];
-        const idx = notebooks.findIndex(n => String(n.id) === String(currentNotebookId));
-        if (idx !== -1) { notebooks[idx].name = name.trim(); LocalDB.set('study_notebooks', notebooks); loadStudies(); openSubjectDetail(currentNotebookId); }
-        closeSubjectMenu();
+        if (currentNotebookId) openStudyEditSheet('folder', currentNotebookId);
+        closeStudyContextMenus();
     };
 
     window.deleteSubject = function() {
-        if (!currentNotebookId || !confirm('Excluir materia e manter notas sem caderno?')) return;
-        const notebooks = LocalDB.get('study_notebooks') || [];
-        const filtered = notebooks.filter(n => String(n.id) !== String(currentNotebookId));
-        LocalDB.set('study_notebooks', filtered);
+        if (!currentNotebookId || !confirm('Excluir matéria? As notas ficam sem pasta.')) return;
+        const notebooks = (LocalDB.get('study_notebooks') || []).filter(n => String(n.id) !== String(currentNotebookId));
+        LocalDB.set('study_notebooks', notebooks);
         closeSubjectDetail();
         loadStudies();
-        closeSubjectMenu();
+        closeStudyContextMenus();
+    };
+
+    window.deleteStudyNote = function() {
+        const id = window._menuNoteId;
+        if (!id || !confirm('Excluir esta nota?')) return;
+        const notes = LocalDB.get('study_notes') || [];
+        const idx = notes.findIndex(n => String(n.id) === String(id));
+        if (idx !== -1) { notes[idx].is_deleted = 1; LocalDB.set('study_notes', notes); }
+        closeStudyContextMenus();
+        if (currentNotebookId) openSubjectDetail(currentNotebookId);
+        loadStudies();
     };
 
     function extractNoteTitleFromEditor() {
@@ -5732,16 +6533,26 @@ function clearLocalDB() {
         const title = extractNoteTitleFromEditor();
         const content = hidden ? hidden.value : '';
         const tags = document.getElementById('note-tags')?.value || '';
-        const subject = document.getElementById('note-subject')?.value || '';
+        let jarvisSubject = document.getElementById('note-subject')?.value?.trim() || '';
         const notebookId = document.getElementById('note-notebook')?.value || currentNotebookId || '';
         if (!title && !content) { showInAppNotification('Escreva algo primeiro!', 'warn'); return; }
         const notes = LocalDB.get('study_notes') || [];
         const now = new Date().toISOString();
+        if (!jarvisSubject && notebookId && typeof inferJarvisNoteSubject === 'function') {
+            jarvisSubject = inferJarvisNoteSubject(title, content, notebookId, editingNoteId);
+        }
+        const description = stripHtmlText(content).substring(0, 160);
         if (editingNoteId) {
             const idx = notes.findIndex(n => String(n.id) === String(editingNoteId));
-            if (idx !== -1) notes[idx] = { ...notes[idx], title, content, tags, subject, notebook_id: notebookId, updated_at: now };
+            if (idx !== -1) notes[idx] = {
+                ...notes[idx], title, content, tags, subject: jarvisSubject, jarvis_subject: jarvisSubject,
+                description, notebook_id: notebookId, updated_at: now
+            };
         } else {
-            notes.push({ id: Date.now().toString(), title, content, tags, subject, notebook_id: notebookId, created_at: now, updated_at: now });
+            notes.push({
+                id: Date.now().toString(), title, content, tags, subject: jarvisSubject, jarvis_subject: jarvisSubject,
+                description, notebook_id: notebookId, created_at: now, updated_at: now
+            });
             awardXP(15, 'Nova nota');
         }
         LocalDB.set('study_notes', notes);
@@ -5759,26 +6570,16 @@ function clearLocalDB() {
     };
 
     window.insertYouTubeEmbed = function() {
-        const url = document.getElementById('yt-url-input')?.value?.trim();
-        if (!url) return;
-        const videoId = extractYouTubeId(url);
-        if (!videoId) { alert('URL invalida'); return; }
+        const raw = document.getElementById('yt-url-input')?.value?.trim();
+        if (!raw) return;
+        const ids = extractAllYouTubeIds(raw);
+        if (!ids.length) {
+            const single = extractYouTubeId(raw);
+            if (single) ids.push(single);
+        }
+        if (!ids.length) { alert('URL invalida'); return; }
         closeYouTubeModal();
-        const editor = document.getElementById('note-content-rich');
-        if (!editor) return;
-        editor.focus();
-        const embedSrc = getYouTubeEmbedSrc(videoId);
-        const embedHTML = `<div class="yt-embed-block" contenteditable="false">
-            <iframe
-                src="${embedSrc}"
-                title="YouTube video player"
-                loading="lazy"
-                referrerpolicy="strict-origin-when-cross-origin"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowfullscreen></iframe>
-        </div><p><br></p>`;
-        document.execCommand('insertHTML', false, embedHTML);
-        saveNoteDebounced();
+        insertYouTubeEmbedsAtCursor(ids);
     };
 
     window.filterNoteLinkList = function(query) {
@@ -5824,7 +6625,38 @@ function clearLocalDB() {
 
     window.openFinanceOverflow = function(ev) {
         ev.stopPropagation();
-        showToast('Mais acoes de financas em breve');
+        const popup = document.getElementById('finance-overflow-popup');
+        if (!popup) return;
+        popup.style.display = 'block';
+        popup.style.top = (ev.clientY + 8) + 'px';
+        popup.style.right = '16px';
+        popup.style.left = 'auto';
+        setTimeout(() => document.addEventListener('click', closeFinanceOverflowOnce, { once: true }), 0);
+    };
+    function closeFinanceOverflowOnce() { closeFinanceOverflow(); }
+
+    const WORKOUT_TEMPLATES = [
+        { name: 'Peito & Tríceps', muscle: 'Peito', exercises: [{ name: 'Supino reto', sets: 4, reps: 10, weight: 0 }, { name: 'Crucifixo', sets: 3, reps: 12, weight: 0 }, { name: 'Tríceps pulley', sets: 3, reps: 15, weight: 0 }] },
+        { name: 'Costas & Bíceps', muscle: 'Costas', exercises: [{ name: 'Puxada frontal', sets: 4, reps: 10, weight: 0 }, { name: 'Remada curvada', sets: 3, reps: 10, weight: 0 }, { name: 'Rosca direta', sets: 3, reps: 12, weight: 0 }] },
+        { name: 'Pernas', muscle: 'Pernas', exercises: [{ name: 'Agachamento', sets: 4, reps: 8, weight: 0 }, { name: 'Leg press', sets: 3, reps: 12, weight: 0 }, { name: 'Cadeira extensora', sets: 3, reps: 15, weight: 0 }] },
+        { name: 'Full Body', muscle: 'Corpo inteiro', exercises: [{ name: 'Burpee', sets: 3, reps: 10, weight: 0 }, { name: 'Flexão', sets: 3, reps: 15, weight: 0 }, { name: 'Prancha', sets: 3, reps: 60, weight: 0 }] }
+    ];
+
+    window.renderWorkoutTemplates = function() {
+        const row = document.getElementById('workout-templates-row');
+        if (!row) return;
+        row.innerHTML = WORKOUT_TEMPLATES.map((t, i) =>
+            `<button class="study-chip" onclick="startWorkoutFromTemplate(${i})" style="white-space:nowrap">${escapeHtml(t.name)}</button>`
+        ).join('');
+    };
+
+    window.startWorkoutFromTemplate = function(idx) {
+        const t = WORKOUT_TEMPLATES[idx];
+        if (!t) return;
+        openWorkoutForm();
+        document.getElementById('workout-form-name').value = t.name;
+        document.getElementById('workout-form-muscle').value = t.muscle;
+        renderWorkoutExercises(t.exercises.slice());
     };
 
     // Boot: sync reminders + load budget
@@ -5960,6 +6792,21 @@ function scanJsStorageCategories() {
                 deepOnly: true
             });
         }
+    }
+
+    if (window.AndroidNative && typeof AndroidNative.scanLargeDownloads === 'function') {
+        try {
+            const dl = parseNativeJson(AndroidNative.scanLargeDownloads());
+            if (dl && dl.totalBytes > 0) {
+                categories.push({
+                    id: 'large_downloads',
+                    name: 'Downloads grandes (5MB+)',
+                    bytes: dl.totalBytes,
+                    desc: (dl.files?.length || 0) + ' arquivos na pasta Downloads',
+                    cleanable: false
+                });
+            }
+        } catch (_) {}
     }
 
     return categories;
@@ -6216,6 +7063,7 @@ window.requestCleanerAiAdvice = async function() {
 };
 
 window.loadCleaner = function() {
+    renderCleanerTips([], null);
     scanPhoneStorage();
 };
 

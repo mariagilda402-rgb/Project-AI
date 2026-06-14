@@ -4,12 +4,22 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 APP_JS = ROOT / "mobile" / "app.js"
+PHASE15_JS = ROOT / "mobile" / "nexus-phase15.js"
 INDEX_HTML = ROOT / "mobile" / "index.html"
 YOUTUBE_PLAYER_HTML = ROOT / "mobile" / "youtube-player.html"
+PHASE15_SQL = ROOT / "supabase_migration_phase15.sql"
 
 
 def read_app_js() -> str:
     return APP_JS.read_text(encoding="utf-8")
+
+
+def read_phase15_js() -> str:
+    return PHASE15_JS.read_text(encoding="utf-8")
+
+
+def read_mobile_bundle() -> str:
+    return read_app_js() + "\n" + read_phase15_js()
 
 
 def read_index_html() -> str:
@@ -35,19 +45,18 @@ def test_mobile_localdb_exposes_legacy_offline_aliases():
 
 
 def test_mobile_exposes_jarvis_call_toggle_for_fab():
-    app_js = read_app_js()
+    bundle = read_mobile_bundle()
 
-    assert "window.toggleJarvisCall" in app_js
-    assert "AndroidNative.startJarvisCall" in app_js
-    assert "AndroidNative.stopJarvisCall" in app_js
-    assert "isWifiConnected" in app_js
-    assert "requireWifiForJarvis" in app_js
+    assert "window.toggleJarvisCall" in bundle
+    assert "AndroidNative.startJarvisCall" in bundle
+    assert "AndroidNative.stopJarvisCall" in bundle
+    assert "requireWifiForJarvis" in bundle
 
 
 def test_mobile_blocks_jarvis_without_wifi():
     app_js = read_app_js()
-    assert "requireWifiForJarvis('ligação')" in app_js
-    assert "AndroidNative.isWifiConnected" in app_js or "isWifiConnected()" in app_js
+    assert "requireWifiForJarvis" in app_js
+    assert "isNetworkOnline()" in app_js
 
 
 def test_mobile_guards_web_notification_api_for_android_webview():
@@ -91,6 +100,31 @@ def test_mobile_nav_targets_all_have_matching_views():
     targets = re.findall(r'data-target="(view-[^"]+)"', html)
     for target in set(targets):
         assert f'id="{target}"' in html, f"Missing view for nav target {target}"
+
+
+def test_mobile_refresh_view_content_covers_nav_modules():
+    app_js = read_app_js()
+    assert "window.refreshViewContent" in app_js
+    assert "case 'view-goals':" in app_js
+    assert "case 'view-fitness':" in app_js
+    assert "case 'view-journal':" in app_js
+    assert "case 'view-alarms':" in app_js
+    assert "case 'view-routines':" in app_js
+    assert "case 'view-iot':" in app_js
+    assert "case 'view-cleaner':" in app_js
+    assert "ensureModuleNavVisible" in app_js
+
+
+def test_mobile_includes_audio_module():
+    html = read_index_html()
+    assert "nexus-audio.js" in html
+    assert 'id="cfg-audio-master"' in html
+    assert (ROOT / "mobile" / "nexus-audio.js").is_file()
+
+
+def test_mobile_jarvis_note_action_uses_supabase():
+    app_js = read_app_js()
+    assert "jarvis-note-action" in app_js
 
 
 def test_mobile_exposes_critical_window_handlers():
@@ -165,6 +199,7 @@ def test_mobile_youtube_embed_has_referrer_policy():
     assert "picture-in-picture" in app_js
     html = read_index_html()
     assert 'name="referrer"' in html
+    assert 'id="yt-embed-menu-popup"' in html
     player_html = read_youtube_player_html()
     assert "youtube-nocookie.com/embed/" in player_html
     assert "setAttribute('referrerpolicy', 'strict-origin-when-cross-origin')" in player_html
@@ -358,9 +393,49 @@ def test_mobile_cleaner_module_toggle():
     assert 'data-target="view-cleaner"' in html
 
 
-def test_mobile_apk_has_storage_clean_bridge():
+def test_mobile_fab_removed_jarvis_home_only():
+    html = read_index_html()
+    bundle = read_mobile_bundle()
+    assert 'id="fab-add"' not in html
+    assert "callJarvisChat" in bundle
+    assert "buildJarvisContext" in bundle
+    assert 'id="jarvis-call-overlay"' in html
+    assert 'id="view-alarms"' in html
+    assert 'id="module-settings-list"' in html
     main = (ROOT / "mobile-apk" / "app" / "src" / "main" / "java" / "com" / "nexus" / "mobile" / "MainActivity.java").read_text(encoding="utf-8")
     assert "getStorageStats" in main
     assert "getDeviceDiagnostics" in main
     assert "clearAppCache" in main
     assert "runNativeClean" in main
+    assert '"nexus-phase15.js"' in main
+
+
+def test_mobile_phase15_supabase_and_jarvis():
+    sql = PHASE15_SQL.read_text(encoding="utf-8")
+    assert "jarvis_chat_messages" in sql
+    assert "jarvis_call_sessions" in sql
+    assert "jarvis_call_turns" in sql
+    assert "nexus_alarms" in sql
+    assert "nexus_user_settings" in sql
+
+    app_js = read_app_js()
+    p15 = read_phase15_js()
+    assert "jarvis_chat_messages" in app_js
+    assert "notificationsEnabled" in app_js
+    assert "static patchRow" in app_js
+    assert "toggleJarvisCallMic" in p15
+    assert "speakJarvis" in p15
+    assert "loadAlarms" in p15
+    assert "buildAlarmSchedule" in p15
+    assert "loadJarvisCallHistory" in p15
+    assert "initModuleDragSort" in p15
+    assert "loadJarvisPersistentHistory" in p15
+
+    html = read_index_html()
+    assert 'id="cfg-jarvis-tts"' in html
+    assert 'id="alarm-form-modal"' in html
+    assert 'nexus-phase15.js' in html
+
+    for name in ["jarvis-chat", "jarvis-note-action", "jarvis-tts"]:
+        assert (ROOT / "supabase" / "functions" / name / "index.ts").is_file()
+    assert (ROOT / "supabase" / "functions" / "_shared" / "jarvis_prompts.ts").is_file()

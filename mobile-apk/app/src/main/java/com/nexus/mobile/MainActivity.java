@@ -40,7 +40,7 @@ import android.app.PendingIntent;
 import android.content.Intent;
 import android.net.ConnectivityManager;
 import android.net.Network;
-import android.net.NetworkCapabilities;
+import android.net.wifi.WifiManager;
 import androidx.core.content.FileProvider;
 import androidx.webkit.WebViewAssetLoader;
 
@@ -55,7 +55,7 @@ import android.os.StatFs;
 import android.app.ActivityManager;
 import android.os.Environment;
 
-import org.json.JSONObject;
+import androidx.browser.customtabs.CustomTabsIntent;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -76,6 +76,8 @@ public class MainActivity extends Activity {
         "index.html",
         "style.css",
         "app.js",
+        "nexus-audio.js",
+        "nexus-phase15.js",
         "youtube-player.html",
         "manifest.json",
         "sw.js"
@@ -124,6 +126,7 @@ public class MainActivity extends Activity {
 
         configureWebView();
         maybeRequestRuntimePermissions();
+        maybeRequestExactAlarmPermission();
 
         webView.setBackgroundColor(Color.parseColor("#0d0d12"));
         loadBestAvailableApp();
@@ -156,6 +159,7 @@ public class MainActivity extends Activity {
                 "if(window.handleOAuthCallback){window.handleOAuthCallback('" + escaped + "');}",
                 null
             );
+            loadBestAvailableApp();
         });
     }
 
@@ -208,6 +212,22 @@ public class MainActivity extends Activity {
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                if (request == null || request.getUrl() == null) return false;
+                Uri uri = request.getUrl();
+                if ("com.nexus.mobile".equals(uri.getScheme()) && "auth".equals(uri.getHost())) {
+                    handleOAuthIntent(new Intent(Intent.ACTION_VIEW, uri));
+                    return true;
+                }
+                return false;
+            }
+
+            @Override
+            @SuppressWarnings("deprecation")
+            public boolean shouldOverrideUrlLoading(WebView view, String url) {
+                if (url != null && url.startsWith("com.nexus.mobile://auth/")) {
+                    handleOAuthIntent(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
+                    return true;
+                }
                 return false;
             }
 
@@ -287,9 +307,31 @@ public class MainActivity extends Activity {
                 missing.add(Manifest.permission.POST_NOTIFICATIONS);
             }
         }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED) {
+                missing.add(Manifest.permission.BLUETOOTH_SCAN);
+            }
+            if (checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+                missing.add(Manifest.permission.BLUETOOTH_CONNECT);
+            }
+        }
 
         if (!missing.isEmpty()) {
             requestPermissions(missing.toArray(new String[0]), PERMISSION_REQUEST_CODE);
+        }
+    }
+
+    private void maybeRequestExactAlarmPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            AlarmManager am = (AlarmManager) getSystemService(ALARM_SERVICE);
+            if (am != null && !am.canScheduleExactAlarms()) {
+                try {
+                    Intent intent = new Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM);
+                    intent.setData(Uri.parse("package:" + getPackageName()));
+                    startActivity(intent);
+                } catch (Exception ignored) {
+                }
+            }
         }
     }
 
@@ -409,13 +451,25 @@ public class MainActivity extends Activity {
         public void openOAuthUrl(String url) {
             runOnUiThread(() -> {
                 try {
-                    Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
-                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                    startActivity(intent);
+                    CustomTabsIntent.Builder builder = new CustomTabsIntent.Builder();
+                    builder.setShowTitle(true);
+                    CustomTabsIntent tabs = builder.build();
+                    tabs.launchUrl(MainActivity.this, Uri.parse(url));
                 } catch (Exception e) {
-                    Toast.makeText(MainActivity.this, "Não foi possível abrir login: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                    try {
+                        Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        startActivity(intent);
+                    } catch (Exception ex) {
+                        Toast.makeText(MainActivity.this, "Não foi possível abrir login: " + ex.getMessage(), Toast.LENGTH_LONG).show();
+                    }
                 }
             });
+        }
+
+        @JavascriptInterface
+        public void loadOAuthUrl(String url) {
+            openOAuthUrl(url);
         }
 
         @JavascriptInterface
@@ -537,52 +591,32 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface
         public void scheduleReminder(int id, String title, String body, long triggerAtMs) {
+            scheduleAlarm(id, title, body, triggerAtMs, false, 5, 3);
+        }
+
+        @JavascriptInterface
+        public void scheduleAlarm(int id, String title, String body, long triggerAtMs, boolean isAlarm, int snoozeMinutes, int maxSnooze) {
             runOnUiThread(() -> {
                 try {
-                    AlarmManager alarmManager = (AlarmManager) getSystemService(ALARM_SERVICE);
-                    if (alarmManager == null) return;
-
-                    Intent intent = new Intent(MainActivity.this, ReminderReceiver.class);
-                    intent.putExtra(ReminderReceiver.EXTRA_ID, id);
-                    intent.putExtra(ReminderReceiver.EXTRA_TITLE, title);
-                    intent.putExtra(ReminderReceiver.EXTRA_BODY, body);
-
-                    PendingIntent pending = PendingIntent.getBroadcast(
-                        MainActivity.this,
-                        id,
-                        intent,
-                        PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
-                    );
-
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                        alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMs, pending);
-                    } else {
-                        alarmManager.setExact(AlarmManager.RTC_WAKEUP, triggerAtMs, pending);
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        AlarmManager am = (AlarmManager) getSystemService(ALARM_SERVICE);
+                        if (am != null && !am.canScheduleExactAlarms()) {
+                            Intent settingsIntent = new Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM);
+                            settingsIntent.setData(Uri.parse("package:" + getPackageName()));
+                            startActivity(settingsIntent);
+                            Toast.makeText(MainActivity.this, "Permita alarmes exatos para o alarme tocar", Toast.LENGTH_LONG).show();
+                        }
                     }
+                    AlarmScheduler.schedule(MainActivity.this, id, title, body, triggerAtMs, isAlarm, snoozeMinutes, maxSnooze);
                 } catch (Exception e) {
-                    Toast.makeText(MainActivity.this, "Falha ao agendar lembrete", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(MainActivity.this, "Falha ao agendar alarme", Toast.LENGTH_SHORT).show();
                 }
             });
         }
 
         @JavascriptInterface
         public void cancelReminder(int id) {
-            runOnUiThread(() -> {
-                try {
-                    AlarmManager alarmManager = (AlarmManager) getSystemService(ALARM_SERVICE);
-                    if (alarmManager == null) return;
-
-                    Intent intent = new Intent(MainActivity.this, ReminderReceiver.class);
-                    PendingIntent pending = PendingIntent.getBroadcast(
-                        MainActivity.this,
-                        id,
-                        intent,
-                        PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
-                    );
-                    alarmManager.cancel(pending);
-                } catch (Exception ignored) {
-                }
-            });
+            runOnUiThread(() -> AlarmScheduler.cancel(MainActivity.this, id));
         }
 
         @JavascriptInterface
@@ -749,6 +783,83 @@ public class MainActivity extends Activity {
                 return json.toString();
             } catch (Exception e) {
                 return "{\"error\":\"" + e.getMessage().replace("\"", "'") + "\"}";
+            }
+        }
+
+        @JavascriptInterface
+        public String scanNearbyDevices() {
+            JSONArray devices = new JSONArray();
+            try {
+                android.bluetooth.BluetoothAdapter adapter = android.bluetooth.BluetoothAdapter.getDefaultAdapter();
+                if (adapter != null && adapter.isEnabled()) {
+                    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S
+                        || checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED) {
+                        for (android.bluetooth.BluetoothDevice dev : adapter.getBondedDevices()) {
+                            JSONObject o = new JSONObject();
+                            o.put("name", dev.getName() != null ? dev.getName() : "Bluetooth");
+                            o.put("address", dev.getAddress());
+                            o.put("type", "bluetooth");
+                            o.put("source", "bluetooth");
+                            devices.put(o);
+                        }
+                    }
+                }
+            } catch (Exception ignored) {
+            }
+            try {
+                android.net.wifi.WifiManager wm = (android.net.wifi.WifiManager)
+                    getApplicationContext().getSystemService(WIFI_SERVICE);
+                if (wm != null && wm.isWifiEnabled()) {
+                    if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+                        java.util.List<android.net.wifi.ScanResult> results = wm.getScanResults();
+                        if (results != null) {
+                            java.util.HashSet<String> seen = new java.util.HashSet<>();
+                            for (android.net.wifi.ScanResult sr : results) {
+                                if (sr.SSID == null || sr.SSID.isEmpty() || seen.contains(sr.SSID)) continue;
+                                seen.add(sr.SSID);
+                                JSONObject o = new JSONObject();
+                                o.put("name", sr.SSID);
+                                o.put("address", sr.BSSID);
+                                o.put("type", "wifi");
+                                o.put("source", "wifi");
+                                devices.put(o);
+                            }
+                        }
+                    }
+                }
+            } catch (Exception ignored) {
+            }
+            return devices.toString();
+        }
+
+        @JavascriptInterface
+        public String scanLargeDownloads() {
+            try {
+                File downloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+                JSONArray files = new JSONArray();
+                long total = 0;
+                if (downloads != null && downloads.isDirectory()) {
+                    File[] list = downloads.listFiles();
+                    if (list != null) {
+                        for (File f : list) {
+                            if (!f.isFile()) continue;
+                            long size = f.length();
+                            if (size < 5 * 1024 * 1024) continue;
+                            total += size;
+                            JSONObject o = new JSONObject();
+                            o.put("name", f.getName());
+                            o.put("bytes", size);
+                            files.put(o);
+                            if (files.length() >= 20) break;
+                        }
+                    }
+                }
+                JSONObject json = new JSONObject();
+                json.put("totalBytes", total);
+                json.put("files", files);
+                return json.toString();
+            } catch (Exception e) {
+                return "{\"totalBytes\":0,\"files\":[]}";
             }
         }
     }
