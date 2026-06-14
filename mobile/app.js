@@ -220,6 +220,43 @@ function showInAppNotification(message, type = 'info') {
 window.showToast = window.showToast || showToast;
 window.showInAppNotification = window.showInAppNotification || showInAppNotification;
 
+function closeTransientMobileSurfaces() {
+    [
+        'goal-form-modal',
+        'workout-form-modal',
+        'subject-form-modal',
+        'subtask-inline-modal',
+        'habit-detail-modal',
+        'task-detail-modal',
+        'routine-runner-modal',
+        'yt-modal',
+        'note-link-modal',
+        'color-picker-popup',
+        'slash-menu'
+    ].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = 'none';
+    });
+
+    ['create-modal', 'settings-modal'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.classList.remove('show');
+        }
+    });
+
+    const calendar = document.getElementById('nexus-calendar-modal');
+    if (calendar) {
+        calendar.classList.remove('show');
+        calendar.style.display = 'none';
+    }
+
+    const overflow = document.getElementById('rt-overflow-menu');
+    if (overflow) overflow.style.display = 'none';
+}
+
+window.closeTransientMobileSurfaces = closeTransientMobileSurfaces;
+
 let jarvisCallActive = false;
 let jarvisCallStartedAt = 0;
 let jarvisCallTimerId = null;
@@ -436,6 +473,7 @@ window.backgroundSync = backgroundSync;
 document.querySelectorAll('.nav-item').forEach(item => {
     item.addEventListener('click', (e) => {
         e.preventDefault();
+        closeTransientMobileSurfaces();
         
         document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
         item.classList.add('active');
@@ -2816,7 +2854,13 @@ function insertYouTubeEmbed() {
     if (!editor) return;
     editor.focus();
     const embedHTML = `<div class="yt-embed-block" contenteditable="false">
-        <iframe src="https://www.youtube.com/embed/${videoId}?rel=0" allowfullscreen loading="lazy"></iframe>
+        <iframe
+            src="https://www.youtube-nocookie.com/embed/${videoId}"
+            title="YouTube video player"
+            loading="lazy"
+            referrerpolicy="strict-origin-when-cross-origin"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowfullscreen></iframe>
     </div><p><br></p>`;
     document.execCommand('insertHTML', false, embedHTML);
 }
@@ -4127,7 +4171,8 @@ function centerGraph() {
 // ANALYTICS & CHARTS DASHBOARD (Chart.js)
 // ================================================================
 
-let _chartInstances = {};
+window._chartInstances = window._chartInstances || {};
+let _chartInstances = window._chartInstances;
 
 function initChartDefaults() {
     if (typeof Chart !== 'undefined') {
@@ -4145,10 +4190,32 @@ function initChartDefaults() {
 }
 
 function safeDestroyChart(id) {
-    if (_chartInstances[id]) {
-        _chartInstances[id].destroy();
-        _chartInstances[id] = null;
+    window._chartInstances = window._chartInstances || {};
+    _chartInstances = window._chartInstances;
+
+    const trackedChart = _chartInstances[id];
+    if (trackedChart && typeof trackedChart.destroy === 'function') {
+        try {
+            trackedChart.destroy();
+        } catch (error) {
+            console.warn('Chart destroy failed for tracked instance:', id, error);
+        }
     }
+
+    const canvas = document.getElementById(id);
+    const registeredChart = canvas && typeof Chart !== 'undefined' && typeof Chart.getChart === 'function'
+        ? Chart.getChart(canvas)
+        : null;
+    if (registeredChart && registeredChart !== trackedChart && typeof registeredChart.destroy === 'function') {
+        try {
+            registeredChart.destroy();
+        } catch (error) {
+            console.warn('Chart destroy failed for registry instance:', id, error);
+        }
+    }
+
+    delete window._chartInstances[id];
+    delete _chartInstances[id];
 }
 
 // ─── Finance Charts ──────────────────────────────────────────────
@@ -5676,9 +5743,13 @@ function clearLocalDB() {
         if (!editor) return;
         editor.focus();
         const embedHTML = `<div class="yt-embed-block" contenteditable="false">
-            <iframe src="https://www.youtube.com/embed/${videoId}?rel=0" referrerpolicy="strict-origin-when-cross-origin"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen loading="lazy"></iframe>
-            <a class="yt-fallback-btn" href="https://www.youtube.com/watch?v=${videoId}" target="_blank" rel="noopener">Abrir no YouTube</a>
+            <iframe
+                src="https://www.youtube-nocookie.com/embed/${videoId}"
+                title="YouTube video player"
+                loading="lazy"
+                referrerpolicy="strict-origin-when-cross-origin"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowfullscreen></iframe>
         </div><p><br></p>`;
         document.execCommand('insertHTML', false, embedHTML);
         saveNoteDebounced();

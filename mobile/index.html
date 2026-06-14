@@ -594,7 +594,7 @@
                     </div>
 
                     <!-- Legacy hidden textarea for saving compatibility -->
-                    <textarea id="note-content" style="display:none"></textarea>
+                    <textarea id="note-content" class="legacy-hidden-textarea" hidden aria-hidden="true" tabindex="-1"></textarea>
                 </div>
 
                 <!-- AI Diff Panel -->
@@ -1416,7 +1416,7 @@
     </div>
 
     <!-- Goal Form Modal -->
-    <div id="goal-form-modal" class="bottom-sheet" style="display:none">
+    <div id="goal-form-modal" class="mobile-form-sheet" style="display:none">
         <div class="bottom-sheet-content glass">
             <div class="bottom-sheet-handle"></div>
             <h3 id="goal-form-title" style="margin:0 0 16px">Nova Meta</h3>
@@ -1435,7 +1435,7 @@
     </div>
 
     <!-- Workout Form Modal -->
-    <div id="workout-form-modal" class="bottom-sheet" style="display:none">
+    <div id="workout-form-modal" class="mobile-form-sheet" style="display:none">
         <div class="bottom-sheet-content glass">
             <div class="bottom-sheet-handle"></div>
             <h3 id="workout-form-title" style="margin:0 0 16px">Treino</h3>

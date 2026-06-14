@@ -150,6 +150,10 @@ def test_mobile_studies_has_subjects_grid():
 def test_mobile_youtube_embed_has_referrer_policy():
     app_js = read_app_js()
     assert 'referrerpolicy="strict-origin-when-cross-origin"' in app_js
+    assert "yt-embed-block" in app_js
+    assert "youtube-nocookie.com/embed/" in app_js
+    assert "allowfullscreen" in app_js
+    assert "picture-in-picture" in app_js
     html = read_index_html()
     assert 'name="referrer"' in html
 
@@ -178,6 +182,41 @@ def test_supabase_migration_phase14_exists():
     assert "days_of_week" in text
     assert "cover_image" in text
     assert "notify_at" in text
+
+
+def test_mobile_chart_destroy_uses_chartjs_registry():
+    app_js = read_app_js()
+    assert "Chart.getChart" in app_js
+    assert "window._chartInstances" in app_js
+    assert "delete window._chartInstances[id]" in app_js
+
+
+def test_mobile_closes_transient_modals_when_switching_tabs():
+    app_js = read_app_js()
+    assert "closeTransientMobileSurfaces" in app_js
+    assert "goal-form-modal" in app_js
+    assert "workout-form-modal" in app_js
+    nav_block = app_js[app_js.find("document.querySelectorAll('.nav-item')"):app_js.find("// ----------------------------------------------------", app_js.find("document.querySelectorAll('.nav-item')") + 1)]
+    assert "closeTransientMobileSurfaces" in nav_block
+
+
+def test_mobile_goal_and_workout_forms_are_centered_overlays():
+    html = read_index_html()
+    assert 'id="goal-form-modal" class="mobile-form-sheet"' in html
+    assert 'id="workout-form-modal" class="mobile-form-sheet"' in html
+    css = (ROOT / "mobile" / "style.css").read_text(encoding="utf-8")
+    assert ".mobile-form-sheet" in css
+    assert "align-items: center" in css
+    assert "justify-content: center" in css
+
+
+def test_mobile_hidden_note_textarea_cannot_render_white_box():
+    html = read_index_html()
+    assert 'id="note-content" class="legacy-hidden-textarea"' in html
+    css = (ROOT / "mobile" / "style.css").read_text(encoding="utf-8")
+    assert ".legacy-hidden-textarea" in css
+    assert "display: none !important" in css
+    assert ".rich-editor" in css and "background: transparent" in css
 
 
 def test_mobile_view_routines_inside_main():

@@ -415,6 +415,28 @@ body {
     font-weight: 800;
 }
 
+.mobile-form-sheet {
+    position: fixed;
+    inset: 0;
+    z-index: 2400;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 18px;
+    background: rgba(0, 0, 0, 0.68);
+    backdrop-filter: blur(8px);
+}
+
+.mobile-form-sheet .bottom-sheet-content {
+    width: min(94vw, 430px);
+    max-height: min(82vh, 720px);
+    overflow-y: auto;
+    border-radius: 18px;
+    padding: 18px;
+    margin: 0;
+    transform: none;
+}
+
 .close-btn {
     background: none;
     border: none;
@@ -1695,12 +1717,27 @@ body.theme-amoled::before {
 /* The Rich Editor Div */
 .rich-editor {
     min-height: 300px;
+    background: transparent;
     color: white;
     font-size: 1rem;
     line-height: 1.75;
     outline: none;
     caret-color: var(--accent-purple);
     word-break: break-word;
+}
+
+.legacy-hidden-textarea {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    position: absolute !important;
+    left: -9999px !important;
+    width: 0 !important;
+    height: 0 !important;
+    pointer-events: none !important;
+    background: transparent !important;
+    color: transparent !important;
+    border: 0 !important;
 }
 .rich-editor:empty::before {
     content: attr(data-placeholder);
@@ -1806,6 +1843,41 @@ body.theme-amoled::before {
     width: 100%;
     height: 100%;
     border: none;
+}
+
+.yt-video-card {
+    width: 100%;
+    margin: 12px 0;
+    border: 1px solid rgba(255,68,68,0.35);
+    border-radius: 14px;
+    overflow: hidden;
+    background: #0b0b0f;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.45);
+}
+
+.yt-video-link {
+    display: block;
+    color: #fff;
+    text-decoration: none;
+}
+
+.yt-video-link img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    object-fit: cover;
+    background: #000;
+}
+
+.yt-video-link span {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px;
+    color: #fff;
+    background: linear-gradient(135deg, #ff4444, #b91c1c);
+    font-weight: 800;
 }
 
 /* Image block */
