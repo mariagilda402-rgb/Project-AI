@@ -12,7 +12,7 @@ from src.utils.nexus_notifier import broadcast_nexus_state
 
 def _log(ev: str, payload: dict) -> None:
     try:
-        from src.telemetry.events import log_event
+        from src.utils.telemetry import log_event
 
         log_event(ev, payload)
     except Exception:

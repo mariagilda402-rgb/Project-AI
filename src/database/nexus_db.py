@@ -205,6 +205,148 @@ class NexusDatabase:
                 )
             """)
 
+            # 11. NEW PHASE 1 TABLES
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS finance_budgets (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    category TEXT NOT NULL,
+                    monthly_limit REAL NOT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS finance_investments (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ticker TEXT NOT NULL,
+                    type TEXT NOT NULL,
+                    quantity REAL NOT NULL,
+                    avg_price REAL NOT NULL,
+                    currency TEXT DEFAULT 'BRL',
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS finance_goals (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    target_amount REAL NOT NULL,
+                    current_amount REAL DEFAULT 0,
+                    target_date DATE,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS workout_plans (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    days_per_week INTEGER,
+                    focus TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS workout_sessions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    plan_id INTEGER,
+                    date DATE DEFAULT (date('now', 'localtime')),
+                    notes TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(plan_id) REFERENCES workout_plans(id)
+                )
+            """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS workout_sets (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id INTEGER,
+                    exercise_name TEXT NOT NULL,
+                    sets INTEGER,
+                    reps INTEGER,
+                    weight REAL,
+                    rpe REAL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS cron_jobs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    schedule TEXT NOT NULL,
+                    command TEXT NOT NULL,
+                    active INTEGER DEFAULT 1,
+                    last_run DATETIME,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS calendar_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    title TEXT NOT NULL,
+                    date DATE,
+                    time TEXT,
+                    duration_minutes INTEGER,
+                    reminder_minutes INTEGER,
+                    google_event_id TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS workout_sets (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id INTEGER,
+                    exercise TEXT NOT NULL,
+                    sets INTEGER,
+                    reps INTEGER,
+                    weight_kg REAL,
+                    rpe REAL,
+                    FOREIGN KEY(session_id) REFERENCES workout_sessions(id)
+                )
+            """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS nutrition_logs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    date DATE DEFAULT (date('now', 'localtime')),
+                    meal_name TEXT,
+                    calories INTEGER,
+                    protein_g INTEGER,
+                    carbs_g INTEGER,
+                    fat_g INTEGER,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS body_measurements (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    date DATE DEFAULT (date('now', 'localtime')),
+                    weight_kg REAL,
+                    body_fat_pct REAL,
+                    notes TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS cron_jobs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    schedule TEXT NOT NULL,
+                    command TEXT NOT NULL,
+                    active INTEGER DEFAULT 1,
+                    last_run DATETIME,
+                    next_run DATETIME,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS calendar_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    title TEXT NOT NULL,
+                    event_date DATE NOT NULL,
+                    event_time TEXT,
+                    duration_minutes INTEGER,
+                    reminder_minutes INTEGER,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+
             conn.commit()
             self._migrate_schema(conn)
 

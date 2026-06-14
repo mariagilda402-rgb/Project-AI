@@ -15,7 +15,7 @@ from src.agent.prompts import (
 from src.agent.tool_guardrails import ToolCallGuardrailController
 from src.agent.tool_markers import parse_tool_markers
 from src.agent.toolsets import ToolsetSelector
-from src.agents.agent_model import AgentManager
+from src.agent.agent_model import AgentManager
 from src.memory.store import MemoryStore
 from src.memory.vector_db import SemanticMemory
 from src.services.llm import LLMService

@@ -5,6 +5,7 @@ Inclui formatação para prompt, extração inteligente e consolidação.
 """
 
 import json
+import base64
 from datetime import datetime
 from threading import Lock
 from pathlib import Path
@@ -13,46 +14,118 @@ STRUCTURED_MEMORY_PATH = Path("data/structured_memory.json")
 _lock = Lock()
 MAX_VALUE_LENGTH = 400
 
+_crypto_key = None
+_memory_cache = None
+_fernet_class = None
+
+def _get_fernet():
+    global _fernet_class
+    if not _fernet_class:
+        try:
+            from cryptography.fernet import Fernet
+            _fernet_class = Fernet
+        except ImportError:
+            return None
+    if not _crypto_key:
+        return None
+    return _fernet_class(_crypto_key)
+
+def set_memory_password(password: str) -> bool:
+    global _crypto_key, _memory_cache
+    try:
+        from cryptography.hazmat.primitives import hashes
+        from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+        kdf = PBKDF2HMAC(
+            algorithm=hashes.SHA256(),
+            length=32,
+            salt=b'nexus_salt_123',
+            iterations=100000,
+        )
+        _crypto_key = base64.urlsafe_b64encode(kdf.derive(password.encode('utf-8')))
+
+        # Test if it decrypts
+        if STRUCTURED_MEMORY_PATH.exists():
+            data = STRUCTURED_MEMORY_PATH.read_bytes()
+            if data.startswith(b'gAAAAA'):
+                fernet = _get_fernet()
+                fernet.decrypt(data) # will raise if wrong password
+
+        load_structured_memory() # populate cache
+        return True
+    except Exception as e:
+        print(f'[StructuredMemory] Wrong password or err: {e}')
+        _crypto_key = None
+        return False
 
 def _empty_memory() -> dict:
     return {
-        "identity":      {},   # nome, idade, cidade, profissão, idioma, nacionalidade
-        "preferences":   {},   # comida, cor, música, filme, jogo, esporte, hobbies
-        "projects":      {},   # projetos ativos, metas, coisas sendo construídas
-        "relationships": {},   # amigos, família, parceiro, colegas
-        "wishes":        {},   # planos futuros, coisas para comprar, viagens
-        "notes":         {},   # qualquer outra coisa que vale lembrar
+        "identity":      {},
+        "preferences":   {},
+        "projects":      {},
+        "relationships": {},
+        "wishes":        {},
+        "notes":         {},
     }
 
-
 def load_structured_memory() -> dict:
+    global _memory_cache
+    if _memory_cache is not None:
+        return _memory_cache
+
     if not STRUCTURED_MEMORY_PATH.exists():
+        _memory_cache = _empty_memory()
+        return _memory_cache
+
+    fernet = _get_fernet()
+    if not fernet:
+        print("[StructuredMemory] Locked. Waiting for password.")
         return _empty_memory()
+
     with _lock:
         try:
-            data = json.loads(STRUCTURED_MEMORY_PATH.read_text(encoding="utf-8"))
+            encrypted_data = STRUCTURED_MEMORY_PATH.read_bytes()
+            if not encrypted_data.startswith(b'gAAAAA'):
+                # Plain json migration
+                data_str = encrypted_data.decode("utf-8")
+                if data_str.strip().startswith('{'):
+                    data = json.loads(data_str)
+                    _memory_cache = data
+                    save_structured_memory(data)
+                    return data
+
+            decrypted_data = fernet.decrypt(encrypted_data)
+            data = json.loads(decrypted_data.decode("utf-8"))
             if isinstance(data, dict):
                 base = _empty_memory()
                 for key in base:
                     if key not in data:
                         data[key] = {}
+                _memory_cache = data
                 return data
             return _empty_memory()
         except Exception as e:
-            print(f"[StructuredMemory] ⚠️ Load error: {e}")
+            print(f"[StructuredMemory] Load error: {e}")
             return _empty_memory()
 
-
 def save_structured_memory(memory: dict) -> None:
+    global _memory_cache
     if not isinstance(memory, dict):
         return
-    STRUCTURED_MEMORY_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with _lock:
-        STRUCTURED_MEMORY_PATH.write_text(
-            json.dumps(memory, indent=2, ensure_ascii=False),
-            encoding="utf-8"
-        )
 
+    STRUCTURED_MEMORY_PATH.parent.mkdir(parents=True, exist_ok=True)
+    fernet = _get_fernet()
+
+    with _lock:
+        _memory_cache = memory
+        data_str = json.dumps(memory, indent=2, ensure_ascii=False)
+        if fernet:
+            encrypted_data = fernet.encrypt(data_str.encode("utf-8"))
+            STRUCTURED_MEMORY_PATH.write_bytes(encrypted_data)
+        else:
+            if STRUCTURED_MEMORY_PATH.exists():
+                print("[StructuredMemory] Warning: Cannot save encrypted data without password. File not overwritten.")
+                return
+            STRUCTURED_MEMORY_PATH.write_text(data_str, encoding="utf-8")
 
 def _truncate_value(val: str) -> str:
     if isinstance(val, str) and len(val) > MAX_VALUE_LENGTH:

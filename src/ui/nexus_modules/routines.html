@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Nexus · Rotinas</title>
+  <link rel="stylesheet" href="health.css" />
+  <link rel="stylesheet" href="nexus_theme.css?v=2" />
+</head>
+<body>
+  <header>
+    <div><h1>🔄 Rotinas</h1><span>Manhã, treino, estudo — passo a passo</span></div>
+    <div style="display:flex; gap:8px; align-items:center;">
+      <button type="button" class="btn btn-ghost" onclick="pywebview.api.jump('overview','{}')">Voltar</button>
+    </div>
+  </header>
+  <main>
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-title">Nova rotina</div>
+      <input id="routineName" placeholder="Ex: Manhã produtiva" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:rgba(0,0,0,0.25);color:var(--text);margin-bottom:8px" />
+      <textarea id="routineSteps" placeholder="Um passo por linha&#10;Acordar&#10;Hidratar&#10;Estudar 25min" style="width:100%;min-height:100px;padding:10px;border-radius:8px;border:1px solid var(--border);background:rgba(0,0,0,0.25);color:var(--text)"></textarea>
+      <button class="btn-record" onclick="createRoutine()">Criar Rotina</button>
+    </div>
+    <div id="routinesList"></div>
+  </main>
+  <script src="nexus_boot.js"></script>
+  <script>
+    async function loadRoutines() {
+      const raw = await nxBridge('nexus_command', { action: 'get_routines' });
+      const list = document.getElementById('routinesList');
+      let items = raw?.ok ? raw.data : [];
+      if (typeof items === 'string') {
+        try { items = JSON.parse(items); } catch (_) { items = []; }
+      }
+      if (!items || !items.length) {
+        list.innerHTML = '<div class="card"><div style="text-align:center;color:var(--text-dim);padding:20px">Nenhuma rotina. Crie sua rotina matinal acima.</div></div>';
+        return;
+      }
+      list.innerHTML = items.map(r => `
+        <div class="card" style="margin-bottom:12px">
+          <div class="card-title">${r.name || 'Rotina'} <button class="btn btn-ghost" style="font-size:11px" onclick="deleteRoutine(${r.id})">Excluir</button></div>
+          <small style="color:var(--text-dim)">${r.time_of_day || 'Qualquer horário'}</small>
+          <ul style="margin:12px 0 0 18px;color:var(--text)">${(r.steps || []).map(s => '<li>' + (s.title || s) + '</li>').join('')}</ul>
+        </div>
+      `).join('');
+    }
+
+    async function createRoutine() {
+      const name = document.getElementById('routineName').value.trim();
+      const stepsText = document.getElementById('routineSteps').value.trim();
+      if (!name) return;
+      const steps = stepsText.split('\n').filter(Boolean).map((t, i) => ({ order: i + 1, title: t.trim() }));
+      await nxBridge('nexus_command', { action: 'create_routine', name, time_of_day: 'morning', steps });
+      document.getElementById('routineName').value = '';
+      document.getElementById('routineSteps').value = '';
+      loadRoutines();
+      showToastBanner({ type: 'success', msg: 'Rotina criada!' });
+    }
+
+    async function deleteRoutine(id) {
+      if (!confirm('Excluir esta rotina?')) return;
+      await nxBridge('nexus_command', { action: 'delete_routine', routine_id: id });
+      loadRoutines();
+    }
+
+    loadRoutines();
+    window.addEventListener('message', (e) => { if (e.data === 'nexus-tab-focus') loadRoutines(); });
+  </script>
+</body>
+</html>

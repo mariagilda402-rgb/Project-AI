@@ -10,7 +10,7 @@ from google import genai
 from google.genai import types
 from openai import OpenAI
 from src.services.rate_limit import SlidingWindowRateLimiter
-from src.telemetry.events import log_event
+from src.utils.telemetry import log_event
 
 logger = logging.getLogger(__name__)
 

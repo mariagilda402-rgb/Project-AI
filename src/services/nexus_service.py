@@ -463,7 +463,7 @@ class NexusService:
                 self.db.add_xp(total_xp)
                 log_nexus_event(f"HABIT DONE: {target['name']} (+{total_xp} XP)")
                 try:
-                    from src.telemetry.events import log_event
+                    from src.utils.telemetry import log_event
                     log_event("nexus_habit", {"habit": target["name"], "streak": streak})
                 except Exception:
                     pass
@@ -4184,6 +4184,135 @@ class NexusService:
             logger.error(e)
             return "Falha ao aplicar preset."
 
+    # =========================================================================
+    # ADVANCED HABITS
+    # =========================================================================
+    def get_habit_stats(self, habit_id: int) -> str:
+        with self.db._get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT name, current_streak, max_streak, xp_reward FROM habits WHERE id = ?", (habit_id,))
+            row = cur.fetchone()
+            if not row:
+                return "Hábito não encontrado."
+
+            cur.execute("SELECT COUNT(*) FROM habit_logs WHERE habit_id = ?", (habit_id,))
+            total_completions = cur.fetchone()[0]
+
+            stats = {
+                "name": row[0],
+                "current_streak": row[1],
+                "max_streak": row[2],
+                "xp_reward": row[3],
+                "total_completions": total_completions
+            }
+            return json.dumps(stats, ensure_ascii=False)
+
+    def get_habit_heatmap(self, year: int) -> str:
+        with self.db._get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT date(completed_at), COUNT(*) FROM habit_logs WHERE strftime('%Y', completed_at) = ? GROUP BY date(completed_at)", (str(year),))
+            rows = cur.fetchall()
+            heatmap = {row[0]: row[1] for row in rows}
+            return json.dumps(heatmap, ensure_ascii=False)
+
+    # =========================================================================
+    # ADVANCED FINANCE & WORKOUT & CALENDAR
+    # =========================================================================
+    def add_calendar_event(self, title: str, event_date: str, time_str: str, duration: int, reminder: int) -> str:
+        with self.db._get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("INSERT INTO calendar_events (title, date, time, duration_minutes, reminder_minutes) VALUES (?, ?, ?, ?, ?)",
+                       (title, event_date, time_str, duration, reminder))
+            conn.commit()
+            return f"Evento '{title}' agendado para {event_date} às {time_str} ({duration} min)."
+
+    def get_calendar_events(self, period="today") -> str:
+        import datetime
+        today = datetime.date.today()
+        if period == "today":
+            target_dates = [today.isoformat()]
+        else:
+            # week
+            target_dates = [(today + datetime.timedelta(days=i)).isoformat() for i in range(7)]
+
+        with self.db._get_connection() as conn:
+            cur = conn.cursor()
+            placeholders = ",".join("?" for _ in target_dates)
+            cur.execute(f"SELECT id, title, date, time FROM calendar_events WHERE date IN ({placeholders}) ORDER BY date, time", target_dates)
+            events = cur.fetchall()
+
+            if not events:
+                return f"Nenhum evento para {period}."
+
+            result = []
+            for ev in events:
+                result.append({"id": ev[0], "title": ev[1], "date": ev[2], "time": ev[3]})
+            return json.dumps(result, ensure_ascii=False)
+
+    def set_finance_budget(self, category: str, limit: float) -> str:
+        with self.db._get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT id FROM finance_budgets WHERE category = ?", (category,))
+            row = cur.fetchone()
+            if row:
+                cur.execute("UPDATE finance_budgets SET monthly_limit = ? WHERE id = ?", (limit, row[0]))
+            else:
+                cur.execute("INSERT INTO finance_budgets (category, monthly_limit) VALUES (?, ?)", (category, limit))
+            conn.commit()
+            return f"Budget para '{category}' definido para R$ {limit:.2f}."
+
+    def get_finance_budget_status(self) -> str:
+        current_month = date.today().replace(day=1).isoformat()
+        with self.db._get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT category, monthly_limit FROM finance_budgets")
+            budgets = cur.fetchall()
+            if not budgets:
+                return "Nenhum budget definido."
+
+            status_list = []
+            for cat, limit in budgets:
+                cur.execute(
+                    "SELECT SUM(amount) FROM finance_transactions WHERE type='expense' AND category=? AND occurred_at >= ?",
+                    (cat, current_month)
+                )
+                spent = cur.fetchone()[0] or 0
+                status_list.append({"category": cat, "limit": limit, "spent": spent, "remaining": limit - spent})
+
+            return json.dumps(status_list, ensure_ascii=False)
+
+    def add_finance_investment(self, ticker: str, inv_type: str, quantity: float, avg_price: float) -> str:
+        with self.db._get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("INSERT INTO finance_investments (ticker, type, quantity, avg_price) VALUES (?, ?, ?, ?)",
+                       (ticker, inv_type, quantity, avg_price))
+            conn.commit()
+            return f"Investimento {quantity}x {ticker} adicionado."
+
+    def get_finance_portfolio(self) -> str:
+        with self.db._get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT ticker, type, quantity, avg_price FROM finance_investments")
+            invs = cur.fetchall()
+            portfolio = [{"ticker": r[0], "type": r[1], "quantity": r[2], "avg_price": r[3]} for r in invs]
+            return json.dumps(portfolio, ensure_ascii=False)
+
+    def log_workout(self, plan_id: int, exercises: list) -> str:
+        # exercises is a list of dicts: {"name": str, "sets": int, "reps": int, "weight": float}
+        with self.db._get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("INSERT INTO workout_sessions (plan_id, date) VALUES (?, date('now', 'localtime'))", (plan_id,))
+            session_id = cur.lastrowid
+
+            if exercises:
+                for ex in exercises:
+                    cur.execute(
+                        "INSERT INTO workout_sets (session_id, exercise_name, sets, reps, weight) VALUES (?, ?, ?, ?, ?)",
+                        (session_id, ex.get("name"), ex.get("sets", 1), ex.get("reps", 1), ex.get("weight", 0))
+                    )
+            conn.commit()
+            return f"Treino registrado com sucesso (Sessão {session_id})."
+
     def handle_structured_command(self, data: dict) -> str:
         act = (data.get("action") or "").strip().lower()
         try:
@@ -4193,6 +4322,98 @@ class NexusService:
                 except (TypeError, ValueError):
                     hold_ms = 1400
                 return self.handle_nexus_batch(data.get("steps"), hold_ms=hold_ms)
+            if act == "get_routines":
+                with self.db._get_connection() as conn:
+                    cur = conn.cursor()
+                    cur.execute("SELECT id, name, description, time_of_day FROM nexus_routines WHERE active=1")
+                    rows = cur.fetchall()
+                    res = []
+                    for r in rows:
+                        cur.execute("SELECT title, duration_min FROM nexus_routine_steps WHERE routine_id=? ORDER BY step_order", (r[0],))
+                        steps = [{"title": s[0], "duration": s[1]} for s in cur.fetchall()]
+                        res.append({"id": r[0], "name": r[1], "desc": r[2], "time": r[3], "steps": steps})
+                    return json.dumps(res, ensure_ascii=False)
+
+            if act == "create_routine":
+                name = data.get("name")
+                time_of_day = data.get("time_of_day", "Morning")
+                steps = data.get("steps", [])
+                if not name: return json.dumps({"error": "Name required"})
+                with self.db._get_connection() as conn:
+                    cur = conn.cursor()
+                    cur.execute("INSERT INTO nexus_routines (name, time_of_day) VALUES (?, ?)", (name, time_of_day))
+                    rid = cur.lastrowid
+                    for i, step in enumerate(steps):
+                        cur.execute("INSERT INTO nexus_routine_steps (routine_id, step_order, title, duration_min) VALUES (?, ?, ?, ?)",
+                            (rid, i+1, step.get("title"), step.get("duration", 5)))
+                    conn.commit()
+                return json.dumps({"ok": True})
+
+            if act == "delete_routine":
+                rid = data.get("id")
+                if rid:
+                    with self.db._get_connection() as conn:
+                        cur = conn.cursor()
+                        cur.execute("UPDATE nexus_routines SET active=0 WHERE id=?", (rid,))
+                        conn.commit()
+                    return json.dumps({"ok": True})
+
+            if act == "cron_add":
+                from src.services.cron_scheduler import NexusCronScheduler
+                scheduler = NexusCronScheduler()
+                name = data.get("name", "Unnamed Cron")
+                schedule = data.get("schedule", "0 * * * *")
+                command = data.get("command", "")
+                job_id = scheduler.add_job(name, schedule, command)
+                return f"Cron job '{name}' adicionado com sucesso (ID: {job_id})."
+            if act == "cron_remove":
+                from src.services.cron_scheduler import NexusCronScheduler
+                scheduler = NexusCronScheduler()
+                job_id = data.get("job_id")
+                if job_id:
+                    scheduler.remove_job(int(job_id))
+                    return f"Cron job {job_id} removido."
+                return "ID do job não fornecido."
+            if act == "cron_list":
+                from src.services.cron_scheduler import NexusCronScheduler
+                scheduler = NexusCronScheduler()
+                jobs = scheduler.get_jobs()
+                return json.dumps(jobs, ensure_ascii=False)
+            if act == "calendar_add":
+                return self.add_calendar_event(
+                    data.get("title", ""),
+                    data.get("date", date.today().isoformat()),
+                    data.get("time", "12:00"),
+                    int(data.get("duration", 60)),
+                    int(data.get("reminder", 15))
+                )
+            if act == "calendar_today":
+                return self.get_calendar_events("today")
+            if act == "calendar_week":
+                return self.get_calendar_events("week")
+            if act == "agent_delegate":
+                from src.agent.worker_agent import agent_delegate
+                return agent_delegate(data.get("goal", ""), data.get("context", ""))
+            if act == "agent_status":
+                from src.agent.worker_agent import agent_status
+                return agent_status(data.get("worker_id", ""))
+            if act == "habit_stats":
+                return self.get_habit_stats(int(data.get("habit_id", 0)))
+            if act == "habit_heatmap":
+                return self.get_habit_heatmap(int(data.get("year", date.today().year)))
+            if act == "finance_budget_set":
+                limit = float(str(data.get("amount", 0)).replace(",", "."))
+                return self.set_finance_budget(data.get("category", "Geral"), limit)
+            if act == "finance_budget_status":
+                return self.get_finance_budget_status()
+            if act == "finance_investment_add":
+                qty = float(str(data.get("quantity", 0)).replace(",", "."))
+                price = float(str(data.get("price", 0)).replace(",", "."))
+                return self.add_finance_investment(data.get("ticker", ""), data.get("type", "stock"), qty, price)
+            if act == "finance_investment_portfolio":
+                return self.get_finance_portfolio()
+            if act == "workout_log":
+                return self.log_workout(data.get("plan_id"), data.get("exercises"))
             if act == "finance_add":
                 t = (data.get("type") or "expense").lower()
                 raw_amt = data.get("amount")
@@ -4650,10 +4871,186 @@ class NexusService:
                     default=str,
                     ensure_ascii=False,
                 )
+            if act == "morning_briefing":
+                return self.generate_morning_briefing()
+            if act == "proactive_suggestions":
+                return self.get_proactive_suggestions()
         except Exception as e:
             logger.exception("nexus_command")
             return f"Erro Nexus: {e}"
         return f"Acao desconhecida: {act}"
+
+    # ------------------------------------------------------------------ #
+    # BRIEFING MATINAL                                                     #
+    # ------------------------------------------------------------------ #
+    def generate_morning_briefing(self) -> str:
+        """Agrega dados do dia e retorna JSON com resumo matinal estruturado."""
+        today = date.today()
+        today_str = today.isoformat()
+
+        # --- tarefas pendentes de hoje ---
+        with self.db._get_connection() as conn:
+            c = conn.cursor()
+            c.execute("""
+                SELECT title, priority, due_date FROM tasks
+                WHERE is_deleted = 0 AND status != 'done'
+                ORDER BY due_date ASC LIMIT 10
+            """)
+            tasks = [{"title": r[0], "priority": r[1], "due_date": r[2]} for r in c.fetchall()]
+
+            # --- habitos ativos e streak ---
+            c.execute("""
+                SELECT name, current_streak, target_days FROM habits
+                WHERE active = 1 AND is_deleted = 0
+                ORDER BY current_streak DESC LIMIT 10
+            """)
+            habits = [{"name": r[0], "streak": r[1], "target": r[2]} for r in c.fetchall()]
+
+            # --- eventos de hoje ---
+            c.execute("""
+                SELECT title, event_time, duration_minutes FROM calendar_events
+                WHERE event_date = ? ORDER BY event_time ASC LIMIT 10
+            """, (today_str,))
+            events = [{"title": r[0], "time": r[1], "duration": r[2]} for r in c.fetchall()]
+
+            # --- balanco financeiro do mes ---
+            month_start = today.replace(day=1).isoformat()
+            c.execute("""
+                SELECT type, SUM(amount) FROM finance_transactions
+                WHERE is_deleted = 0 AND occurred_at >= ?
+                GROUP BY type
+            """, (month_start,))
+            fin_rows = {r[0]: float(r[1]) for r in c.fetchall()}
+            income = fin_rows.get("income", 0)
+            expense = fin_rows.get("expense", 0)
+            balance = income - expense
+
+        briefing = {
+            "date": today_str,
+            "greeting": f"Bom dia! Hoje é {today.strftime('%A, %d de %B de %Y')}.",
+            "tasks_pending": tasks,
+            "habits_active": habits,
+            "events_today": events,
+            "finance_month": {
+                "income": income,
+                "expense": expense,
+                "balance": balance,
+            },
+            "summary": (
+                f"{len(tasks)} tarefas pendentes, {len(habits)} hábitos ativos, "
+                f"{len(events)} evento(s) hoje. "
+                f"Balanço do mês: R$ {balance:+.2f}."
+            ),
+        }
+        return json.dumps(briefing, ensure_ascii=False, default=str)
+
+    # ------------------------------------------------------------------ #
+    # ANÁLISE PROATIVA                                                     #
+    # ------------------------------------------------------------------ #
+    def get_proactive_suggestions(self) -> str:
+        """Analisa padrões e retorna sugestões acionáveis para o Jarvis."""
+        suggestions = []
+        today = date.today()
+        seven_days_ago = (today - timedelta(days=7)).isoformat()
+
+        with self.db._get_connection() as conn:
+            c = conn.cursor()
+
+            # 1. Hábitos com streak quebrando (último log > 1 dia atrás)
+            c.execute("""
+                SELECT h.name, h.current_streak, MAX(hl.completed_at) as last_log
+                FROM habits h
+                LEFT JOIN habit_logs hl ON hl.habit_id = h.id
+                WHERE h.active = 1 AND h.is_deleted = 0
+                GROUP BY h.id
+                HAVING last_log IS NULL OR last_log < date('now', '-1 day')
+                LIMIT 5
+            """)
+            for row in c.fetchall():
+                name, streak, last = row
+                suggestions.append({
+                    "type": "habit_at_risk",
+                    "priority": "high",
+                    "message": f"⚠️ Hábito '{name}' (streak: {streak}) não foi registrado ontem. Risco de quebra!",
+                    "action": f"Registre '{name}' hoje para manter o streak.",
+                })
+
+            # 2. Tarefas com prazo expirado
+            c.execute("""
+                SELECT title, due_date FROM tasks
+                WHERE is_deleted = 0 AND status != 'done'
+                  AND due_date < date('now') AND due_date IS NOT NULL
+                ORDER BY due_date ASC LIMIT 5
+            """)
+            for row in c.fetchall():
+                title, due = row
+                suggestions.append({
+                    "type": "overdue_task",
+                    "priority": "high",
+                    "message": f"🔴 Tarefa atrasada: '{title}' (prazo: {due}).",
+                    "action": f"Complete ou reagende '{title}'.",
+                })
+
+            # 3. Gastos acima de 80% do budget da categoria
+            c.execute("""
+                SELECT fb.category, fb.monthly_limit,
+                       COALESCE(SUM(ft.amount), 0) as spent
+                FROM finance_budgets fb
+                LEFT JOIN finance_transactions ft
+                  ON ft.category = fb.category
+                  AND ft.type = 'expense'
+                  AND ft.occurred_at >= date('now', 'start of month')
+                  AND ft.is_deleted = 0
+                GROUP BY fb.category
+                HAVING spent >= fb.monthly_limit * 0.8
+                LIMIT 5
+            """)
+            for row in c.fetchall():
+                cat, limit, spent = row
+                pct = int((spent / limit) * 100) if limit else 0
+                suggestions.append({
+                    "type": "budget_alert",
+                    "priority": "medium",
+                    "message": f"💸 Categoria '{cat}': {pct}% do budget mensal usado (R$ {spent:.2f} / R$ {limit:.2f}).",
+                    "action": "Revise seus gastos ou ajuste o orçamento.",
+                })
+
+            # 4. Sem treino nos últimos 3 dias
+            c.execute("""
+                SELECT COUNT(*) FROM fitness_workouts
+                WHERE is_deleted = 0 AND started_at >= date('now', '-3 days')
+            """)
+            recent_workouts = c.fetchone()[0]
+            if recent_workouts == 0:
+                suggestions.append({
+                    "type": "fitness_gap",
+                    "priority": "medium",
+                    "message": "🏋️ Nenhum treino registrado nos últimos 3 dias.",
+                    "action": "Que tal um treino hoje? Registre no app!",
+                })
+
+            # 5. Metas sem progresso recente
+            c.execute("""
+                SELECT name, progress_pct FROM nexus_goals
+                WHERE is_deleted = 0 AND progress_pct < 100
+                  AND updated_at < date('now', '-7 days')
+                LIMIT 3
+            """)
+            for row in c.fetchall():
+                name, pct = row
+                suggestions.append({
+                    "type": "stale_goal",
+                    "priority": "low",
+                    "message": f"🎯 Meta '{name}' está em {pct}% sem atualização há mais de 7 dias.",
+                    "action": f"Atualize o progresso da meta '{name}'.",
+                })
+
+        result = {
+            "generated_at": datetime.now().isoformat(),
+            "total": len(suggestions),
+            "suggestions": suggestions,
+        }
+        return json.dumps(result, ensure_ascii=False, default=str)
 
 
 _nexus_singleton: NexusService | None = None

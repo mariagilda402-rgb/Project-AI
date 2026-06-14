@@ -371,6 +371,19 @@ body {
   color: var(--text);
 }
 
+#nx-app-wrapper[data-motion="reduced"] *,
+#nx-app-wrapper[data-motion="reduced"] *::before,
+#nx-app-wrapper[data-motion="reduced"] *::after {
+  animation: none !important;
+  transition-duration: 80ms !important;
+}
+#nx-app-wrapper[data-motion="expressive"] .nx-chrome-inner > main > * {
+  animation: nxContentRise var(--nx-motion-normal) var(--nx-ease-out) both;
+}
+#nx-app-wrapper[data-density="compact"] .nx-chrome-inner > main {
+  padding: 12px 16px 24px !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

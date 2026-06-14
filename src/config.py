@@ -155,6 +155,7 @@ class Settings:
     stt_non_speaking_duration: float
     stt_calibration_seconds: float
     stt_min_audio_seconds: float
+    # TTS (apenas providers de API)
     tts_provider: str
     tts_provider_order: str
     murf_api_key: str
@@ -169,27 +170,6 @@ class Settings:
     assistant_base_persona: str
     llm_fallback_gemini: bool
     enable_visualizer: bool
-    kokoro_voice: str
-    kokoro_speed: float
-    xtts_model_name: str
-    xtts_speaker_wav: str
-    xtts_language: str
-    xtts_device: str
-    xtts_rvc_voice: str
-    xtts_python: str
-    xtts_persistent: bool
-    xtts_preload: bool
-    styletts2_command: str
-    styletts2_reference_wav: str
-    styletts2_python: str
-    styletts2_model_checkpoint: str
-    styletts2_config: str
-    styletts2_alpha: float
-    styletts2_beta: float
-    styletts2_diffusion_steps: int
-    styletts2_embedding_scale: float
-    styletts2_persistent: bool
-    styletts2_preload: bool
     tts_prefetch_chunks: bool
     start_vision_tracker: bool
     start_heartbeat: bool
@@ -199,12 +179,6 @@ class Settings:
     clap_min_gap: float
     clap_max_gap: float
     clap_cooldown: float
-    piper_repo_id: str
-    piper_jarvis_quality: str
-    piper_model_file: str
-    piper_config_file: str
-    piper_use_cuda: bool
-    piper_fx_preset: str
     ui_motion_level: str = "balanced"
     ui_density: str = "comfortable"
     require_critical_confirmation: bool = True
@@ -214,6 +188,7 @@ class Settings:
     vision_detail_default: bool = False
     panel_hotkey: str = "win+shift+a"
     study_professor_mode: bool = False
+    fish_audio_api_key: str = ""
 
 
 def load_settings() -> Settings:
@@ -248,7 +223,7 @@ def load_settings() -> Settings:
         ollama_base_url=(os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1") or "").strip() or "http://localhost:11434/v1",
         openai_api_key=(os.getenv("OPENAI_API_KEY", "") or "").strip(),
         tts_model=os.getenv("OPENAI_TTS_MODEL", "gpt-4o-mini-tts"),
-        tts_voice=os.getenv("OPENAI_TTS_VOICE", "alloy"),
+        tts_voice=os.getenv("OPENAI_TTS_VOICE", "Jarvis"),
         use_mic=_as_bool(os.getenv("USE_MIC"), default=True),
         require_critical_confirmation=_as_bool(
             os.getenv("REQUIRE_CRITICAL_CONFIRMATION"), default=True
@@ -276,11 +251,11 @@ def load_settings() -> Settings:
         stt_min_audio_seconds=_as_float(
             os.getenv("STT_MIN_AUDIO_SECONDS"), 0.35, minimum=0.05, maximum=3.0
         ),
-        tts_provider=(os.getenv("TTS_PROVIDER", "xtts") or "xtts").strip().lower(),
+        tts_provider=(os.getenv("TTS_PROVIDER", "edge") or "edge").strip().lower(),
         tts_provider_order=(
             os.getenv(
                 "TTS_PROVIDER_ORDER",
-                "edge,kokoro,rvc,piper,openai,elevenlabs,murf,fish,local",
+                "elevenlabs,edge,murf,openai,fish,local",
             )
             or ""
         ).strip(),
@@ -302,34 +277,6 @@ def load_settings() -> Settings:
         ),
         llm_fallback_gemini=_as_bool(os.getenv("LLM_FALLBACK_GEMINI"), default=False),
         enable_visualizer=_as_bool(os.getenv("ENABLE_VISUALIZER"), default=False),
-        kokoro_voice=(os.getenv("KOKORO_VOICE", "pf_dora") or "").strip() or "pf_dora",
-        kokoro_speed=max(0.5, min(2.0, float(os.getenv("KOKORO_SPEED", "1.0") or "1.0"))),
-        xtts_model_name=(
-            os.getenv("XTTS_MODEL_NAME", "tts_models/multilingual/multi-dataset/xtts_v2")
-            or "tts_models/multilingual/multi-dataset/xtts_v2"
-        ).strip(),
-        xtts_speaker_wav=(os.getenv("XTTS_SPEAKER_WAV", "") or "").strip(),
-        xtts_language=(os.getenv("XTTS_LANGUAGE", "pt") or "pt").strip().lower(),
-        xtts_device=(os.getenv("XTTS_DEVICE", "auto") or "auto").strip().lower(),
-        xtts_rvc_voice=(os.getenv("XTTS_RVC_VOICE", "Jarvis") or "Jarvis").strip(),
-        xtts_python=(os.getenv("XTTS_PYTHON", "") or "").strip(),
-        xtts_persistent=_as_bool(os.getenv("XTTS_PERSISTENT"), default=True),
-        xtts_preload=_as_bool(os.getenv("XTTS_PRELOAD"), default=True),
-        styletts2_command=(os.getenv("STYLETTS2_COMMAND", "") or "").strip(),
-        styletts2_reference_wav=(os.getenv("STYLETTS2_REFERENCE_WAV", "") or "").strip(),
-        styletts2_python=(os.getenv("STYLETTS2_PYTHON", "") or "").strip(),
-        styletts2_model_checkpoint=(os.getenv("STYLETTS2_MODEL_CHECKPOINT", "") or "").strip(),
-        styletts2_config=(os.getenv("STYLETTS2_CONFIG", "") or "").strip(),
-        styletts2_alpha=max(0.0, min(1.0, float(os.getenv("STYLETTS2_ALPHA", "0.3") or "0.3"))),
-        styletts2_beta=max(0.0, min(1.0, float(os.getenv("STYLETTS2_BETA", "0.7") or "0.7"))),
-        styletts2_diffusion_steps=max(
-            1, min(20, int(os.getenv("STYLETTS2_DIFFUSION_STEPS", "3") or "3"))
-        ),
-        styletts2_embedding_scale=max(
-            0.1, min(10.0, float(os.getenv("STYLETTS2_EMBEDDING_SCALE", "1.0") or "1.0"))
-        ),
-        styletts2_persistent=_as_bool(os.getenv("STYLETTS2_PERSISTENT"), default=True),
-        styletts2_preload=_as_bool(os.getenv("STYLETTS2_PRELOAD"), default=False),
         tts_prefetch_chunks=_as_bool(os.getenv("TTS_PREFETCH_CHUNKS"), default=True),
         start_vision_tracker=_as_bool(os.getenv("START_VISION_TRACKER"), default=False),
         start_heartbeat=_as_bool(os.getenv("START_HEARTBEAT"), default=True),
@@ -339,12 +286,6 @@ def load_settings() -> Settings:
         clap_min_gap=_as_float(os.getenv("CLAP_MIN_GAP"), 0.1, minimum=0.02, maximum=1.0),
         clap_max_gap=_as_float(os.getenv("CLAP_MAX_GAP"), 1.2, minimum=0.2, maximum=4.0),
         clap_cooldown=_as_float(os.getenv("CLAP_COOLDOWN"), 3.0, minimum=0.5, maximum=20.0),
-        piper_repo_id=(os.getenv("PIPER_REPO_ID", "rhasspy/piper-voices") or "").strip() or "rhasspy/piper-voices",
-        piper_jarvis_quality=(os.getenv("PIPER_JARVIS_QUALITY", "medium") or "medium").strip().lower(),
-        piper_model_file=(os.getenv("PIPER_MODEL_FILE", "") or "").strip(),
-        piper_config_file=(os.getenv("PIPER_CONFIG_FILE", "") or "").strip(),
-        piper_use_cuda=_as_bool(os.getenv("PIPER_USE_CUDA"), default=False),
-        piper_fx_preset=(os.getenv("PIPER_FX_PRESET", "none") or "none").strip().lower(),
         ui_motion_level=_normalize_choice(
             os.getenv("UI_MOTION_LEVEL"),
             {"reduced", "balanced", "expressive"},
@@ -360,4 +301,5 @@ def load_settings() -> Settings:
         vision_detail_default=_as_bool(os.getenv("VISION_DETAIL_DEFAULT"), default=False),
         panel_hotkey=(os.getenv("PANEL_HOTKEY", "win+shift+a") or "win+shift+a").strip().lower(),
         study_professor_mode=_as_bool(os.getenv("STUDY_PROFESSOR_MODE"), default=False),
+        fish_audio_api_key=(os.getenv("FISH_AUDIO_API_KEY", "") or "").strip(),
     )

@@ -137,7 +137,7 @@ if str(root_dir) not in sys.path:
     sys.path.append(str(root_dir))
 from src.agent.orchestrator import AgentOrchestrator
 from src.config import load_settings
-from src.integrations.super_productivity import SuperProductivityConnector
+from src.services.super_productivity import SuperProductivityConnector
 from src.memory.store import MemoryStore
 from src.services.llm import LLMService
 from src.services.stt import STTService
@@ -310,7 +310,7 @@ if str(root_dir) not in sys.path:
     sys.path.append(str(root_dir))
 from src.agent.orchestrator import AgentOrchestrator
 from src.config import load_settings
-from src.integrations.super_productivity import SuperProductivityConnector
+from src.services.super_productivity import SuperProductivityConnector
 from src.memory.store import MemoryStore
 from src.services.llm import LLMService
 from src.services.stt import STTService
@@ -357,6 +357,8 @@ from src.skills.system_exit import SystemExitTool
 from src.skills.change_voice import ChangeVoiceSkill
 from src.tools.skill_manager import load_dynamic_skills
 from src.runtime_status import RuntimeStatus
+from src.services.mcp_client import MCPServerManager
+from src.tools.mcp_tool import MCPTool
 
 # Globais para acesso dos tools (ex: settings_manager)
 vision_tracker = None
@@ -405,131 +407,15 @@ def main() -> None:
         murf_voice_id=settings.murf_voice_id,
         murf_api_url=settings.murf_api_url,
         allow_system_player_on_failure=settings.tts_allow_system_player,
-        elevenlabs_api_keys=settings.elevenlabs_api_keys,
-        piper_repo_id=settings.piper_repo_id,
-        piper_jarvis_quality=settings.piper_jarvis_quality,
-        piper_model_file=settings.piper_model_file,
-        piper_config_file=settings.piper_config_file,
-        piper_use_cuda=settings.piper_use_cuda,
-        piper_fx_preset=settings.piper_fx_preset,
-        kokoro_voice="pf_dora",
-        xtts_model_name=settings.xtts_model_name,
-        xtts_speaker_wav=settings.xtts_speaker_wav,
-        xtts_language=settings.xtts_language,
-        xtts_device=settings.xtts_device,
-        xtts_rvc_voice=settings.xtts_rvc_voice,
-        xtts_python=settings.xtts_python,
-        xtts_persistent=settings.xtts_persistent,
-        styletts2_command=settings.styletts2_command,
-        styletts2_reference_wav=settings.styletts2_reference_wav,
-        styletts2_python=settings.styletts2_python,
-        styletts2_model_checkpoint=settings.styletts2_model_checkpoint,
-        styletts2_config=settings.styletts2_config,
-        styletts2_alpha=settings.styletts2_alpha,
-        styletts2_beta=settings.styletts2_beta,
-        styletts2_diffusion_steps=settings.styletts2_diffusion_steps,
-        styletts2_embedding_scale=settings.styletts2_embedding_scale,
-        styletts2_persistent=settings.styletts2_persistent,
-        styletts2_preload=settings.styletts2_preload,
+        max_chunk_chars=settings.tts_max_chunk_chars,
+        pause_between_chunks_sec=settings.tts_pause_between_chunks_sec,
+        edge_tts_rate=settings.edge_tts_rate,
+        edge_tts_volume=settings.edge_tts_volume,
         tts_prefetch_chunks=settings.tts_prefetch_chunks,
-        fish_audio_api_key=__import__("os").environ.get("FISH_AUDIO_API_KEY", ""),
+        elevenlabs_api_keys=settings.elevenlabs_api_keys,
+        fish_audio_api_key=settings.fish_audio_api_key,
     )
     runtime_status.mark_startup_phase("tts_ready", settings.tts_provider)
-    if settings.xtts_preload:
-        tts.warmup_xtts_async()
-        runtime_status.mark_startup_phase("xtts_preload_scheduled")
-    if settings.styletts2_preload:
-        tts.warmup_styletts2_async()
-        runtime_status.mark_startup_phase("styletts2_preload_scheduled")
-    llm = LLMService(
-        gemini_api_key=settings.gemini_api_key,
-        gemini_model=settings.gemini_model,
-        openrouter_api_key=settings.openrouter_api_key,
-        openrouter_model=settings.openrouter_model,
-        nvidia_api_key=settings.nvidia_api_key,
-        nvidia_model=settings.nvidia_model,
-        groq_api_key=settings.groq_api_key,
-        groq_model=settings.groq_model,
-        ollama_model=settings.ollama_model,
-        ollama_base_url=settings.ollama_base_url,
-        primary_llm_provider=settings.llm_provider,
-        fallback_gemini=settings.llm_fallback_gemini,
-        runtime_status=runtime_status,
-    )
-    runtime_status.mark_startup_phase("llm_ready", settings.llm_provider)
-    # Set global reference for tools that need LLM access
-    import src.services.llm as _llm_module
-    _llm_module._global_llm_instance = llm
-
-    vision = VisionService(
-        vision_provider=settings.vision_provider,
-        gemini_api_key=settings.gemini_api_key,
-        gemini_model=settings.gemini_model,
-        nvidia_api_key=settings.nvidia_api_key,
-        nvidia_model=settings.nvidia_vision_model or settings.nvidia_model,
-        groq_api_key=settings.groq_api_key,
-        groq_vision_model=settings.groq_vision_model,
-    )
-    memory = MemoryStore()
-    runtime_status.mark_startup_phase("vision_memory_ready", settings.vision_provider)
-
-    confirm_bus = CriticalConfirmationBus()
-    confirm_bus.enabled = load_critical_confirm_enabled(
-        settings.require_critical_confirmation
-    )
-    tools = ToolRegistry(
-        tools=[
-            DesktopAutomationTool(),
-            ProductivityTool(SuperProductivityConnector()),
-            FinanceTool(),
-            WebSearchTool(),
-            ClipboardTool(),
-            TimerTool(),
-            SystemInfoTool(),
-
-            SpotifyTool(),
-            AppManagerTool(),
-            FileManagerTool(),
-            MediaControlTool(),
-            MemoryManagerTool(),
-            WhatsAppTool(),
-            VisualizerControlTool(),
-            GenerateImageTool(),
-            ShowImageTool(),
-            ListImagesTool(),
-            HackerModeTool(),
-            NexusTool(),
-            HabitTrackerTool(),
-            HealthJournalTool(),
-            UserManagerTool(),
-            CodeHelperTool(),
-            BrowserAgentTool(),
-            PersonaManagerTool(),
-            DevAgentTool(),
-            CmdControlTool(),
-            SettingsManagerTool(),
-            FileProcessorTool(),
-            SystemControlTool(),
-            ToggleLiveTool(),
-            NewsTool(),
-            WorkflowTool(),
-            HealthJournalTool(),
-            ChangeVoiceSkill(tts_instance=tts),
-            SystemExitTool()
-        ] + load_dynamic_skills(),
-        require_critical_confirmation=settings.require_critical_confirmation,
-        confirm_bus=confirm_bus,
-    )
-    runtime_status.mark_startup_phase("tools_ready", str(len(tools.tools)))
-    agent = AgentOrchestrator(
-        llm=llm, vision=vision, tools=tools, memory=memory,
-        use_function_calling=settings.gemini_use_function_calling,
-        assistant_base_persona=settings.assistant_base_persona,
-        confirm_bus=confirm_bus,
-    )
-    runtime_status.mark_startup_phase("agent_ready")
-
-    # Inicia rastreador de gestos/visao apenas quando configurado.
     if settings.start_vision_tracker or settings.use_face_auth:
         from src.services.vision_tracker import VisionTracker
 
@@ -549,6 +435,12 @@ def main() -> None:
         heartbeat = HeartbeatService(interval_minutes=30, llm_service=llm)
         heartbeat.start()
         runtime_status.mark_startup_phase("heartbeat_started")
+
+    # Inicia Cron Scheduler
+    from src.services.cron_scheduler import NexusCronScheduler
+    cron_scheduler = NexusCronScheduler()
+    cron_scheduler.start()
+    runtime_status.mark_startup_phase("cron_scheduler_started")
 
     # Inicia agente proativo somente quando o usuario escolher no painel.
     proactive = None

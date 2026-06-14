@@ -252,11 +252,19 @@ def build_agent_tool(
                     "finance_add (type expense|income, amount, category, description, occurred_at opcional ISO date, notes, is_debt), "
                     "finance_list (date_from, date_to opcional), finance_delete (transaction_id ou description/category/occurred_at/type/amount), "
                     "finance_update (transaction_id ou target_description/target_date; new_amount/new_category/new_description/new_notes/new_is_debt), "
+                    "finance_budget_set (category, amount), finance_budget_status, "
+                    "finance_investment_add (ticker, type, quantity, price), finance_investment_portfolio, "
+                    "workout_log (plan_id, exercises: json list com objects {name, sets, reps, weight}), "
+                    "calendar_add (title, date, time, duration, reminder), calendar_today, calendar_week, "
                     "habit_complete (habit_name), habit_add (name, description, xp_reward, days_of_week opcional lista 0-6), "
+                    "habit_stats (habit_id), habit_heatmap (year), "
                     "task_add (title, due_date opcional ISO), task_complete (task_id), task_delete (task_id), task_list (due_date, include_done), "
                     "goal_add (name, target_date), goal_update (name, progress), reward_redeem (reward_name), reward_status, "
                     "preset_apply_json (habits: lista de objetos), preset_from_goals (goals ou objectives), "
+                    "study_plan_create (subject, goal, hours_per_week, target_date), study_pomodoro_done (minutes), study_mindmap_generate (note_id), "
+                    "agent_delegate (goal, context), agent_status (worker_id), "
                     "preset_save (name), preset_apply (name), presets_list, "
+                    "cron_add (name, schedule, command), cron_remove (job_id), cron_list, "
                     "theme_list, theme_apply (module, preset_id), theme_generate (module, prompt, name opcional), "
                     "news_briefing (query opcional, limit), news_history (limit), "
                     "news_save_note (item ou briefing + item_index, subject opcional), "
@@ -273,7 +281,9 @@ def build_agent_tool(
                     "note_attach_media (note_id, media_url, caption opcional), "
                     "flashcards_generate (note_id ou subject, max_cards), flashcard_review (card_id, quality 0-5), "
                     "flashcards_due (limit), quiz_random (n, area opcional), quiz_attempt_review (attempt_id), "
-                    "quiz_flashcards_generate (attempt_id, only_wrong opcional), study_recommendations."
+                    "quiz_flashcards_generate (attempt_id, only_wrong opcional), study_recommendations, "
+                    "morning_briefing (sem parâmetros — retorna JSON com tarefas/hábitos/eventos/finanças do dia), "
+                    "proactive_suggestions (sem parâmetros — retorna alertas e sugestões baseadas em padrões)."
                 ),
                 parameters=types.Schema(
                     type=types.Type.OBJECT,
@@ -300,10 +310,28 @@ def build_agent_tool(
                         "new_description": _str_prop("Nova descricao no finance_update."),
                         "new_notes": _str_prop("Novas observacoes no finance_update."),
                         "new_is_debt": _str_prop("0 ou 1 para atualizar divida no finance_update."),
+                        "ticker": _str_prop("Ticker do ativo (ex: AAPL, BTC)."),
+                        "quantity": _str_prop("Quantidade do ativo (float)."),
+                        "price": _str_prop("Preço médio do ativo (float)."),
+                        "plan_id": _str_prop("ID do plano de treino."),
+                        "exercises": _str_prop("JSON list para workout_log."),
+                        "date": _str_prop("Data para o calendario (YYYY-MM-DD)."),
+                        "time": _str_prop("Hora do evento (HH:MM)."),
+                        "duration": _str_prop("Duração do evento em minutos."),
+                        "reminder": _str_prop("Lembrete em minutos antes do evento."),
                         "reward_name": _str_prop("Nome da recompensa para reward_redeem."),
                         "progress": _str_prop("Progresso 0-100 para goal_update."),
                         "habit_name": _str_prop("Nome do habito para completar."),
-                        "name": _str_prop("Nome (habito)."),
+                        "habit_id": _str_prop("ID do habito."),
+                        "year": _str_prop("Ano para o heatmap (ex: 2026)."),
+                        "name": _str_prop("Nome (habito, cron job)."),
+                        "schedule": _str_prop("Cron expression (ex: '0 8 * * *')."),
+                        "command": _str_prop("Comando a executar no cron (string de intenção)."),
+                        "goal": _str_prop("Objetivo do estudo, preset ou sub-agente (agent_delegate)."),
+                        "context": _str_prop("Contexto para o sub-agente (agent_delegate)."),
+                        "worker_id": _str_prop("ID do worker (agent_status)."),
+                        "hours_per_week": _str_prop("Horas por semana."),
+                        "job_id": _str_prop("ID numerico do cron job."),
                         "xp_reward": _str_prop("XP do habito."),
                         "title": _str_prop("Titulo tarefa ou nota."),
                         "due_date": _str_prop("Data ISO tarefa."),

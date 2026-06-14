@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from src.integrations.super_productivity import SuperProductivityConnector
+from src.services.super_productivity import SuperProductivityConnector
 
 from .base import ToolResult
 

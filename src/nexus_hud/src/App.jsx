@@ -4,6 +4,7 @@ import { Wallet, Trophy, BookOpen, Activity, BarChart3, Clock } from 'lucide-rea
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import MindPalaceEditor from './components/MindPalaceEditor';
 import FinanceTab from './components/FinanceTab';
+import MemoryTab from './components/MemoryTab';
 
 /** Tailwind JIT só vê classes literais no código — nunca use `text-${x}`. */
 const THEME_UI = {
@@ -249,7 +250,7 @@ const NexusHUD = () => {
                 <div className="flex items-center gap-2 mt-2">
                     <div className={`h-2 w-2 animate-pulse rounded-full ${currentTheme.pulseDot}`} />
                     <div className="ml-6 flex gap-4">
-                        {['dashboard', 'notes', 'board', 'finance', 'study', 'progress'].map(tab => (
+                        {['dashboard', 'notes', 'memory', 'board', 'finance', 'study', 'progress'].map(tab => (
                             <button
                                 key={tab}
                                 type="button"
@@ -411,6 +412,12 @@ const NexusHUD = () => {
               {state.activeTab === 'notes' && (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="h-full min-h-0">
                     <MindPalaceEditor />
+                </motion.div>
+              )}
+
+              {state.activeTab === 'memory' && (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="h-full min-h-0">
+                    <MemoryTab theme={currentTheme} />
                 </motion.div>
               )}
 

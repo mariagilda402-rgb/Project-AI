@@ -440,6 +440,8 @@
     <div class="sidebar">
       <div class="logo">AI Manager</div>
       <button class="nav-btn active" data-tab="home">🏠 Início</button>
+      <button class="nav-btn" data-tab="dashboard">📊 Dashboard Vida</button>
+      <button class="nav-btn" data-tab="routines">🔄 Minhas Rotinas</button>
       <button class="nav-btn" data-tab="agents">🤖 Meus Agentes</button>
       <button class="nav-btn" data-tab="chat">💬 Histórico de Chat</button>
       <button class="nav-btn" data-tab="logs">📋 Logs do Sistema</button>
@@ -447,12 +449,13 @@
       <button class="nav-btn" data-tab="reference">📖 Referência</button>
       <button class="nav-btn" data-tab="diagnostics">🩺 Diagnóstico</button>
       <button class="nav-btn" data-tab="config">⚙️ Configurações</button>
+      <button class="nav-btn" data-tab="memory" style="color: var(--accent);">🧠 Memória Jarvis</button>
       <div style="flex:1"></div>
       <button class="nav-btn" data-tab="trash" style="color: var(--danger)">🗑️ Lixeira</button>
     </div>
 
     <div class="content-area">
-      
+
       <!-- Header with Active Indicator and Close Button -->
       <div style="position:absolute; top:0; left:0; right:0; height:60px; background:linear-gradient(180deg, rgba(139,92,246,0.1) 0%, transparent 100%); border-bottom:1px solid rgba(139,92,246,0.2); display:flex; align-items:center; justify-content:space-between; padding:0 25px; z-index:998;">
         <div style="display:flex; align-items:center; gap:8px; color:var(--accent); font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:1px;">
@@ -465,8 +468,98 @@
       <!-- Spacer for content area -->
       <div style="height:60px;"></div>
 
-      <!-- INICIO -->
-    <div id="page-home" class="page active">
+      <div class="main-content">
+
+        <!-- ================= PAGE: DASHBOARD VIDA ================= -->
+        <div id="page-dashboard" class="page">
+          <div class="header">
+            <div>
+              <h1 class="h1">Dashboard de Vida (Nexus)</h1>
+              <p class="subtitle">Visão unificada de Hábitos, Finanças, Tarefas, Metas e Alertas Proativos</p>
+            </div>
+            <div style="display:flex; gap:8px;">
+              <button class="btn btn-secondary" onclick="loadMorningBriefing()">🌅 Briefing</button>
+              <button class="btn btn-secondary" onclick="loadProactiveSuggestions()">💡 Sugestões</button>
+              <button class="btn btn-primary" onclick="refreshDashboardVida()">↻ Atualizar Tudo</button>
+            </div>
+          </div>
+
+          <!-- Briefing Matinal -->
+          <div id="briefing-card" class="glass-panel" style="padding: 20px; margin-top: 16px; display: none; border-left: 3px solid var(--accent);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 14px;">
+              <h2 style="font-size: 1.05rem; margin:0; color: var(--accent);"><span style="margin-right:8px;">🌅</span>Briefing Matinal</h2>
+              <button onclick="document.getElementById('briefing-card').style.display='none'" style="background:none; border:none; color:var(--text-dim); cursor:pointer; font-size:1.2rem;">×</button>
+            </div>
+            <div id="briefing-summary" style="font-size:13px; color:var(--text-dim); line-height:1.7;"></div>
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-top: 14px;">
+              <div style="background:var(--surface); border-radius:8px; padding:12px; border:1px solid var(--border);">
+                <div style="font-size:10px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.5px; margin-bottom:6px;">Tarefas Pendentes</div>
+                <div id="briefing-tasks" style="font-size:12px; color:var(--text);"></div>
+              </div>
+              <div style="background:var(--surface); border-radius:8px; padding:12px; border:1px solid var(--border);">
+                <div style="font-size:10px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.5px; margin-bottom:6px;">Eventos Hoje</div>
+                <div id="briefing-events" style="font-size:12px; color:var(--text);"></div>
+              </div>
+              <div style="background:var(--surface); border-radius:8px; padding:12px; border:1px solid var(--border);">
+                <div style="font-size:10px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.5px; margin-bottom:6px;">Finanças do Mês</div>
+                <div id="briefing-finance" style="font-size:12px;"></div>
+              </div>
+              <div style="background:var(--surface); border-radius:8px; padding:12px; border:1px solid var(--border);">
+                <div style="font-size:10px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.5px; margin-bottom:6px;">Hábitos Ativos</div>
+                <div id="briefing-habits" style="font-size:12px; color:var(--text);"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Sugestões Proativas -->
+          <div id="proactive-card" class="glass-panel" style="padding: 20px; margin-top: 16px; display: none; border-left: 3px solid var(--warning);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 14px;">
+              <h2 style="font-size: 1.05rem; margin:0; color: var(--warning);"><span style="margin-right:8px;">💡</span>Sugestões Proativas</h2>
+              <button onclick="document.getElementById('proactive-card').style.display='none'" style="background:none; border:none; color:var(--text-dim); cursor:pointer; font-size:1.2rem;">×</button>
+            </div>
+            <div id="proactive-list" style="display:flex; flex-direction:column; gap:10px;"></div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-top: 20px;">
+            <div class="glass-panel" style="padding: 20px;">
+              <h2 style="font-size: 1.1rem; margin-bottom: 15px; color: var(--accent);">📊 Finanças</h2>
+              <div id="dashboard-finance-content">
+                <p class="subtitle">Carregando...</p>
+              </div>
+            </div>
+
+            <div class="glass-panel" style="padding: 20px;">
+              <h2 style="font-size: 1.1rem; margin-bottom: 15px; color: var(--success);">🌱 Hábitos &amp; Saúde</h2>
+              <div id="dashboard-habits-content">
+                <p class="subtitle">Carregando...</p>
+              </div>
+            </div>
+
+            <div class="glass-panel" style="padding: 20px;">
+              <h2 style="font-size: 1.1rem; margin-bottom: 15px; color: var(--warning);">📅 Tarefas &amp; Calendário</h2>
+              <div id="dashboard-tasks-content">
+                <p class="subtitle">Carregando...</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ================= PAGE: ROTINAS ================= -->
+        <div id="page-routines" class="page">
+          <div class="header">
+            <div>
+              <h1 class="h1">Minhas Rotinas</h1>
+              <p class="subtitle">Gerencie suas rotinas diárias e encadeamento de tarefas</p>
+            </div>
+            <button class="btn btn-primary" onclick="promptCreateRoutine()">+ Nova Rotina</button>
+          </div>
+          <div id="routines-list" style="display: flex; flex-direction: column; gap: 16px; margin-top: 20px;">
+            <p class="subtitle">Carregando rotinas...</p>
+          </div>
+        </div>
+
+        <!-- ================= PAGE: HOME ================= -->
+        <div id="page-home" class="page active">
       <h1>Início</h1>
       <div class="home-layout">
         <div class="home-main">
@@ -616,11 +709,7 @@
           <div class="form-group">
             <label>Provedor TTS</label>
             <select id="fTtsProvider">
-              <option value="styletts2">StyleTTS2 (Clone local)</option>
-              <option value="xtts">XTTS v2 (Clone local)</option>
               <option value="edge">Edge TTS (Nuvem)</option>
-              <option value="piper">Piper JARVIS (PC local)</option>
-              <option value="kokoro">Kokoro (Local)</option>
               <option value="rvc">RVC + Edge base</option>
               <option value="fish">Fish Audio (API)</option>
             </select>
@@ -708,6 +797,37 @@
     </div>
   </div>
 
+  <!-- MEMORIA JARVIS -->
+  <div id="page-memory" class="page">
+    <h1>🧠 Memória do Jarvis</h1>
+    <p style="color:var(--text-dim); font-size:13px; margin-bottom:20px;">Visualize, edite e exclua os dados estruturados que o Jarvis sabe sobre você.</p>
+
+    <!-- Lock Screen -->
+    <div id="memory-lock" style="display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:360px; gap:16px;">
+      <div style="font-size:4rem;">🔒</div>
+      <h2 style="color:var(--accent); margin:0;">Acesso Restrito</h2>
+      <p style="color:var(--text-dim); text-align:center;">Insira sua senha para gerenciar a memória do Jarvis</p>
+      <div id="memory-setup-note" style="display:none; color:var(--warning); font-size:12px; text-align:center; max-width:300px;">Primeira vez: defina uma senha para proteger este módulo</div>
+      <input type="password" id="memory-pwd-input" placeholder="Senha..." style="max-width:280px; text-align:center;" onkeydown="if(event.key==='Enter') unlockMemory()">
+      <div style="display:flex; gap:10px;">
+        <button class="btn-primary" onclick="unlockMemory()">🔓 Desbloquear</button>
+      </div>
+    </div>
+
+    <!-- Memory Content (hidden until unlocked) -->
+    <div id="memory-content" style="display:none;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+        <h2 style="margin:0; color:var(--accent);">Dados na Memória</h2>
+        <div style="display:flex; gap:8px;">
+          <button class="btn-secondary" onclick="refreshMemory()">↻ Atualizar</button>
+          <button class="btn-secondary" onclick="lockMemory()">🔒 Bloquear</button>
+        </div>
+      </div>
+      <div id="memory-categories" style="display:flex; flex-direction:column; gap:16px;"></div>
+      <p id="memory-empty" style="display:none; color:var(--text-dim); font-style:italic;">Nenhuma memória estruturada encontrada.</p>
+    </div>
+  </div>
+
   <!-- REFERENCIA -->
   <div id="page-reference" class="page">
     <h1>Referência de ferramentas</h1>
@@ -782,6 +902,12 @@
           <option value="comfortable">Confortavel</option>
           <option value="compact">Compacta</option>
         </select>
+      </div>
+      <div class="form-group">
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+          <input type="checkbox" id="cfgStudyProfessorMode" style="width:auto; height:16px;">
+          Modo Professor ENEM (Jarvis mais didático nos estudos)
+        </label>
       </div>
       <button class="btn-secondary" id="btnSaveUiConfig" style="width:100%;">Aplicar aparencia</button>
       <div class="form-group" style="margin-top: 15px; display:flex; align-items:center; gap:10px;">
@@ -874,11 +1000,9 @@
         <label style="display:block; margin-top:10px;">Janela entre palmas (s)</label>
         <input type="number" id="cfgClapMaxGap" min="0.2" max="4" step="0.1" value="1.2" title="Janela entre palmas">
         <label style="display:flex; align-items:center; gap:8px; cursor:pointer; margin-top:10px;">
-          <input type="checkbox" id="cfgXttsPreload" style="width:auto; height:16px;">
           Pre-carregar XTTS ao iniciar
         </label>
         <label style="display:flex; align-items:center; gap:8px; cursor:pointer; margin-top:10px;">
-          <input type="checkbox" id="cfgStyleTts2PreloadStartup" style="width:auto; height:16px;">
           Pre-carregar StyleTTS2 ao iniciar
         </label>
         <button class="btn-secondary" id="btnSaveStartupConfig" style="width:100%; margin-top:10px;">Salvar inicializacao</button>
@@ -938,12 +1062,8 @@
       <div class="form-group">
         <label>Provedor TTS</label>
         <select id="cfgTts">
-          <option value="styletts2">StyleTTS2 (Clone local)</option>
           <option value="edge">Edge TTS (API rápida)</option>
-          <option value="kokoro">Kokoro (local)</option>
           <option value="rvc">RVC + Edge base</option>
-          <option value="piper">Piper (local)</option>
-          <option value="xtts">XTTS v2 (clone local)</option>
           <option value="openai">OpenAI TTS</option>
           <option value="elevenlabs">ElevenLabs</option>
           <option value="murf">Murf</option>
@@ -957,19 +1077,13 @@
       </div>
       <div class="form-group">
         <label>Python StyleTTS2 isolado</label>
-        <input type="text" id="cfgStyleTts2Python" placeholder="C:/.../.venv_styletts2/Scripts/python.exe">
       </div>
       <div class="form-group">
         <label>ReferÃªncia StyleTTS2</label>
-        <input type="text" id="cfgStyleTts2Reference" placeholder="data/voice_samples/jarvis_xtts_fast/jarvis_fast_ref_01.wav">
       </div>
       <div class="form-group">
-        <label>Diffusion steps: <span class="slider-val" id="cfgStyleTts2DiffusionVal">3</span></label>
-        <input type="range" id="cfgStyleTts2DiffusionSteps" min="1" max="10" step="1" value="3">
       </div>
       <div class="form-group">
-        <label>EmoÃ§Ã£o / embedding scale: <span class="slider-val" id="cfgStyleTts2EmbeddingVal">1.0</span></label>
-        <input type="range" id="cfgStyleTts2EmbeddingScale" min="0.5" max="3.0" step="0.1" value="1.0">
       </div>
       <div class="form-group">
         <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
@@ -1018,6 +1132,168 @@
   </div>
 
   <script>
+    // DASHBOARD VIDA
+    async function refreshDashboardVida() {
+      try {
+        const financeEl = document.getElementById('dashboard-finance-content');
+        const habitsEl = document.getElementById('dashboard-habits-content');
+        const tasksEl = document.getElementById('dashboard-tasks-content');
+
+        financeEl.innerHTML = "<p>Atualizando...</p>";
+        habitsEl.innerHTML = "<p>Atualizando...</p>";
+        tasksEl.innerHTML = "<p>Atualizando...</p>";
+
+        // Fetch via pywebview
+        const data = await window.pywebview.api.call_method('nexus_get_dashboard_data');
+        if (!data) return;
+
+        financeEl.innerHTML = `<p>Transações hoje: ${data.finance?.today || 0}</p>
+                               <p>Total do Mês: R$ ${data.finance?.month_total || '0.00'}</p>`;
+        habitsEl.innerHTML = `<p>Hábitos Concluídos: ${data.habits?.completed || 0}/${data.habits?.total || 0}</p>
+                              <p>Nível Atual: ${data.user?.level || 1} (${data.user?.xp || 0} XP)</p>`;
+        tasksEl.innerHTML = `<p>Eventos hoje: ${data.calendar?.events_today || 0}</p>`;
+      } catch (e) {
+        console.error("Erro ao carregar Dashboard de Vida", e);
+      }
+    }
+
+    async function loadMorningBriefing() {
+      const card = document.getElementById('briefing-card');
+      card.style.display = 'block';
+      document.getElementById('briefing-summary').textContent = 'Gerando briefing...';
+      try {
+        const raw = await window.pywebview.api.nexus_command(JSON.stringify({ action: 'morning_briefing' }));
+        const d = JSON.parse(raw);
+        document.getElementById('briefing-summary').textContent = d.summary || '';
+
+        const tasks = d.tasks_pending || [];
+        document.getElementById('briefing-tasks').innerHTML = tasks.length
+          ? tasks.slice(0,4).map(t => `<div style="margin-bottom:4px;">• ${t.title}</div>`).join('')
+          : '<span style="color:var(--success)">✅ Nenhuma tarefa pendente</span>';
+
+        const events = d.events_today || [];
+        document.getElementById('briefing-events').innerHTML = events.length
+          ? events.map(e => `<div style="margin-bottom:4px;">🗓 ${e.time ? e.time.substring(0,5) + ' — ' : ''}${e.title}</div>`).join('')
+          : '<span style="color:var(--text-dim)">Sem eventos hoje</span>';
+
+        const fin = d.finance_month || {};
+        const balColor = (fin.balance || 0) >= 0 ? 'var(--success)' : 'var(--danger)';
+        document.getElementById('briefing-finance').innerHTML =
+          `<div>Receitas: <strong style="color:var(--success)">R$ ${(fin.income||0).toFixed(2)}</strong></div>
+           <div>Despesas: <strong style="color:var(--danger)">R$ ${(fin.expense||0).toFixed(2)}</strong></div>
+           <div>Balanço: <strong style="color:${balColor}">R$ ${(fin.balance||0).toFixed(2)}</strong></div>`;
+
+        const habits = d.habits_active || [];
+        document.getElementById('briefing-habits').innerHTML = habits.length
+          ? habits.slice(0,4).map(h => `<div style="margin-bottom:4px;">🔥 ${h.name} (${h.streak} dias)</div>`).join('')
+          : '<span style="color:var(--text-dim)">Nenhum hábito ativo</span>';
+      } catch (e) {
+        document.getElementById('briefing-summary').textContent = 'Erro ao gerar briefing: ' + e.message;
+        console.error(e);
+      }
+    }
+
+    async function loadProactiveSuggestions() {
+      const card = document.getElementById('proactive-card');
+      const list = document.getElementById('proactive-list');
+      card.style.display = 'block';
+      list.innerHTML = '<p style="color:var(--text-dim); font-size:13px;">Analisando padrões...</p>';
+      try {
+        const raw = await window.pywebview.api.nexus_command(JSON.stringify({ action: 'proactive_suggestions' }));
+        const d = JSON.parse(raw);
+        const suggestions = d.suggestions || [];
+        if (!suggestions.length) {
+          list.innerHTML = '<p style="color:var(--success); font-size:13px;">✅ Nenhum alerta proativo no momento. Está tudo em dia!</p>';
+          return;
+        }
+        const priorityColor = { high: 'var(--danger)', medium: 'var(--warning)', low: 'var(--text-dim)' };
+        list.innerHTML = suggestions.map(s => `
+          <div style="background:var(--surface); border-radius:8px; padding:12px 14px; border-left:3px solid ${priorityColor[s.priority] || 'var(--border)'}; display:flex; flex-direction:column; gap:4px;">
+            <div style="font-size:13px; color:var(--text);">${s.message}</div>
+            <div style="font-size:11px; color:var(--text-dim);">&#128204; ${s.action}</div>
+          </div>`).join('');
+      } catch (e) {
+        list.innerHTML = '<p style="color:var(--danger); font-size:13px;">Erro ao carregar sugestões.</p>';
+        console.error(e);
+      }
+    }
+
+    async function loadRoutines() {
+      const container = document.getElementById('routines-list');
+      container.innerHTML = '<p class="subtitle">Carregando...</p>';
+      try {
+        const raw = await window.pywebview.api.nexus_command(JSON.stringify({ action: 'get_routines' }));
+        const routines = JSON.parse(raw);
+        if (!routines || routines.length === 0) {
+          container.innerHTML = '<p class="subtitle">Nenhuma rotina criada ainda. Crie uma nova!</p>';
+          return;
+        }
+        container.innerHTML = routines.map(r => `
+          <div class="glass-panel" style="padding: 16px; position: relative;">
+            <button onclick="deleteRoutine(${r.id})" style="position:absolute; top:16px; right:16px; background:none; border:none; color:var(--danger); cursor:pointer;"><i class="fa-solid fa-trash"></i></button>
+            <h3 style="margin: 0 0 4px; color: var(--accent);">${r.name} <span style="font-size:12px; color:var(--text-dim); font-weight:normal;">(${r.time})</span></h3>
+            ${r.desc ? `<p style="margin:0 0 12px; font-size:13px; color:var(--text-dim);">${r.desc}</p>` : ''}
+            <div style="display:flex; flex-direction:column; gap:8px; margin-top:12px;">
+              ${r.steps.map((s, i) => `
+                <div style="background:var(--surface); padding:8px 12px; border-radius:6px; font-size:13px; display:flex; justify-content:space-between;">
+                  <span><strong style="color:var(--text-dim); margin-right:8px;">${i+1}.</strong> ${s.title}</span>
+                  <span style="color:var(--accent);">${s.duration} min</span>
+                </div>
+              `).join('')}
+            </div>
+            <div style="margin-top:16px;">
+              <button class="btn btn-secondary" onclick="startRoutine(${r.id})">▶ Iniciar Rotina</button>
+            </div>
+          </div>
+        `).join('');
+      } catch (e) {
+        container.innerHTML = '<p class="subtitle" style="color:var(--danger);">Erro ao carregar rotinas.</p>';
+        console.error(e);
+      }
+    }
+
+    async function promptCreateRoutine() {
+      const name = prompt("Nome da Rotina (ex: Rotina Matinal):");
+      if (!name) return;
+      const stepsRaw = prompt("Insira as tarefas separadas por vírgula (ex: Arrumar cama, 10min Leitura, Meditação):");
+      if (!stepsRaw) return;
+
+      const steps = stepsRaw.split(',').map(s => {
+        const str = s.trim();
+        return { title: str, duration: 5 }; // default 5 min
+      });
+
+      try {
+        const raw = await window.pywebview.api.nexus_command(JSON.stringify({
+          action: 'create_routine', name, time_of_day: 'Any', steps
+        }));
+        const res = JSON.parse(raw);
+        if (res.ok) {
+          showToast('Rotina criada!');
+          loadRoutines();
+        } else {
+          showToast('Erro ao criar: ' + res.error, 'error');
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    async function deleteRoutine(id) {
+      if (!confirm("Excluir esta rotina?")) return;
+      try {
+        await window.pywebview.api.nexus_command(JSON.stringify({ action: 'delete_routine', id }));
+        showToast('Rotina excluída.');
+        loadRoutines();
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    function startRoutine(id) {
+      showToast('Rotina iniciada! (Lógica de timer no próximo update)', 'info');
+    }
+
     // TOAST NOTIFICATIONS
     function showToast(msg, type = 'info') {
       const c = document.getElementById('toastContainer');
@@ -1063,7 +1339,7 @@
       neonColorPicker.value = savedNeonColor;
       // Define a cor salva na raiz
       document.documentElement.style.setProperty('--accent', savedNeonColor);
-      
+
       // Converte Hex para RGBA para o Glow
       function hexToRgba(hex, alpha) {
         let r = parseInt(hex.slice(1, 3), 16),
@@ -1113,6 +1389,8 @@
         document.getElementById('page-' + btn.dataset.tab).classList.add('active');
 
         if (btn.dataset.tab === 'agents') loadAgentsGrid();
+        if (btn.dataset.tab === 'dashboard') refreshDashboardVida();
+        if (btn.dataset.tab === 'routines') loadRoutines();
         if (btn.dataset.tab === 'modes') loadModesTab();
         if (btn.dataset.tab === 'trash') { loadTrashAgents(); loadTrashMemories(); }
         if (btn.dataset.tab === 'reference') loadReferenceTab();
@@ -1741,18 +2019,12 @@
           document.getElementById('cfgTts').value = cfg.tts_provider || '';
           const fo = document.getElementById('cfgTtsFallbackOrder');
           if (fo) fo.value = cfg.tts_provider_order || '';
-          const stp = document.getElementById('cfgStyleTts2Python');
           if (stp) stp.value = cfg.styletts2_python || '';
-          const str = document.getElementById('cfgStyleTts2Reference');
           if (str) str.value = cfg.styletts2_reference_wav || '';
-          const std = document.getElementById('cfgStyleTts2DiffusionSteps');
-          const stdv = document.getElementById('cfgStyleTts2DiffusionVal');
           if (std) {
             std.value = cfg.styletts2_diffusion_steps || 3;
             if (stdv) stdv.textContent = String(std.value);
           }
-          const ste = document.getElementById('cfgStyleTts2EmbeddingScale');
-          const stev = document.getElementById('cfgStyleTts2EmbeddingVal');
           if (ste) {
             ste.value = cfg.styletts2_embedding_scale || 1.0;
             if (stev) stev.textContent = parseFloat(ste.value).toFixed(1);
@@ -1781,9 +2053,8 @@
           setChecked('cfgEnableClapTrigger', cfg.enable_clap_trigger !== false);
           setValue('cfgClapThreshold', cfg.clap_threshold || 0.15);
           setValue('cfgClapMaxGap', cfg.clap_max_gap || 1.2);
-          setChecked('cfgXttsPreload', cfg.xtts_preload !== false);
-          setChecked('cfgStyleTts2PreloadStartup', cfg.styletts2_preload === true);
           applyUiPreferences(cfg.ui_motion_level || 'balanced', cfg.ui_density || 'comfortable');
+          setChecked('cfgStudyProfessorMode', cfg.study_professor_mode === true);
         }
       } catch (e) {
         console.error("Erro ao carregar config:", e);
@@ -1840,13 +2111,9 @@
         showToast(ok ? 'Importado. Reinicie se necessário.' : 'Cancelado ou falhou.', ok ? 'success' : 'error');
       });
 
-      const std = document.getElementById('cfgStyleTts2DiffusionSteps');
-      const stdv = document.getElementById('cfgStyleTts2DiffusionVal');
       if (std && stdv) {
         std.addEventListener('input', () => { stdv.textContent = String(std.value); });
       }
-      const ste = document.getElementById('cfgStyleTts2EmbeddingScale');
-      const stev = document.getElementById('cfgStyleTts2EmbeddingVal');
       if (ste && stev) {
         ste.addEventListener('input', () => { stev.textContent = parseFloat(ste.value).toFixed(1); });
       }
@@ -1855,10 +2122,6 @@
         const payload = {
           tts_provider: document.getElementById('cfgTts').value,
           tts_provider_order: document.getElementById('cfgTtsFallbackOrder').value.trim(),
-          styletts2_python: document.getElementById('cfgStyleTts2Python').value.trim(),
-          styletts2_reference_wav: document.getElementById('cfgStyleTts2Reference').value.trim(),
-          styletts2_diffusion_steps: parseInt(document.getElementById('cfgStyleTts2DiffusionSteps').value, 10) || 3,
-          styletts2_embedding_scale: parseFloat(document.getElementById('cfgStyleTts2EmbeddingScale').value) || 1.0,
           tts_prefetch_chunks: document.getElementById('cfgTtsPrefetchChunks').checked
         };
         const result = await apiCall('update_tts_config', payload);
@@ -1917,8 +2180,6 @@
           enable_clap_trigger: optionalChecked('cfgEnableClapTrigger', true),
           clap_threshold: parseFloat(optionalValue('cfgClapThreshold', '0.15')),
           clap_max_gap: parseFloat(optionalValue('cfgClapMaxGap', '1.2')),
-          xtts_preload: optionalChecked('cfgXttsPreload', true),
-          styletts2_preload: optionalChecked('cfgStyleTts2PreloadStartup', false)
         };
         const result = await apiCall('update_startup_config', payload);
         if (result && result.ok) showToast('Inicializacao salva. Reinicie para aplicar servicos de fundo.', 'success');
@@ -1929,10 +2190,12 @@
       if (bui) bui.addEventListener('click', async () => {
         const motion = (document.getElementById('cfgMotionLevel') || {}).value || 'balanced';
         const density = (document.getElementById('cfgUiDensity') || {}).value || 'comfortable';
+        const professor = !!((document.getElementById('cfgStudyProfessorMode') || {}).checked);
         applyUiPreferences(motion, density);
         const result = await apiCall('update_ui_config', {
           ui_motion_level: motion,
-          ui_density: density
+          ui_density: density,
+          study_professor_mode: professor
         });
         if (result && result.ok) showToast('Aparencia aplicada.', 'success');
         else showToast((result && result.error) ? result.error : 'Falha ao salvar aparencia.', 'error');
@@ -2053,6 +2316,165 @@
     });
     nxFullscreenObserver.observe(document.body);
   </script>
+
+  <!-- MEMORY MANAGER SCRIPT -->
+  <script>
+    // ============================================================
+    // MEMORY MANAGER — Senha + CRUD via pywebview API
+    // ============================================================
+    const MEMORY_PWD_KEY = 'nexus_panel_memory_pwd';
+
+    function initMemoryPage() {
+      const saved = localStorage.getItem(MEMORY_PWD_KEY);
+      if (!saved) {
+        document.getElementById('memory-setup-note').style.display = 'block';
+        document.getElementById('memory-pwd-input').placeholder = 'Criar nova senha...';
+      }
+    }
+
+    function unlockMemory() {
+      const input = document.getElementById('memory-pwd-input').value.trim();
+      if (!input) { showToast('Digite uma senha.', 'warning'); return; }
+
+      const saved = localStorage.getItem(MEMORY_PWD_KEY);
+      if (!saved) {
+        // First-time setup
+        if (input.length < 4) { showToast('Mínimo 4 caracteres.', 'warning'); return; }
+        localStorage.setItem(MEMORY_PWD_KEY, input);
+        showToast('Senha criada com sucesso!', 'success');
+        showMemoryContent();
+      } else if (input === saved) {
+        showMemoryContent();
+      } else {
+        showToast('Senha incorreta!', 'error');
+        document.getElementById('memory-pwd-input').value = '';
+      }
+    }
+
+    async function showMemoryContent() {
+      document.getElementById('memory-lock').style.display = 'none';
+      document.getElementById('memory-content').style.display = 'block';
+      document.getElementById('memory-pwd-input').value = '';
+      await refreshMemory();
+    }
+
+    function lockMemory() {
+      document.getElementById('memory-lock').style.display = 'flex';
+      document.getElementById('memory-content').style.display = 'none';
+      document.getElementById('memory-categories').innerHTML = '';
+    }
+
+    async function refreshMemory() {
+      const container = document.getElementById('memory-categories');
+      const emptyMsg = document.getElementById('memory-empty');
+      container.innerHTML = '<p style="color:var(--text-dim); font-size:13px;">Carregando memórias...</p>';
+
+      let data = {};
+      try {
+        if (window.pywebview && window.pywebview.api) {
+          data = await window.pywebview.api.get_structured_memory();
+        } else {
+          // Dev fallback
+          data = { notes: { exemplo: 'Dado de teste' }, preferencias: { tema: 'dark' } };
+        }
+      } catch(e) {
+        container.innerHTML = '<p style="color:var(--danger);">Erro ao carregar memórias: ' + e + '</p>';
+        return;
+      }
+
+      const categories = Object.keys(data).filter(k => Object.keys(data[k] || {}).length > 0);
+      if (categories.length === 0) {
+        container.innerHTML = '';
+        emptyMsg.style.display = 'block';
+        return;
+      }
+      emptyMsg.style.display = 'none';
+
+      container.innerHTML = categories.map(cat => {
+        const items = data[cat];
+        const rows = Object.entries(items).map(([key, value]) => {
+          const safeKey = encodeURIComponent(cat + '|' + key);
+          const displayVal = typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value);
+          return `
+            <div class="mem-item" id="memrow-${safeKey}">
+              <div style="flex:1; overflow:hidden;">
+                <span style="font-size:10px; color:var(--text-dim); font-family:monospace; text-transform:uppercase;">${escapeHtml(key)}</span>
+                <div id="memval-${safeKey}" style="font-size:13px; color:var(--text); margin-top:4px; word-break:break-word;">${escapeHtml(displayVal)}</div>
+                <textarea id="memedit-${safeKey}" style="display:none; width:100%; margin-top:6px; font-size:12px; border-radius:6px; min-height:60px;" rows="3">${escapeHtml(displayVal)}</textarea>
+              </div>
+              <div style="display:flex; flex-direction:column; gap:6px; margin-left:10px;">
+                <button class="btn-icon" title="Editar" onclick="toggleEditMemory('${safeKey}', '${escapeHtml(cat)}', '${escapeHtml(key)}')" style="font-size:12px;">✏️</button>
+                <button class="btn-icon" title="Excluir" onclick="deleteMemoryEntry('${escapeHtml(cat)}', '${escapeHtml(key)}')" style="background:rgba(239,68,68,0.1); color:var(--danger); border-color:rgba(239,68,68,.3); font-size:12px;">🗑</button>
+              </div>
+            </div>`;
+        }).join('');
+
+        return `
+          <div class="mode-card" style="padding:16px;">
+            <h2 style="color:var(--accent); margin-bottom:14px; font-size:11px; text-transform:uppercase; letter-spacing:.8px;">${escapeHtml(cat)}</h2>
+            <div class="mem-list">${rows}</div>
+          </div>`;
+      }).join('');
+    }
+
+    function toggleEditMemory(safeKey, cat, key) {
+      const valDiv = document.getElementById('memval-' + safeKey);
+      const editArea = document.getElementById('memedit-' + safeKey);
+      if (editArea.style.display === 'none') {
+        editArea.style.display = 'block';
+        valDiv.style.display = 'none';
+        editArea.focus();
+        // Change button to Save
+        const btn = editArea.closest('.mem-item').querySelector('.btn-icon[title="Editar"]');
+        btn.textContent = '💾';
+        btn.title = 'Salvar';
+        btn.onclick = () => saveMemoryEntry(safeKey, cat, key);
+      }
+    }
+
+    async function saveMemoryEntry(safeKey, cat, key) {
+      const editArea = document.getElementById('memedit-' + safeKey);
+      const newValue = editArea.value.trim();
+      try {
+        if (window.pywebview && window.pywebview.api) {
+          await window.pywebview.api.update_structured_memory_entry(cat, key, newValue);
+        }
+        showToast('Memória atualizada!', 'success');
+        await refreshMemory();
+      } catch(e) {
+        showToast('Erro ao salvar: ' + e, 'error');
+      }
+    }
+
+    async function deleteMemoryEntry(cat, key) {
+      if (!confirm(`Excluir "${key}" de "${cat}"?`)) return;
+      try {
+        if (window.pywebview && window.pywebview.api) {
+          await window.pywebview.api.delete_structured_memory_entry(cat, key);
+        }
+        showToast('Entrada excluída.', 'success');
+        await refreshMemory();
+      } catch(e) {
+        showToast('Erro ao excluir: ' + e, 'error');
+      }
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    // Init memory page when tab is clicked
+    document.addEventListener('DOMContentLoaded', () => {
+      document.querySelectorAll('.nav-btn[data-tab="memory"]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          setTimeout(initMemoryPage, 50);
+        });
+      });
+    });
+  </script>
+
 </body>
 
 </html>

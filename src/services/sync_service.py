@@ -12,14 +12,24 @@ load_dotenv()
 TABLES_TO_SYNC = [
     "nexus_user",
     "habits",
+    "habit_logs",
     "tasks",
     "finance_transactions",
     "nexus_rewards",
     "study_notes",
+    "study_notebooks",
+    "flashcards",
     "nexus_goals",
     "fitness_workouts",
+    "nexus_videos",
+    "routines",
+    "journal_entries",
+    "pomo_sessions",
+    "reading_books",
+    "reading_sessions",
+    "quiz_attempts",
     "nexus_commands",
-    "nexus_memory_sync"
+    "nexus_memory_sync",
 ]
 
 class SyncService:

@@ -132,11 +132,24 @@ def nexus_bridge_call(method: str, args_json: str = "{}") -> str:
         if m == "health_workouts_list":
             return ok(svc.db.list_fitness_workouts())
 
+        if m == "health_workout_add":
+            wid = svc.db.add_fitness_workout(
+                str(args.get("type") or args.get("name") or "Treino"),
+                int(args.get("duration_minutes") or 45),
+                int(args.get("calories_burned") or 0),
+                str(args.get("notes") or ""),
+            )
+            return ok({"id": wid})
+
         if m == "health_metrics_get":
             return ok({"latest": svc.db.get_latest_fitness_metrics(), "history": svc.db.list_fitness_metrics()})
 
         if m == "journal_entries_list":
             return ok(svc.db.list_journal_entries())
+
+        if m == "journal_entry_add":
+            eid = svc.db.add_journal_entry(str(args.get("content") or ""))
+            return ok({"id": eid})
 
         if m == "mood_logs_list":
             return ok(svc.db.list_mood_logs())
@@ -607,6 +620,19 @@ def nexus_bridge_call(method: str, args_json: str = "{}") -> str:
             svc.db.mark_video_watched(vid)
             svc.add_xp(50)
             return ok({"message": "XP resgatado com sucesso!"})
+
+        if m == "nexus_command":
+            action = args.get("action") or args
+            if isinstance(action, dict) and "action" not in action:
+                payload = {"action": action.get("action"), **action}
+            else:
+                payload = dict(args)
+            if not payload.get("action"):
+                return err("action obrigatório")
+            result = svc.handle_structured_command(payload)
+            if isinstance(result, (dict, list)):
+                return ok(result)
+            return ok({"message": result})
 
         return err(f"Método desconhecido: {m}")
     except Exception as e:

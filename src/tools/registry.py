@@ -6,7 +6,7 @@ import time
 from src.tools.base import Tool, ToolResult
 from src.tools.critical_actions import FILE_ACTIONS_NEED_CONFIRM
 from src.tools.critical_confirm import CriticalConfirmationBus
-from src.telemetry.events import log_event
+from src.utils.telemetry import log_event
 
 
 class ToolRegistry:

@@ -130,7 +130,7 @@ class CriticalConfirmationBus:
             self._approved = bool(approved)
             self._pending = None
         try:
-            from src.telemetry.events import log_event
+            from src.utils.telemetry import log_event
 
             log_event("critical_confirm", {"approved": bool(approved), "tool": tool_name})
         except Exception:

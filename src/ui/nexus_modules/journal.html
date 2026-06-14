@@ -21,7 +21,9 @@
         <div id="journalList" style="flex:1; overflow-y:auto; max-height:400px; padding-right:4px;">
           <div style="padding:20px; text-align:center; color:var(--text-dim); font-size:12px;">Carregando...</div>
         </div>
-        <button class="btn-record" style="margin-top:16px;" onclick="askAgent('Escreva no meu diário: ')">Nova Entrada c/ IA</button>
+        <button class="btn-record" style="margin-top:16px;" onclick="saveJournalEntry()">Salvar Entrada</button>
+        <textarea id="journalDraft" placeholder="Como foi seu dia? O que aprendeu?" style="width:100%;min-height:90px;margin-top:12px;padding:10px;border-radius:8px;border:1px solid var(--border);background:rgba(0,0,0,0.25);color:var(--text);resize:vertical"></textarea>
+        <button class="btn-record" style="margin-top:8px;background:linear-gradient(135deg,#6366f1,#8b5cf6)" onclick="askAgent('Analise meu diário recente e dê feedback como psicólogo')">Feedback Psicólogo IA</button>
       </div>
 
       <div class="card" style="grid-column: span 1;">
@@ -95,11 +97,19 @@
     }
 
     function askAgent(cmd) {
-      if(window.pywebview && window.pywebview.api) {
-          // Apenas coloca no input do chat ou manda direto
-          window.pywebview.api.agent_chat(cmd);
-          showToastBanner({type:'info', msg: 'Interagindo com a IA...'});
+      if (window.pywebview && window.pywebview.api && window.pywebview.api.send_chat_message) {
+          window.pywebview.api.send_chat_message(cmd);
+          showToastBanner({type:'info', msg: 'Jarvis processando...'});
       }
+    }
+
+    async function saveJournalEntry() {
+      const content = document.getElementById('journalDraft')?.value?.trim();
+      if (!content) return;
+      await nxBridge('journal_entry_add', { content });
+      document.getElementById('journalDraft').value = '';
+      loadData();
+      showToastBanner({type:'success', msg: 'Entrada salva!'});
     }
 
     loadData();

@@ -254,15 +254,18 @@ class DesktopApi:
 
     def get_telemetry_tail(self, max_lines=50):
         try:
-            from src.telemetry.events import read_event_tail
+            from src.utils.telemetry import read_event_tail
             return read_event_tail(int(max_lines))
         except Exception as e:
             return [{"error": str(e)}]
-
     def get_structured_memory(self):
-        try:
-            from src.memory.structured_memory import load_structured_memory
-            return load_structured_memory()
+        from src.memory.structured_memory import load_structured_memory
+        return load_structured_memory()
+
+    def unlock_structured_memory(self, password: str) -> bool:
+        from src.memory.structured_memory import set_memory_password
+        return set_memory_password(password)
+
         except Exception as e:
             print(f"[DesktopApi] structured memory: {e}")
             return {}
@@ -273,6 +276,14 @@ class DesktopApi:
             return forget(str(key or "").strip(), str(category or "notes").strip())
         except Exception as e:
             print(f"[DesktopApi] forget: {e}")
+            return f"Erro: {e}"
+
+    def update_structured_memory_entry(self, category, key, value):
+        try:
+            from src.memory.structured_memory import remember
+            return remember(str(key or "").strip(), str(value or "").strip(), str(category or "notes").strip())
+        except Exception as e:
+            print(f"[DesktopApi] remember: {e}")
             return f"Erro: {e}"
 
     def get_tools_reference(self):
@@ -440,7 +451,6 @@ class DesktopApi:
                 speed=ag.tts_speed,
                 edge_rate=ag.edge_tts_rate,
                 edge_vol=ag.edge_tts_volume,
-                kokoro_voice=ag.kokoro_voice,
             )
         except Exception as e:
             print(f"[DesktopApi] Erro ao aplicar TTS do agente: {e}")
@@ -455,7 +465,6 @@ class DesktopApi:
             tts_provider=data.get('tts_provider', getattr(self.settings, "tts_provider", "edge") if self.settings else "edge"),
             tts_voice=data.get('tts_voice', 'pt-BR-FranciscaNeural'),
             tts_speed=speed,
-            kokoro_voice=data.get('kokoro_voice', 'pf_dora'),
         )
         return asdict(agent) if agent else None
 
@@ -470,7 +479,6 @@ class DesktopApi:
             tts_provider=data.get('tts_provider'),
             tts_voice=data.get('tts_voice'),
             tts_speed=speed,
-            kokoro_voice=data.get('kokoro_voice'),
         )
         if agent and agent.id == self.agent_manager._active_agent_id:
             self._apply_active_agent_tts()
@@ -698,21 +706,7 @@ class DesktopApi:
             'clap_max_gap': getattr(s, "clap_max_gap", 1.2),
             'clap_cooldown': getattr(s, "clap_cooldown", 3.0),
             'edge_tts_rate': s.edge_tts_rate,
-            'kokoro_voice': s.kokoro_voice,
-            'xtts_preload': getattr(s, "xtts_preload", True),
-            'styletts2_python': getattr(s, "styletts2_python", ""),
-            'styletts2_reference_wav': getattr(s, "styletts2_reference_wav", ""),
-            'styletts2_alpha': getattr(s, "styletts2_alpha", 0.3),
-            'styletts2_beta': getattr(s, "styletts2_beta", 0.7),
-            'styletts2_diffusion_steps': getattr(s, "styletts2_diffusion_steps", 3),
-            'styletts2_embedding_scale': getattr(s, "styletts2_embedding_scale", 1.0),
-            'styletts2_persistent': getattr(s, "styletts2_persistent", True),
-            'styletts2_preload': getattr(s, "styletts2_preload", False),
             'tts_prefetch_chunks': getattr(s, "tts_prefetch_chunks", True),
-            'piper_repo_id': getattr(s, "piper_repo_id", "jgkawell/jarvis"),
-            'piper_jarvis_quality': getattr(s, "piper_jarvis_quality", "medium"),
-            'piper_use_cuda': getattr(s, "piper_use_cuda", False),
-            'piper_fx_preset': getattr(s, "piper_fx_preset", "none"),
             'critical_confirm_enabled': self.get_critical_confirm_enabled(),
             'panel_hotkey': getattr(s, "panel_hotkey", "win+shift+a"),
             'vision_detail_default': getattr(s, "vision_detail_default", False),
@@ -747,33 +741,17 @@ class DesktopApi:
         try:
             provider = str(data.get("tts_provider") or getattr(self.settings, "tts_provider", "edge")).strip().lower()
             order = str(data.get("tts_provider_order") or getattr(self.settings, "tts_provider_order", "")).strip()
-            style_python = str(data.get("styletts2_python") or "").strip()
-            style_ref = str(data.get("styletts2_reference_wav") or "").strip()
-            diffusion = max(1, min(20, int(float(data.get("styletts2_diffusion_steps") or 3))))
-            embedding = max(0.1, min(10.0, float(data.get("styletts2_embedding_scale") or 1.0)))
             prefetch = bool(data.get("tts_prefetch_chunks", True))
 
             updates = {
                 "TTS_PROVIDER": provider,
                 "TTS_PROVIDER_ORDER": order,
-                "STYLETTS2_PYTHON": style_python,
-                "STYLETTS2_REFERENCE_WAV": style_ref,
-                "STYLETTS2_DIFFUSION_STEPS": diffusion,
-                "STYLETTS2_EMBEDDING_SCALE": embedding,
-                "STYLETTS2_PERSISTENT": "true",
-                "STYLETTS2_PRELOAD": "true" if provider == "styletts2" else "false",
                 "TTS_PREFETCH_CHUNKS": "true" if prefetch else "false",
             }
             self._update_env_file(updates)
 
             object.__setattr__(self.settings, "tts_provider", provider)
             object.__setattr__(self.settings, "tts_provider_order", order)
-            object.__setattr__(self.settings, "styletts2_python", style_python)
-            object.__setattr__(self.settings, "styletts2_reference_wav", style_ref)
-            object.__setattr__(self.settings, "styletts2_diffusion_steps", diffusion)
-            object.__setattr__(self.settings, "styletts2_embedding_scale", embedding)
-            object.__setattr__(self.settings, "styletts2_persistent", True)
-            object.__setattr__(self.settings, "styletts2_preload", provider == "styletts2")
             object.__setattr__(self.settings, "tts_prefetch_chunks", prefetch)
 
             self._tts.provider = provider
@@ -781,15 +759,7 @@ class DesktopApi:
             from src.services.tts import resolve_tts_provider_order
 
             self._tts.provider_order = resolve_tts_provider_order(provider, order)
-            self._tts.styletts2_python = style_python
-            self._tts.styletts2_reference_wav = style_ref
-            self._tts.styletts2_diffusion_steps = diffusion
-            self._tts.styletts2_embedding_scale = embedding
-            self._tts.styletts2_persistent = True
-            self._tts.styletts2_preload = provider == "styletts2"
             self._tts.tts_prefetch_chunks = prefetch
-            if provider == "styletts2":
-                self._tts.warmup_styletts2_async()
 
             return {"ok": True, "provider": provider, "order": self._tts.provider_order}
         except Exception as e:
@@ -866,8 +836,6 @@ class DesktopApi:
             clap_min_gap = max(0.02, min(1.0, float(data.get("clap_min_gap") or 0.1)))
             clap_max_gap = max(0.2, min(4.0, float(data.get("clap_max_gap") or 1.2)))
             clap_cooldown = max(0.5, min(20.0, float(data.get("clap_cooldown") or 3.0)))
-            xtts_preload = bool(data.get("xtts_preload", getattr(self.settings, "xtts_preload", True)))
-            styletts2_preload = bool(data.get("styletts2_preload", getattr(self.settings, "styletts2_preload", False)))
 
             updates = {
                 "START_VISION_TRACKER": "true" if start_vision else "false",
@@ -878,8 +846,6 @@ class DesktopApi:
                 "CLAP_MIN_GAP": clap_min_gap,
                 "CLAP_MAX_GAP": clap_max_gap,
                 "CLAP_COOLDOWN": clap_cooldown,
-                "XTTS_PRELOAD": "true" if xtts_preload else "false",
-                "STYLETTS2_PRELOAD": "true" if styletts2_preload else "false",
             }
             self._update_env_file(updates)
 
@@ -891,8 +857,6 @@ class DesktopApi:
             object.__setattr__(self.settings, "clap_min_gap", clap_min_gap)
             object.__setattr__(self.settings, "clap_max_gap", clap_max_gap)
             object.__setattr__(self.settings, "clap_cooldown", clap_cooldown)
-            object.__setattr__(self.settings, "xtts_preload", xtts_preload)
-            object.__setattr__(self.settings, "styletts2_preload", styletts2_preload)
 
             return {"ok": True, "requires_restart": True}
         except Exception as e:
@@ -908,16 +872,19 @@ class DesktopApi:
             density = str(data.get("ui_density") or "comfortable").strip().lower()
             if density not in {"comfortable", "compact"}:
                 density = "comfortable"
+            professor = bool(data.get("study_professor_mode", getattr(self.settings, "study_professor_mode", False)))
 
             self._update_env_file(
                 {
                     "UI_MOTION_LEVEL": motion,
                     "UI_DENSITY": density,
+                    "STUDY_PROFESSOR_MODE": "true" if professor else "false",
                 }
             )
             object.__setattr__(self.settings, "ui_motion_level", motion)
             object.__setattr__(self.settings, "ui_density", density)
-            return {"ok": True, "ui_motion_level": motion, "ui_density": density}
+            object.__setattr__(self.settings, "study_professor_mode", professor)
+            return {"ok": True, "ui_motion_level": motion, "ui_density": density, "study_professor_mode": professor}
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
@@ -985,14 +952,86 @@ class DesktopApi:
             print(f"[DesktopApi] open_nexus_module: {e}")
             return False
 
+    def nexus_command(self, payload_json: str) -> str:
+        """Expoe nexus_command ao JS do painel (pywebview.api.nexus_command(json))."""
+        try:
+            from src.services.nexus_service import get_nexus_service
+            import json
+            data = json.loads(payload_json or "{}")
+            action = data.pop("action", "")
+            return get_nexus_service().nexus_command(action, data)
+        except Exception as e:
+            import json
+            return json.dumps({"error": str(e)})
+
     def nexus_theme_list(self):
         try:
             from src.services.nexus_service import get_nexus_service
-
-            return get_nexus_service().list_window_themes()
+            service = get_nexus_service()
+            return service.db.get_theme_presets()
         except Exception as e:
-            print(f"[DesktopApi] nexus_theme_list: {e}")
-            return {"modules": [], "presets": [], "assignments": {}, "error": str(e)}
+            return []
+
+    def nexus_get_dashboard_data(self):
+        try:
+            from src.services.nexus_service import get_nexus_service
+            import datetime
+            service = get_nexus_service()
+
+            # Construir payload de resumo (Finanças, Hábitos, Tarefas/Calendário)
+            today = datetime.date.today().isoformat()
+
+            data = {
+                "finance": {
+                    "today": 0,
+                    "month_total": 0.00
+                },
+                "habits": {
+                    "total": 0,
+                    "completed": 0
+                },
+                "calendar": {
+                    "events_today": 0
+                },
+                "user": {
+                    "level": 1,
+                    "xp": 0
+                }
+            }
+
+            with service.db._get_connection() as conn:
+                cur = conn.cursor()
+                # User stats
+                cur.execute("SELECT level, xp FROM nexus_user WHERE id = 1")
+                row = cur.fetchone()
+                if row:
+                    data["user"]["level"] = row[0]
+                    data["user"]["xp"] = row[1]
+
+                # Finance month total
+                month = today[:7] + "-01"
+                cur.execute("SELECT SUM(amount) FROM finance_transactions WHERE type='expense' AND occurred_at >= ?", (month,))
+                month_val = cur.fetchone()[0]
+                if month_val: data["finance"]["month_total"] = round(month_val, 2)
+
+                cur.execute("SELECT COUNT(*) FROM finance_transactions WHERE date(occurred_at) = ?", (today,))
+                data["finance"]["today"] = cur.fetchone()[0]
+
+                # Habits
+                cur.execute("SELECT COUNT(*) FROM habits WHERE active=1")
+                data["habits"]["total"] = cur.fetchone()[0]
+                cur.execute("SELECT COUNT(DISTINCT habit_id) FROM habit_logs WHERE date(completed_at) = ?", (today,))
+                data["habits"]["completed"] = cur.fetchone()[0]
+
+                # Calendar
+                cur.execute("SELECT COUNT(*) FROM calendar_events WHERE date = ?", (today,))
+                data["calendar"]["events_today"] = cur.fetchone()[0]
+
+            return data
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return None
 
     def nexus_theme_apply(self, module, preset_id):
         try:
@@ -1196,7 +1235,7 @@ class DesktopApp:
 
         # --- Inicia o Sistema de Biometria e Reconhecimento de Voz ---
         try:
-            from src.ai.voice_recognition import JarvisVoice
+            from src.services.voice_recognition import JarvisVoice
             from src.database.nexus_db import NexusDatabase
             self.db = NexusDatabase()
             self.voice = JarvisVoice(self.db)
@@ -1208,13 +1247,13 @@ class DesktopApp:
     def _handle_voice_command(self, command, user, level):
         import logging
         logging.info(f"🗣️ Comando Recebido de {user} (Nv.{level}): {command}")
-        
+
         # Simula lógica de biometria ao ouvir o usuário se apresentando
         biometric_msg = self.voice.simulate_biometric_login(command)
         if biometric_msg:
             logging.info(f"🔒 {biometric_msg}")
             return
-            
+
         # Nível 1 não pode usar comandos, por exemplo
         if level < 2 and "desligar" in command:
             logging.warning(f"⚠️ Acesso negado para {user}. Nível insuficiente.")
@@ -1327,6 +1366,7 @@ class DesktopApp:
         unified_sections = {
             "overview", "habits", "finance", "notes",
             "study", "tasks", "progress", "goals", "quiz",
+            "health", "journal", "routines", "reading",
         }
         # Módulos que continuam como janelas separadas (pesados/independentes)
         standalone_modules = {"memory_graph", "news", "ops"}
@@ -1345,6 +1385,9 @@ class DesktopApp:
             pl.update(get_nexus_service().get_window_theme_boot(mod))
         except Exception as e:
             print(f"[Nexus] Tema da janela indisponivel: {e}")
+        if self.settings:
+            pl["ui_motion_level"] = getattr(self.settings, "ui_motion_level", "balanced")
+            pl["ui_density"] = getattr(self.settings, "ui_density", "comfortable")
         pl.update(dict(payload or {}))
 
         # ── Módulos standalone: janela própria ──
@@ -1713,7 +1756,6 @@ class DesktopApp:
             hidden=True,
             frameless=True,
             transparent=True,
-            background_color='#0a0a0a',
             easy_drag=True
         )
 

@@ -60,9 +60,10 @@
       align-items: center; justify-content: center;
       gap: 2px;
       font-size: 16px;
-      transition: all 0.2s ease;
+      transition: transform 0.22s cubic-bezier(0.34, 1.2, 0.64, 1), border-color 0.2s ease, background 0.2s ease, color 0.2s ease, box-shadow 0.25s ease;
       flex-shrink: 0;
       position: relative;
+      will-change: transform;
     }
     .ux-nav-btn .ux-nav-label {
       font-size: 7px; font-weight: 800;
@@ -167,6 +168,22 @@
       <span>💰</span><span class="ux-nav-label">R$</span>
     </button>
 
+    <div class="ux-nav-sep"></div>
+
+    <!-- Vida -->
+    <button type="button" class="ux-nav-btn" data-section="health" title="Treino & Saúde" onclick="navTo('health')">
+      <span>🏋️</span><span class="ux-nav-label">Treino</span>
+    </button>
+    <button type="button" class="ux-nav-btn" data-section="journal" title="Diário" onclick="navTo('journal')">
+      <span>📔</span><span class="ux-nav-label">Diário</span>
+    </button>
+    <button type="button" class="ux-nav-btn" data-section="routines" title="Rotinas" onclick="navTo('routines')">
+      <span>🔄</span><span class="ux-nav-label">Rotina</span>
+    </button>
+    <button type="button" class="ux-nav-btn" data-section="reading" title="Leitura" onclick="navTo('reading')">
+      <span>📖</span><span class="ux-nav-label">Livros</span>
+    </button>
+
     <div class="ux-sidebar-status" title="Nexus Online"></div>
   </nav>
 
@@ -178,7 +195,7 @@
   <script src="nexus_boot.js"></script>
   <script>
     const boot = readBoot();
-    const SECTIONS = ['overview','habits','finance','notes','study','quiz','progress','goals','tasks'];
+    const SECTIONS = ['overview','habits','finance','notes','study','quiz','progress','goals','tasks','health','journal','routines','reading'];
     const loaded = {};
     let currentSection = null;
 

@@ -76,7 +76,7 @@ def main():
 
     # Diretorio dos arquivos estaticos (orb.js, index.html)
     static_dir = Path(__file__).resolve().parent / "visualizer_web"
-    
+
     app = Flask(__name__, static_folder=str(static_dir))
     sock = Sock(app)
 
@@ -206,7 +206,7 @@ def main():
             # Notifica via WebSocket
             ts = str(int(time.time() * 1000))
             msg = json.dumps({
-                "type": "play_audio", 
+                "type": "play_audio",
                 "url": f"/api/audio?t={ts}",
                 "filename": os.path.basename(path)
             })
@@ -295,6 +295,23 @@ def main():
                         ws.send(json.dumps({"type": "ping"}))
                     except Exception:
                         break
+                else:
+                    try:
+                        msg_json = json.loads(data)
+                        if msg_json.get("type") == "theme_update":
+                            # Salva o tema no state para persistencia
+                            try:
+                                state_path = Path(STATE_FILE)
+                                if state_path.exists():
+                                    curr_state = json.loads(state_path.read_text(encoding="utf-8") or "{}")
+                                    curr_state["theme"] = msg_json.get("theme")
+                                    state_path.write_text(json.dumps(curr_state, ensure_ascii=False, indent=2), encoding="utf-8")
+                            except Exception as e:
+                                print(f"[Visualizer] Erro ao salvar tema: {e}")
+
+                            broadcast_state({"type": "theme_update", "theme": msg_json.get("theme")})
+                    except Exception:
+                        pass
         except Exception:
             pass
         finally:
@@ -316,7 +333,7 @@ def main():
     # Abre o navegador automaticamente
     # import webbrowser
     # threading.Timer(1.5, lambda: webbrowser.open(f"http://localhost:{port}")).start()
-    
+
     app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
 
 

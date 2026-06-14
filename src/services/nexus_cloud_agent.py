@@ -60,11 +60,13 @@ class NexusCloudAgent:
                         self.handle_pc_clipboard(command_str)
                     elif command_str.startswith("GPS_UPDATE:"):
                         self.handle_gps_update(command_str)
+                    elif command_str.startswith("MOBILE_CHAT:"):
+                        self.handle_mobile_chat(cmd_id, command_str)
                     elif command_str.startswith("DISCOVER_IOT"):
                         self.handle_discover_iot(cmd_id)
                     elif command_str.startswith("TOGGLE_IOT:"):
                         self.handle_toggle_iot(cmd_id, command_str)
-                    
+
                     # Mark as completed
                     cur.execute("UPDATE nexus_commands SET status='completed' WHERE id=?", (cmd_id,))
                     conn.commit()
@@ -78,7 +80,7 @@ class NexusCloudAgent:
         match = re.search(r"VIDEO_INSIGHT:\s*(.*?)\s*\|\s*PROMPT:\s*(.*)", command_str)
         if not match:
             raise ValueError("Formato de comando inválido.")
-        
+
         url = match.group(1).strip()
         user_prompt = match.group(2).strip()
 
@@ -91,16 +93,16 @@ class NexusCloudAgent:
         print(f"[NexusCloudAgent] Baixando transcrição do vídeo {video_id}...")
         transcript_list = YouTubeTranscriptApi.get_transcript(video_id, languages=['pt', 'en'])
         transcript_text = " ".join([t['text'] for t in transcript_list])
-        
+
         # Limit transcript size
-        transcript_text = transcript_text[:15000] 
+        transcript_text = transcript_text[:15000]
 
         # Fetch existing notes
         with self.get_db() as conn:
             cur = conn.cursor()
             cur.execute("SELECT id, subject, general_subject FROM study_notes")
             notes = cur.fetchall()
-            
+
         notes_context = "Suas anotações existentes:\n"
         for nid, sub, gen_sub in notes:
             notes_context += f"- ID: {nid} | Título: {sub} | Assunto Geral: {gen_sub or 'Vazio'}\n"
@@ -185,17 +187,155 @@ INSIGHTS: <O novo conteúdo gerado>
             ip = parts[1]
             state = parts[2]
             print(f"[NexusCloudAgent] Enviando comando {state} para dispositivo IOT {ip}...")
-        
+
         with self.get_db() as conn:
             cur = conn.cursor()
             cur.execute("UPDATE nexus_commands SET status='completed' WHERE id=?", (cmd_id,))
             conn.commit()
 
+
+    def handle_image_transcript(self, cmd_id, command_str):
+        print(f"[NexusCloudAgent] Executando OCR na imagem via LLM... {cmd_id}")
+        try:
+            # Format: IMAGE_TRANSCRIPT: <url/base64/path>
+            parts = command_str.split(":", 1)
+            if len(parts) < 2: return
+            image_data = parts[1].strip()
+
+            from src.services.vision import VisionService
+            # In a real setup, vision_service should be passed or instantiated
+            vision = VisionService()
+
+            prompt = (
+                "Você é um assistente de estudos. O usuário enviou uma foto de seu caderno ou material."
+                "Transcreva todo o texto legível, estruture bem com Markdown, corrija pequenos erros de digitação e organize "
+                "por tópicos se possível. Apenas retorne o texto transcrito, sem comentários."
+            )
+            # Assuming image_data is a URL or base64. VisionService handles this.
+            transcript = vision.describe_image(image_data, prompt)
+
+            # Salva no banco como anotação
+            title = "Transcrição Automática " + time.strftime("%Y-%m-%d %H:%M")
+            with self.get_db() as conn:
+                cur = conn.cursor()
+                cur.execute("INSERT INTO study_notes (subject, title, content) VALUES (?, ?, ?)",
+                            ("Estudos", title, transcript))
+                conn.commit()
+
+            print(f"[NexusCloudAgent] Transcrição salva como nota '{title}'.")
+        except Exception as e:
+            print(f"[NexusCloudAgent] Erro na transcrição da imagem: {e}")
+
+    def handle_journal_summary(self, command_str):
+        print(f"[NexusCloudAgent] Resumindo Diário: {command_str}")
+        pass
+
+    def handle_pc_clipboard(self, command_str):
+        try:
+            content = command_str.split(":", 1)[1]
+            import pyperclip
+            pyperclip.copy(content)
+            print("[NexusCloudAgent] Copiado para a área de transferência do PC!")
+        except Exception as e:
+            print("[NexusCloudAgent] Erro no clipboard:", e)
+
+    def handle_gps_update(self, command_str):
+        coords = command_str.split(":", 1)[1]
+        print(f"[NexusCloudAgent] Atualização de GPS recebida: {coords}")
+        # Logica de GeoFencing
+
+    def handle_mobile_chat(self, cmd_id, command_str):
+        """Processa ordens textuais do celular e grava resposta em nexus_commands.result."""
+        prompt_text = command_str.split(":", 1)[1].strip()
+        print(f"[NexusCloudAgent] Processando chat do Mobile: {prompt_text}")
+
+        reply = ""
+        try:
+            from src.services.nexus_service import get_nexus_service
+            svc = get_nexus_service()
+            lower = prompt_text.lower()
+            if any(k in lower for k in ("briefing", "resumo do dia", "bom dia")):
+                reply = svc.generate_morning_briefing()
+            elif any(k in lower for k in ("sugest", "alerta", "proativo")):
+                reply = svc.get_proactive_suggestions()
+            elif "recomend" in lower and "estudo" in lower:
+                reply = svc.handle_structured_command({"action": "study_recommendations"})
+            else:
+                reply = self._mobile_chat_llm(prompt_text)
+        except Exception as e:
+            print(f"[NexusCloudAgent] Fallback LLM chat: {e}")
+            reply = self._mobile_chat_llm(prompt_text)
+
+        result_json = json.dumps({"reply": reply if isinstance(reply, str) else str(reply)}, ensure_ascii=False)
+        with self.get_db() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "UPDATE nexus_commands SET result=?, status='completed', updated_at=CURRENT_TIMESTAMP WHERE id=?",
+                (result_json, cmd_id),
+            )
+            conn.commit()
+
+    def _mobile_chat_llm(self, prompt_text):
+        prompt = f"""
+        Você é o Jarvis. O usuário está no celular e enviou:
+        "{prompt_text}"
+
+        Decida se precisa CRIAR hábito, tarefa ou registrar finança.
+        Para Hábitos: TOOL: create_habit / NAME: / FREQ:
+        Para Tarefas: TOOL: create_task / TITLE: / PRIO:
+        Para Finanças: TOOL: log_finance / TYPE: / AMOUNT: / DESC:
+        Caso contrário: CHAT: <resposta curta em português>
+        """
+        response = self.llm.generate(prompt)
+
+        with self.get_db() as conn:
+            cur = conn.cursor()
+            try:
+                import time
+                timestamp = int(time.time() * 1000)
+
+                if "TOOL: create_habit" in response:
+                    name = re.search(r"NAME:\s*(.*)", response).group(1).strip()
+                    freq = re.search(r"FREQ:\s*(.*)", response).group(1).strip()
+                    cur.execute(
+                        "INSERT INTO habits (id, name, frequency, xp_reward, active, current_streak) VALUES (?, ?, ?, ?, ?, ?)",
+                        (timestamp, name, freq, 50, 1, 0),
+                    )
+                    conn.commit()
+                    return f'Hábito "{name}" criado no Nexus.'
+
+                if "TOOL: create_task" in response:
+                    title = re.search(r"TITLE:\s*(.*)", response).group(1).strip()
+                    prio = re.search(r"PRIO:\s*(.*)", response).group(1).strip()
+                    cur.execute(
+                        "INSERT INTO tasks (id, title, priority, points_reward) VALUES (?, ?, ?, ?)",
+                        (timestamp, title, prio, 20),
+                    )
+                    conn.commit()
+                    return f'Tarefa "{title}" adicionada.'
+
+                if "TOOL: log_finance" in response:
+                    ftype = re.search(r"TYPE:\s*(.*)", response).group(1).strip()
+                    amt = float(re.search(r"AMOUNT:\s*([0-9.]+)", response).group(1).strip())
+                    desc = re.search(r"DESC:\s*(.*)", response).group(1).strip()
+                    cur.execute(
+                        "INSERT INTO finance_transactions (id, type, amount, description, category) VALUES (?, ?, ?, ?, ?)",
+                        (timestamp, ftype, amt, desc, "Geral"),
+                    )
+                    conn.commit()
+                    return f"Finança registrada: {desc} (R$ {amt})."
+            except Exception as e:
+                print(f"[NexusCloudAgent] Erro ao executar LLM Tool: {e}")
+
+        if "CHAT:" in response:
+            return response.split("CHAT:", 1)[1].strip()
+        return response.strip()[:500]
+
     def sync_memory_to_cloud(self):
         try:
             with open("data/structured_memory.json", "r", encoding="utf-8") as f:
                 memory_data = json.load(f)
-            
+
             with self.get_db() as conn:
                 cur = conn.cursor()
                 cur.execute("CREATE TABLE IF NOT EXISTS nexus_memory_sync (id INTEGER PRIMARY KEY, key_name TEXT UNIQUE, data_json TEXT, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)")

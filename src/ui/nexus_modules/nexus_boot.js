@@ -92,6 +92,15 @@ function nxToggleTheme() {
 function nxInitTheme() {
   nxApplyThemeTokens();
   nxApplyTheme(nxStoredTheme());
+  const boot = readBoot();
+  const wrapper = document.getElementById("nx-app-wrapper");
+  if (wrapper) {
+    const motion = boot.ui_motion_level || "balanced";
+    const density = boot.ui_density || "comfortable";
+    wrapper.setAttribute("data-motion", motion);
+    wrapper.setAttribute("data-density", density);
+    document.documentElement.setAttribute("data-nx-motion", motion);
+  }
 }
 
 if (document.readyState === "loading") {
