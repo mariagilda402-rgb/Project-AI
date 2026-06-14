@@ -523,7 +523,7 @@
                 </div>
 
                 <!-- Meta fields (title derived from first H1/line in editor) -->
-                <div style="padding:16px 16px 0">
+                <div class="note-editor-meta">
                     <div style="display:flex;gap:8px;margin-bottom:10px">
                         <select id="note-notebook" style="flex:1;padding:7px 10px;border-radius:8px;background:rgba(255,255,255,0.05);color:var(--text-secondary);border:1px solid var(--border-glass);font-size:0.82rem">
                             <option value="">📁 Sem caderno...</option>
@@ -532,32 +532,7 @@
                             style="flex:1;padding:7px 10px;border-radius:8px;background:rgba(108,92,231,0.08);color:var(--accent-purple);border:1px dashed var(--accent-purple);font-size:0.82rem;font-family:inherit">
                     </div>
                     <input type="text" id="note-subject" placeholder="📚 Assunto (visível para a IA)"
-                        style="padding:7px 10px;border-radius:8px;background:rgba(0,0,0,0.2);color:var(--text-secondary);border:1px solid var(--border-glass);font-size:0.82rem;width:100%;font-family:inherit;margin-bottom:12px">
-                </div>
-
-                <!-- Rich Toolbar (collapsible + overflow) -->
-                <div class="rich-toolbar rich-toolbar-collapsible" id="rich-toolbar">
-                    <div class="rt-visible">
-                    <button class="rt-btn" onclick="richCmd('bold')" title="Negrito"><b>B</b></button>
-                    <button class="rt-btn" onclick="richCmd('italic')" title="Itálico"><i>I</i></button>
-                    <button class="rt-btn" onclick="richHeading(1)" title="Título">H1</button>
-                    <button class="rt-btn" onclick="richCmd('insertUnorderedList')" title="Lista"><i class="fa-solid fa-list-ul"></i></button>
-                    <button class="rt-btn" onclick="openSlashMenu()" title="Inserir (/)"><i class="fa-solid fa-plus"></i></button>
-                    <button class="rt-btn" onclick="openYouTubeModal()" title="YouTube"><i class="fa-brands fa-youtube" style="color:#ff4444"></i></button>
-                    <button class="rt-btn ai-glow" onclick="openJarvisPanel()" title="IA"><i class="fa-solid fa-wand-magic-sparkles"></i></button>
-                    </div>
-                    <button class="rt-btn rt-overflow-btn" onclick="toggleToolbarOverflow(event)" title="Mais"><i class="fa-solid fa-ellipsis"></i></button>
-                    <div class="rt-overflow-menu" id="rt-overflow-menu" style="display:none">
-                    <button class="rt-btn" onclick="richCmd('underline')"><u>U</u></button>
-                    <button class="rt-btn" onclick="richCmd('strikeThrough')"><s>S</s></button>
-                    <button class="rt-btn" onclick="richHeading(2)">H2</button>
-                    <button class="rt-btn" onclick="richHeading(3)">H3</button>
-                    <button class="rt-btn" onclick="richCmd('insertOrderedList')"><i class="fa-solid fa-list-ol"></i></button>
-                    <button class="rt-btn" onclick="richInsertChecklist()"><i class="fa-solid fa-square-check"></i></button>
-                    <button class="rt-btn" onclick="toggleColorPicker(event)"><span id="color-indicator" style="display:inline-block;width:14px;height:14px;border-radius:50%;background:#fff"></span></button>
-                    <button class="rt-btn" onclick="richInsertLink()"><i class="fa-solid fa-link"></i></button>
-                    <button class="rt-btn" onclick="openImagePicker()"><i class="fa-solid fa-image"></i></button>
-                    </div>
+                        style="padding:7px 10px;border-radius:8px;background:rgba(0,0,0,0.2);color:var(--text-secondary);border:1px solid var(--border-glass);font-size:0.82rem;width:100%;font-family:inherit;margin-bottom:4px">
                 </div>
 
                 <!-- Color Picker Popup -->
@@ -581,7 +556,28 @@
                 <input type="file" id="note-image-input" accept="image/*" style="display:none" onchange="handleImageFile(event)">
 
                 <!-- Rich Editor Content Area -->
-                <div style="padding:16px;flex:1">
+                <div class="note-editor-writing-area">
+                    <div class="note-editor-toolbar-float" id="rich-toolbar">
+                        <button class="rt-btn rt-overflow-btn" onclick="toggleToolbarOverflow(event)" title="Mais"><i class="fa-solid fa-ellipsis"></i></button>
+                        <div class="rt-overflow-menu" id="rt-overflow-menu" style="display:none">
+                        <button class="rt-btn" onclick="richCmd('bold')" title="Negrito"><b>B</b></button>
+                        <button class="rt-btn" onclick="richCmd('italic')" title="Itálico"><i>I</i></button>
+                        <button class="rt-btn" onclick="richHeading(1)" title="Título">H1</button>
+                        <button class="rt-btn" onclick="richCmd('insertUnorderedList')" title="Lista"><i class="fa-solid fa-list-ul"></i></button>
+                        <button class="rt-btn" onclick="openSlashMenu()" title="Inserir (/)"><i class="fa-solid fa-plus"></i></button>
+                        <button class="rt-btn" onclick="openYouTubeModal()" title="YouTube"><i class="fa-brands fa-youtube" style="color:#ff4444"></i></button>
+                        <button class="rt-btn ai-glow" onclick="openJarvisPanel()" title="IA"><i class="fa-solid fa-wand-magic-sparkles"></i></button>
+                        <button class="rt-btn" onclick="richCmd('underline')"><u>U</u></button>
+                        <button class="rt-btn" onclick="richCmd('strikeThrough')"><s>S</s></button>
+                        <button class="rt-btn" onclick="richHeading(2)">H2</button>
+                        <button class="rt-btn" onclick="richHeading(3)">H3</button>
+                        <button class="rt-btn" onclick="richCmd('insertOrderedList')"><i class="fa-solid fa-list-ol"></i></button>
+                        <button class="rt-btn" onclick="richInsertChecklist()"><i class="fa-solid fa-square-check"></i></button>
+                        <button class="rt-btn" onclick="toggleColorPicker(event)"><span id="color-indicator" style="display:inline-block;width:14px;height:14px;border-radius:50%;background:#fff"></span></button>
+                        <button class="rt-btn" onclick="richInsertLink()"><i class="fa-solid fa-link"></i></button>
+                        <button class="rt-btn" onclick="openImagePicker()"><i class="fa-solid fa-image"></i></button>
+                        </div>
+                    </div>
                     <div id="note-content-rich"
                         class="rich-editor"
                         contenteditable="true"

@@ -16,8 +16,8 @@ android {
         applicationId "com.nexus.mobile"
         minSdk 23
         targetSdk 34
-        versionCode 4
-        versionName "1.3"
+        versionCode 5
+        versionName "1.4"
     }
 
     buildTypes {
@@ -39,11 +39,12 @@ android {
 
 dependencies {
     implementation 'androidx.core:core:1.12.0'
+    implementation 'androidx.webkit:webkit:1.10.0'
 }
 
 tasks.register("copyMobileWebAssets", Copy) {
     from(mobileWebDir) {
-        include "index.html", "app.js", "style.css", "manifest.json", "sw.js", "version.json"
+        include "index.html", "app.js", "style.css", "youtube-player.html", "manifest.json", "sw.js", "version.json"
     }
     into layout.projectDirectory.dir("src/main/assets")
 }

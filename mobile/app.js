@@ -2841,6 +2841,30 @@ function closeYouTubeModal() {
     if (modal) modal.style.display = 'none';
 }
 
+function getYouTubeEmbedOrigin() {
+    const origin = window.location.origin;
+    if (origin && origin !== 'null' && origin.startsWith('https://')) {
+        return origin;
+    }
+    return null;
+}
+
+function getYouTubeEmbedSrc(videoId) {
+    const origin = getYouTubeEmbedOrigin();
+    if (origin) {
+        const params = new URLSearchParams({
+            rel: '0',
+            playsinline: '1',
+            origin: origin,
+        });
+        return `https://www.youtube-nocookie.com/embed/${videoId}?${params.toString()}`;
+    }
+    const remotePlayerUrl = 'https://mariagilda402-rgb.github.io/Project-AI/mobile/youtube-player.html';
+    const configuredPlayerUrl = window.NEXUS_YOUTUBE_PLAYER_BASE;
+    const playerBaseUrl = configuredPlayerUrl || remotePlayerUrl;
+    return `${playerBaseUrl}?video=${encodeURIComponent(videoId)}`;
+}
+
 function insertYouTubeEmbed() {
     const url = document.getElementById('yt-url-input')?.value?.trim();
     if (!url) return;
@@ -2853,9 +2877,10 @@ function insertYouTubeEmbed() {
     const editor = document.getElementById('note-content-rich');
     if (!editor) return;
     editor.focus();
+    const embedSrc = getYouTubeEmbedSrc(videoId);
     const embedHTML = `<div class="yt-embed-block" contenteditable="false">
         <iframe
-            src="https://www.youtube-nocookie.com/embed/${videoId}"
+            src="${embedSrc}"
             title="YouTube video player"
             loading="lazy"
             referrerpolicy="strict-origin-when-cross-origin"
@@ -5742,9 +5767,10 @@ function clearLocalDB() {
         const editor = document.getElementById('note-content-rich');
         if (!editor) return;
         editor.focus();
+        const embedSrc = getYouTubeEmbedSrc(videoId);
         const embedHTML = `<div class="yt-embed-block" contenteditable="false">
             <iframe
-                src="https://www.youtube-nocookie.com/embed/${videoId}"
+                src="${embedSrc}"
                 title="YouTube video player"
                 loading="lazy"
                 referrerpolicy="strict-origin-when-cross-origin"

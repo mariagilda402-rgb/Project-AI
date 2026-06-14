@@ -22,6 +22,7 @@ import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
+import android.webkit.MimeTypeMap;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
@@ -41,8 +42,10 @@ import android.net.ConnectivityManager;
 import android.net.Network;
 import android.net.NetworkCapabilities;
 import androidx.core.content.FileProvider;
+import androidx.webkit.WebViewAssetLoader;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -64,7 +67,8 @@ public class MainActivity extends Activity {
     private static final int REQUEST_IMAGE_CAPTURE = 4403;
     private String currentPhotoPath = "";
 
-    private static final String LOCAL_APP_URL = "file:///android_asset/index.html";
+    private static final String LOCAL_APP_URL = "https://appassets.androidplatform.net/assets/index.html";
+    private static final String DOWNLOADED_APP_URL = "https://appassets.androidplatform.net/bundle/index.html";
     private static final String REMOTE_BUNDLE_BASE = "https://mariagilda402-rgb.github.io/Project-AI/mobile/";
     private static final String BUNDLE_DIR_NAME = "mobile_bundle";
     private static final String[] WEB_BUNDLE_FILES = {
@@ -72,12 +76,14 @@ public class MainActivity extends Activity {
         "index.html",
         "style.css",
         "app.js",
+        "youtube-player.html",
         "manifest.json",
         "sw.js"
     };
 
     private WebView webView;
     private ProgressBar progressBar;
+    private WebViewAssetLoader webViewAssetLoader;
 
     @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
     @Override
@@ -111,6 +117,10 @@ public class MainActivity extends Activity {
 
         webView = findViewById(R.id.webView);
         progressBar = findViewById(R.id.progressBar);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+            WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG);
+        }
 
         configureWebView();
         maybeRequestRuntimePermissions();
@@ -190,6 +200,11 @@ public class MainActivity extends Activity {
 
         settings.setDomStorageEnabled(true);
 
+        webViewAssetLoader = new WebViewAssetLoader.Builder()
+            .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(this))
+            .addPathHandler("/bundle/", new InternalBundlePathHandler(getDownloadedBundleDir()))
+            .build();
+
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
@@ -198,26 +213,9 @@ public class MainActivity extends Activity {
 
             @Override
             public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
-                if (request != null && request.getUrl() != null) {
-                    String host = request.getUrl().getHost();
-                    if (host != null && (host.contains("youtube.com") || host.contains("youtu.be") || host.contains("googlevideo.com"))) {
-                        try {
-                            URL url = new URL(request.getUrl().toString());
-                            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-                            connection.setRequestProperty("Referer", "https://www.youtube.com/");
-                            connection.setRequestProperty("Origin", "https://www.youtube.com");
-                            connection.connect();
-                            String contentType = connection.getContentType();
-                            if (contentType == null) contentType = "text/html";
-                            return new WebResourceResponse(
-                                contentType,
-                                connection.getContentEncoding() != null ? connection.getContentEncoding() : "utf-8",
-                                connection.getInputStream()
-                            );
-                        } catch (Exception ignored) {
-                            // Fall through to default WebView handling
-                        }
-                    }
+                if (request != null && request.getUrl() != null && webViewAssetLoader != null) {
+                    WebResourceResponse assetResponse = webViewAssetLoader.shouldInterceptRequest(request.getUrl());
+                    if (assetResponse != null) return assetResponse;
                 }
                 return super.shouldInterceptRequest(view, request);
             }
@@ -252,7 +250,7 @@ public class MainActivity extends Activity {
     private void loadBestAvailableApp() {
         File downloadedIndex = getDownloadedBundleIndex();
         if (downloadedIndex.exists()) {
-            webView.loadUrl(Uri.fromFile(downloadedIndex).toString());
+            webView.loadUrl(DOWNLOADED_APP_URL);
             return;
         }
         webView.loadUrl(LOCAL_APP_URL);
@@ -399,7 +397,7 @@ public class MainActivity extends Activity {
     public class NexusAndroidBridge {
         @JavascriptInterface
         public String getShellInfo() {
-            return "{\"nativeShell\":true,\"platform\":\"android\",\"version\":\"1.2\"}";
+            return "{\"nativeShell\":true,\"platform\":\"android\",\"version\":\"1.3\",\"appOrigin\":\"https://appassets.androidplatform.net\"}";
         }
 
         @JavascriptInterface
@@ -753,6 +751,62 @@ public class MainActivity extends Activity {
                 return "{\"error\":\"" + e.getMessage().replace("\"", "'") + "\"}";
             }
         }
+    }
+
+    private static class InternalBundlePathHandler implements WebViewAssetLoader.PathHandler {
+        private final File rootDir;
+
+        InternalBundlePathHandler(File rootDir) {
+            this.rootDir = rootDir;
+        }
+
+        @Override
+        public WebResourceResponse handle(String path) {
+            try {
+                String safePath = path == null ? "" : path;
+                while (safePath.startsWith("/")) {
+                    safePath = safePath.substring(1);
+                }
+
+                File target = new File(rootDir, safePath);
+                String rootPath = rootDir.getCanonicalPath();
+                String targetPath = target.getCanonicalPath();
+                if (!targetPath.equals(rootPath) && !targetPath.startsWith(rootPath + File.separator)) {
+                    return null;
+                }
+                if (!target.isFile()) {
+                    return null;
+                }
+
+                String mimeType = guessMimeType(target.getName());
+                String encoding = isTextMimeType(mimeType) ? "utf-8" : null;
+                return new WebResourceResponse(mimeType, encoding, new FileInputStream(target));
+            } catch (IOException ignored) {
+                return null;
+            }
+        }
+    }
+
+    private static String guessMimeType(String fileName) {
+        String extension = MimeTypeMap.getFileExtensionFromUrl(fileName);
+        String mimeType = extension != null
+            ? MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension.toLowerCase())
+            : null;
+        if (mimeType != null) return mimeType;
+        if (fileName.endsWith(".js")) return "application/javascript";
+        if (fileName.endsWith(".json")) return "application/json";
+        if (fileName.endsWith(".css")) return "text/css";
+        if (fileName.endsWith(".html")) return "text/html";
+        return "application/octet-stream";
+    }
+
+    private static boolean isTextMimeType(String mimeType) {
+        return mimeType != null && (
+            mimeType.startsWith("text/")
+                || mimeType.contains("javascript")
+                || mimeType.contains("json")
+                || mimeType.contains("xml")
+        );
     }
 
     private long dirSize(File file) {

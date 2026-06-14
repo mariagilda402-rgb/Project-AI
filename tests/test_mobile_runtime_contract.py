@@ -5,6 +5,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 APP_JS = ROOT / "mobile" / "app.js"
 INDEX_HTML = ROOT / "mobile" / "index.html"
+YOUTUBE_PLAYER_HTML = ROOT / "mobile" / "youtube-player.html"
 
 
 def read_app_js() -> str:
@@ -13,6 +14,10 @@ def read_app_js() -> str:
 
 def read_index_html() -> str:
     return INDEX_HTML.read_text(encoding="utf-8")
+
+
+def read_youtube_player_html() -> str:
+    return YOUTUBE_PLAYER_HTML.read_text(encoding="utf-8")
 
 
 def test_mobile_app_does_not_redeclare_supabase_sdk_global():
@@ -151,11 +156,32 @@ def test_mobile_youtube_embed_has_referrer_policy():
     app_js = read_app_js()
     assert 'referrerpolicy="strict-origin-when-cross-origin"' in app_js
     assert "yt-embed-block" in app_js
+    assert "getYouTubeEmbedSrc" in app_js
+    assert "getYouTubeEmbedOrigin" in app_js
     assert "youtube-nocookie.com/embed/" in app_js
+    assert "origin: origin" in app_js
+    assert "mariagilda402-rgb.github.io/Project-AI/mobile/youtube-player.html" in app_js
     assert "allowfullscreen" in app_js
     assert "picture-in-picture" in app_js
     html = read_index_html()
     assert 'name="referrer"' in html
+    player_html = read_youtube_player_html()
+    assert "youtube-nocookie.com/embed/" in player_html
+    assert "setAttribute('referrerpolicy', 'strict-origin-when-cross-origin')" in player_html
+    assert "origin: origin" in player_html
+
+
+def test_mobile_apk_serves_webview_from_https_appassets_for_youtube_referrer():
+    main = (ROOT / "mobile-apk" / "app" / "src" / "main" / "java" / "com" / "nexus" / "mobile" / "MainActivity.java").read_text(encoding="utf-8")
+    gradle = (ROOT / "mobile-apk" / "app" / "build.gradle").read_text(encoding="utf-8")
+
+    assert "WebViewAssetLoader" in main
+    assert "https://appassets.androidplatform.net/assets/index.html" in main
+    assert "https://appassets.androidplatform.net/bundle/index.html" in main
+    assert '"youtube-player.html"' in main
+    assert "appOrigin" in main
+    assert "webView.loadUrl(Uri.fromFile" not in main
+    assert "androidx.webkit:webkit" in gradle
 
 
 def test_mobile_save_quick_add_sets_task_name_and_title():
@@ -217,6 +243,33 @@ def test_mobile_hidden_note_textarea_cannot_render_white_box():
     assert ".legacy-hidden-textarea" in css
     assert "display: none !important" in css
     assert ".rich-editor" in css and "background: transparent" in css
+
+
+def test_mobile_note_editor_scrolls_and_uses_compact_toolbar():
+    html = read_index_html()
+    css = (ROOT / "mobile" / "style.css").read_text(encoding="utf-8")
+
+    assert 'class="note-editor-writing-area"' in html
+    assert 'class="note-editor-toolbar-float"' in html
+    assert ".note-editor-writing-area" in css
+    assert "overflow-y: auto" in css
+    assert "flex: 1" in css
+    assert ".note-editor-toolbar-float" in css
+    assert "height: 0" in css
+    assert "rich-toolbar-collapsible" not in html
+    overflow_start = html.index('id="rt-overflow-menu"')
+    overflow_html = html[overflow_start:html.index("</div>", overflow_start) + 6]
+    for action in ["richCmd('bold')", "openYouTubeModal()", "openJarvisPanel()", "openSlashMenu()"]:
+        assert action in overflow_html
+
+
+def test_mobile_youtube_player_is_compact_inside_notes():
+    css = (ROOT / "mobile" / "style.css").read_text(encoding="utf-8")
+
+    assert ".yt-embed-block" in css
+    assert "max-width: 300px" in css
+    assert "aspect-ratio: 16 / 9" in css
+    assert "margin: 10px auto" in css
 
 
 def test_mobile_view_routines_inside_main():
