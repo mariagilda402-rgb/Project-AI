@@ -57,6 +57,9 @@ import android.os.Environment;
 
 import androidx.browser.customtabs.CustomTabsIntent;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -439,7 +442,25 @@ public class MainActivity extends Activity {
     public class NexusAndroidBridge {
         @JavascriptInterface
         public String getShellInfo() {
-            return "{\"nativeShell\":true,\"platform\":\"android\",\"version\":\"1.3\",\"appOrigin\":\"https://appassets.androidplatform.net\"}";
+            try {
+                int vc = getPackageManager().getPackageInfo(getPackageName(), 0).versionCode;
+                String vn = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+                JSONObject json = new JSONObject();
+                json.put("nativeShell", true);
+                json.put("platform", "android");
+                json.put("versionCode", vc);
+                json.put("versionName", vn);
+                json.put("version", vn);
+                json.put("appOrigin", "https://appassets.androidplatform.net");
+                return json.toString();
+            } catch (Exception e) {
+                return "{\"nativeShell\":true,\"platform\":\"android\",\"version\":\"1.9\"}";
+            }
+        }
+
+        @JavascriptInterface
+        public String getAppInfo() {
+            return getShellInfo();
         }
 
         @JavascriptInterface

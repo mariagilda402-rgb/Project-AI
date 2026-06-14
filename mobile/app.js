@@ -647,6 +647,12 @@ window.updateAppVersionDebug = function() {
             apkVer = info.versionName || info.version || apkVer;
             window.__nexusApkVersion = apkVer;
         } catch (_) {}
+    } else if (window.AndroidNative && typeof window.AndroidNative.getShellInfo === 'function') {
+        try {
+            const info = JSON.parse(window.AndroidNative.getShellInfo());
+            apkVer = info.versionName || info.version || apkVer;
+            window.__nexusApkVersion = apkVer;
+        } catch (_) {}
     }
     el.textContent = 'web ' + webVer + ' · apk ' + apkVer;
 };
