@@ -9,11 +9,28 @@ import re
 import threading
 from youtube_transcript_api import YouTubeTranscriptApi
 from src.services.llm import LLMService
+from src.config import load_settings
 
 class NexusCloudAgent:
     def __init__(self, db_path="data/nexus.db"):
         self.db_path = db_path
-        self.llm = LLMService()
+        settings = load_settings()
+        self.llm = LLMService(
+            gemini_api_key=settings.gemini_api_key,
+            gemini_model=settings.gemini_model,
+            openrouter_api_key=settings.openrouter_api_key,
+            openrouter_model=settings.openrouter_model,
+            nvidia_api_key=settings.nvidia_api_key,
+            nvidia_model=settings.nvidia_model,
+            groq_api_key=settings.groq_api_key,
+            groq_model=settings.groq_model,
+            ollama_model=settings.ollama_model,
+            ollama_base_url=settings.ollama_base_url,
+            gemini_max_rpm=settings.gemini_max_rpm,
+            gemini_retry_attempts=settings.gemini_retry_attempts,
+            primary_llm_provider=settings.llm_provider,
+            fallback_gemini=settings.llm_fallback_gemini,
+        )
         self._stop_event = threading.Event()
         self.thread = None
 
@@ -276,16 +293,20 @@ INSIGHTS: <O novo conteúdo gerado>
             conn.commit()
 
     def _mobile_chat_llm(self, prompt_text):
-        prompt = f"""
-        Você é o Jarvis. O usuário está no celular e enviou:
-        "{prompt_text}"
+        prompt = f""" Você é o Jarvis, assistente pessoal do app Nexus (hábitos, tarefas, metas, finanças, estudos, alarmes).
+Responda em português brasileiro, de forma natural e útil.
 
-        Decida se precisa CRIAR hábito, tarefa ou registrar finança.
-        Para Hábitos: TOOL: create_habit / NAME: / FREQ:
-        Para Tarefas: TOOL: create_task / TITLE: / PRIO:
-        Para Finanças: TOOL: log_finance / TYPE: / AMOUNT: / DESC:
-        Caso contrário: CHAT: <resposta curta em português>
-        """
+Mensagem do usuário no celular: "{prompt_text}"
+
+Para criar dados use UMA linha TOOL:
+TOOL: create_habit | name: NOME | time: HH:MM
+TOOL: create_task | title: TITULO | priority: low|medium|high
+TOOL: log_finance | type: income|expense | amount: NUMERO | desc: TEXTO
+TOOL: adjust_goal | name: NOME | delta: +10 ou -10
+
+Caso contrário responda em texto normal (sem prefixo CHAT:).
+Seja conciso e não invente dados do usuário.
+"""
         response = self.llm.generate(prompt)
 
         with self.get_db() as conn:

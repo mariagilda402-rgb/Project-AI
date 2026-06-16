@@ -202,3 +202,35 @@ def register_nexus_routes(app) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
         return jsonify({"ok": True})
+
+    @app.route("/api/nexus/jarvis/note-action", methods=["POST", "OPTIONS"])
+    def nexus_jarvis_note_action():
+        if request.method == "OPTIONS":
+            return "", 204
+        data = request.get_json(silent=True) or {}
+        action = data.get("action") or "summarize_text"
+        content = data.get("content") or data.get("youtube_url") or ""
+        if not content:
+            return jsonify({"ok": False, "error": "content required"}), 400
+        try:
+            from src.config import load_settings
+            from src.services.llm import LLMService
+            settings = load_settings()
+            llm = LLMService(
+                gemini_api_key=settings.gemini_api_key,
+                gemini_model=settings.gemini_model,
+                primary_llm_provider=settings.llm_provider,
+            )
+            prompts = {
+                "summarize_text": f"Resuma o texto abaixo em português com bullet points:\n\n{content}",
+                "expand_text": f"Expanda e detalhe o texto abaixo em português:\n\n{content}",
+                "translate": f"Traduza para português brasileiro:\n\n{content}",
+                "deep_search": f"Explique de forma didática sobre: {content}",
+                "summarize_video": f"O usuário quer resumo do vídeo YouTube: {content}. Descreva o que provavelmente aborda e dicas de estudo.",
+                "generate_image": f"Descreva uma imagem educativa sobre: {content}",
+            }
+            prompt = prompts.get(action, f"Ação {action}: {content}")
+            result = llm.generate(prompt)
+            return jsonify({"ok": True, "result": result or "Sem resposta do modelo."})
+        except Exception as e:
+            return jsonify({"ok": False, "error": str(e)}), 500

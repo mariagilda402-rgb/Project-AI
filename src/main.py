@@ -379,6 +379,20 @@ def main() -> None:
     runtime_status = RuntimeStatus()
     runtime_status.mark_startup_phase("settings_loaded", settings.llm_provider)
 
+    try:
+        from src.services.sync_service import start_sync
+        start_sync()
+        runtime_status.mark_startup_phase("sync_service_started")
+    except Exception as e:
+        print(f"[SyncService] Falha ao iniciar: {e}")
+
+    try:
+        cloud_agent = NexusCloudAgent(db_path=str(root_dir / "data" / "nexus.db"))
+        cloud_agent.start()
+        runtime_status.mark_startup_phase("cloud_agent_started")
+    except Exception as e:
+        print(f"[NexusCloudAgent] Falha ao iniciar: {e}")
+
     if settings.enable_visualizer:
         from src.services import visualizer
         visualizer.start()

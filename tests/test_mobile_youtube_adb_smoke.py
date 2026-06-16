@@ -46,6 +46,7 @@ def _device_connected() -> bool:
 
 
 def _push_bundle_to_device() -> None:
+    _adb("shell", "run-as", PACKAGE, "mkdir", "files")
     _adb("shell", "run-as", PACKAGE, "mkdir", "files/mobile_bundle")
     for file_name in BUNDLE_FILES:
         local_path = MOBILE_DIR / file_name

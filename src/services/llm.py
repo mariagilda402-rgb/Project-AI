@@ -751,6 +751,9 @@ class LLMService:
                     if "Cota diária" in str(sleep_exc): return ""
         return ""
 
+    def generate(self, prompt: str, system_prompt: str = "Você é o Jarvis, assistente pessoal do Nexus. Responda em português de forma útil e concisa.") -> str:
+        return self.chat(system_prompt, [{"role": "user", "content": prompt}])
+
     def classify_intent(self, user_text: str) -> str:
         """
         Classifica em uma chamada curta: vision | action | chat.
