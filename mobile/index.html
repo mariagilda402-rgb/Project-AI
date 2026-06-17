@@ -27,8 +27,7 @@
 
     <!-- Jarvis Call Banner (Hidden by default) -->
     <div id="jarvis-call-banner"
-        style="display: none; position: fixed; top: 0; left: 0; width: 100%; background: rgba(0, 206, 201, 0.9); color: white; padding: 10px; z-index: 1000; align-items: center; justify-content: space-between; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);"
-        onclick="expandJarvisCallOverlay()">
+        style="display: none; position: fixed; top: 0; left: 0; width: 100%; background: rgba(0, 206, 201, 0.9); color: white; padding: 10px; z-index: 1000; display: none; align-items: center; justify-content: space-between; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);">
         <div style="display: flex; align-items: center; gap: 10px;">
             <i class="fa-solid fa-phone-volume fa-shake"></i>
             <div>
@@ -46,29 +45,6 @@
         </div>
     </div>
 
-    <!-- Jarvis Call Overlay (voice + visualizer) -->
-    <div id="jarvis-call-overlay" class="jarvis-call-overlay" style="display:none">
-        <div class="jarvis-call-overlay-inner">
-            <div id="jarvis-call-debug-top" class="jarvis-call-debug-caption" style="display:none"></div>
-            <p id="jarvis-call-state-label" class="jarvis-call-state-label">Em ligação</p>
-            <span id="jarvis-call-timer-overlay" class="jarvis-call-timer-overlay">00:00</span>
-            <div id="jarvis-viz-bars" class="jarvis-viz-bars" aria-hidden="true"></div>
-            <div class="jarvis-call-actions">
-                <button id="jarvis-call-mute-btn" class="jarvis-call-action-btn" onclick="toggleJarvisCallMic()" aria-label="Mutar microfone">
-                    <i class="fa-solid fa-microphone"></i>
-                </button>
-                <button id="jarvis-call-minimize-btn" class="jarvis-call-action-btn" onclick="minimizeJarvisCallOverlay()" aria-label="Minimizar">
-                    <i class="fa-solid fa-down-left-and-up-right-to-center"></i>
-                </button>
-                <button class="jarvis-call-action-btn jarvis-call-hangup" onclick="endJarvisCall()" aria-label="Encerrar">
-                    <i class="fa-solid fa-phone-slash"></i>
-                </button>
-            </div>
-            <button type="button" class="jarvis-call-debug-toggle" onclick="toggleJarvisCallDebug()">Debug</button>
-            <div id="jarvis-call-debug-bottom" class="jarvis-call-debug-caption" style="display:none"></div>
-        </div>
-    </div>
-
     <!-- Top Header -->
     <header class="app-header">
         <div class="user-profile">
@@ -79,9 +55,8 @@
             <div class="user-info">
                 <h1 class="greeting">Olá, <span id="user-name">Comandante</span></h1>
                 <div class="level-badge"><i class="fa-solid fa-star"></i> Nv. <span id="user-level">--</span></div>
-                <div id="app-version-debug" class="app-version-debug">web — · apk —</div>
                 <button id="sync-status-chip" onclick="openSettingsView()" type="button"
-                    style="margin-top:4px;background:rgba(255,255,255,0.08);border:1px solid var(--border-glass);color:var(--text-secondary);padding:4px 10px;border-radius:12px;font-size:0.7rem;cursor:pointer;font-family:inherit">
+                    style="margin-top:6px;background:rgba(255,255,255,0.08);border:1px solid var(--border-glass);color:var(--text-secondary);padding:4px 10px;border-radius:12px;font-size:0.7rem;cursor:pointer;font-family:inherit">
                     <i class="fa-solid fa-cloud"></i> <span id="sync-status-text">Offline</span>
                 </button>
             </div>
@@ -95,8 +70,6 @@
                 <i class="fa-solid fa-broom"></i>
                 <span id="storage-warning-badge" class="storage-warn-badge" style="display:none"></span>
             </button>
-            <button class="icon-btn" aria-label="Histórico Jarvis" onclick="navigateTo('view-jarvis-history')" title="Histórico Jarvis">
-                <i class="fa-solid fa-clock-rotate-left"></i></button>
             <button class="icon-btn" aria-label="Configurações" onclick="openSettingsModal()"><i
                     class="fa-solid fa-gear"></i></button>
         </div>
@@ -168,7 +141,7 @@
             <section class="quick-actions">
                 <h3 class="section-title">Ações Rápidas</h3>
                 <div class="actions-scroll">
-                    <button class="action-bubble" onclick="navigateTo('view-habits');setTimeout(function(){openHabitForm();},200)"><i
+                    <button class="action-bubble" onclick="openCreateModal()"><i
                             class="fa-solid fa-plus"></i><br>Hábito</button>
                     <button class="action-bubble"
                         onclick="document.querySelector('.nav-item[data-target=\'view-finance\']').click();"><i
@@ -241,10 +214,48 @@
                 <button class="study-chip" data-filter="morning" onclick="filterHabits('morning',this)"><i class="fa-solid fa-sun"></i> Manhã</button>
                 <button class="study-chip" data-filter="afternoon" onclick="filterHabits('afternoon',this)"><i class="fa-solid fa-cloud-sun"></i> Tarde</button>
                 <button class="study-chip" data-filter="night" onclick="filterHabits('night',this)"><i class="fa-solid fa-moon"></i> Noite</button>
-                <button class="study-chip" data-filter="archived" onclick="filterHabits('archived',this)"><i class="fa-solid fa-box-archive"></i> Arquivados</button>
             </div>
 
             <div id="habits-list" class="list-container" style="padding-bottom:80px"></div>
+
+            <!-- Habit Detail Modal (full CRUD form) -->
+            <div id="habit-detail-modal" class="bottom-sheet" style="display:none">
+                <div class="bottom-sheet-content glass">
+                    <div class="bottom-sheet-handle"></div>
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+                        <h3 id="habit-form-title" style="margin:0;font-size:1.1rem">Habito</h3>
+                        <button onclick="closeHabitDetail()" class="icon-btn"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                    <div class="form-field"><label>Nome</label><input type="text" id="habit-form-name" placeholder="Ex: Meditar 10 min"></div>
+                    <div class="form-field"><label>Descricao</label><input type="text" id="habit-form-desc" placeholder="Opcional"></div>
+                    <div style="display:flex;gap:10px">
+                        <div class="form-field" style="flex:1"><label>XP</label><input type="number" id="habit-form-xp" value="50" min="1"></div>
+                        <div class="form-field" style="flex:1"><label>Periodo</label>
+                            <select id="habit-form-period"><option value="morning">Manha</option><option value="afternoon">Tarde</option><option value="night">Noite</option><option value="all">Qualquer</option></select>
+                        </div>
+                    </div>
+                    <label class="form-label-sm">Dias da Semana</label>
+                    <div class="dow-row" id="habit-form-dow">
+                        <button type="button" class="dow-btn" data-d="0">D</button>
+                        <button type="button" class="dow-btn selected" data-d="1">S</button>
+                        <button type="button" class="dow-btn selected" data-d="2">T</button>
+                        <button type="button" class="dow-btn selected" data-d="3">Q</button>
+                        <button type="button" class="dow-btn selected" data-d="4">Q</button>
+                        <button type="button" class="dow-btn selected" data-d="5">S</button>
+                        <button type="button" class="dow-btn" data-d="6">S</button>
+                    </div>
+                    <div class="form-field" style="margin-top:12px"><label>Lembrete</label><input type="time" id="habit-alarm-time"></div>
+                    <div style="display:flex;gap:8px;align-items:center;margin:12px 0;padding:10px;background:rgba(255,255,255,0.04);border-radius:10px">
+                        <div style="flex:1;text-align:center"><div style="font-size:1.4rem;font-weight:800;color:#f97316" id="habit-detail-streak">0</div><div style="font-size:0.7rem;color:var(--text-secondary)">Streak</div></div>
+                        <div style="flex:1;text-align:center"><div style="font-size:1.4rem;font-weight:800;color:var(--accent-green)" id="habit-detail-total">0</div><div style="font-size:0.7rem;color:var(--text-secondary)">Total</div></div>
+                    </div>
+                    <div style="display:flex;gap:10px;margin-top:16px">
+                        <button onclick="deleteCurrentHabit()" style="flex:1;background:rgba(255,71,87,0.15);border:1px solid var(--accent-pink);color:var(--accent-pink);padding:14px;border-radius:12px;font-weight:700"><i class="fa-solid fa-trash"></i></button>
+                        <button onclick="saveHabitForm()" style="flex:2;background:var(--accent-primary);border:none;color:white;padding:14px;border-radius:12px;font-weight:700">Salvar</button>
+                        <button id="habit-detail-complete-btn" onclick="completeCurrentHabit()" style="flex:2;background:rgba(255,255,255,0.1);border:none;color:white;padding:14px;border-radius:12px;font-weight:700"><i class="fa-solid fa-check"></i> Feito</button>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div id="view-finance" class="view">
@@ -252,35 +263,11 @@
                 <h2 class="page-title" style="margin-bottom:0">Financas</h2>
                 <div class="view-header-actions">
                     <button class="icon-btn calendar-btn" onclick="NexusCalendar.open({module:'finance',onSelect:function(){loadFinances();}})"><i class="fa-solid fa-calendar"></i> <span id="finance-date-label">Hoje</span></button>
-                    <button class="icon-btn" onclick="openFinanceForm()" title="Nova transacao"><i class="fa-solid fa-plus"></i></button>
                     <button class="icon-btn" onclick="openFinanceOverflow(event)" title="Mais"><i class="fa-solid fa-ellipsis-vertical"></i></button>
                 </div>
             </div>
 
-            <!-- Finance summary -->
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px">
-                <div class="glass" style="padding:12px;border-radius:12px;text-align:center">
-                    <div style="font-size:0.68rem;color:var(--text-secondary)">Saldo mês</div>
-                    <div id="finance-balance-month" style="font-size:1.1rem;font-weight:800;color:var(--accent-green)">R$ 0</div>
-                </div>
-                <div class="glass" style="padding:12px;border-radius:12px;text-align:center">
-                    <div style="font-size:0.68rem;color:var(--text-secondary)">Receitas</div>
-                    <div id="finance-income-month" style="font-size:1.1rem;font-weight:800;color:#34d399">R$ 0</div>
-                </div>
-                <div class="glass" style="padding:12px;border-radius:12px;text-align:center">
-                    <div style="font-size:0.68rem;color:var(--text-secondary)">Despesas</div>
-                    <div id="finance-expense-month" style="font-size:1.1rem;font-weight:800;color:#fb7185">R$ 0</div>
-                </div>
-            </div>
-
-            <!-- Finance tabs -->
-            <div class="fitness-tabs" style="display:flex;gap:0;background:rgba(0,0,0,0.3);border-radius:12px;padding:4px;margin-bottom:16px">
-                <button class="fitness-tab active" id="finance-tab-transactions" onclick="switchFinanceTab('transactions',this)">Transações</button>
-                <button class="fitness-tab" id="finance-tab-investments" onclick="switchFinanceTab('investments',this)">Investimentos</button>
-                <button class="fitness-tab" id="finance-tab-budgets" onclick="switchFinanceTab('budgets',this)">Orçamentos</button>
-            </div>
-
-            <div id="finance-panel-transactions">
+            <!-- Finance Analytics Dashboard -->
             <div class="glass" style="margin-bottom:16px;padding:15px;border-radius:16px">
                 <h3 style="margin:0 0 12px;font-size:0.95rem;color:var(--text-secondary)"><i class="fa-solid fa-chart-pie"></i> Despesas por Categoria (Mês)</h3>
                 <div style="position:relative;height:200px;width:100%">
@@ -296,24 +283,6 @@
 
             <div class="list-container" id="finance-list">
                 <div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> Carregando...</div>
-            </div>
-            </div>
-
-            <div id="finance-panel-investments" style="display:none">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-                    <h3 class="section-title" style="margin:0">Carteira</h3>
-                    <button onclick="openInvestmentForm()" style="background:none;border:none;color:var(--accent-primary);font-weight:700;cursor:pointer;font-family:inherit">+ Ativo</button>
-                </div>
-                <div id="finance-investments-list" class="list-container"></div>
-                <div class="glass" style="padding:14px;border-radius:12px;margin-top:12px">
-                    <div style="font-size:0.75rem;color:var(--text-secondary)">Patrimônio investido</div>
-                    <div id="finance-investments-total" style="font-size:1.4rem;font-weight:800;color:var(--accent-blue)">R$ 0</div>
-                </div>
-            </div>
-
-            <div id="finance-panel-budgets" style="display:none">
-                <p style="font-size:0.85rem;color:var(--text-secondary);margin:0 0 12px">Limite mensal por categoria. Alerta ao ultrapassar 80%.</p>
-                <div id="finance-budgets-list"></div>
             </div>
         </div>
 
@@ -353,6 +322,45 @@
                 <div class="kanban-column" style="flex:0 0 85%;padding-right:20px">
                     <h3 style="font-size:0.9rem;color:var(--accent-green);margin-bottom:10px">CONCLUIDO</h3>
                     <div id="kanban-done" style="display:flex;flex-direction:column;gap:10px;min-height:100px"></div>
+                </div>
+            </div>
+            
+            <!-- Task Detail Modal -->
+            <div id="task-detail-modal" class="bottom-sheet" style="display:none">
+                <div class="bottom-sheet-content glass">
+                    <div class="bottom-sheet-handle"></div>
+                    <input type="text" id="task-detail-name" style="width:100%;background:none;border:none;color:white;font-size:1.4rem;font-weight:700;margin-bottom:10px;font-family:inherit" onchange="saveTaskDetail()">
+                    <textarea id="task-detail-description" placeholder="Descricao..." rows="2" style="width:100%;background:rgba(255,255,255,0.05);border:1px solid var(--border-glass);color:white;padding:10px;border-radius:8px;font-family:inherit;margin-bottom:12px;resize:none" onchange="saveTaskDetail()"></textarea>
+                    <div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+                        <select id="task-detail-priority" style="background:rgba(255,255,255,0.1);color:white;border:none;padding:6px 12px;border-radius:8px;font-size:0.85rem" onchange="saveTaskDetail()">
+                            <option value="low">Baixa</option>
+                            <option value="medium">Media</option>
+                            <option value="high">Alta</option>
+                        </select>
+                        <select id="task-detail-status" style="background:rgba(255,255,255,0.1);color:white;border:none;padding:6px 12px;border-radius:8px;font-size:0.85rem" onchange="saveTaskDetail()">
+                            <option value="todo">A fazer</option>
+                            <option value="doing">Fazendo</option>
+                            <option value="done">Concluida</option>
+                        </select>
+                        <input type="date" id="task-detail-due" style="background:rgba(255,255,255,0.1);color:white;border:none;padding:6px 12px;border-radius:8px;font-size:0.85rem" onchange="saveTaskDetail()">
+                    </div>
+                    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding:10px;background:rgba(255,255,255,0.04);border-radius:10px">
+                        <label class="switch" style="margin:0"><input type="checkbox" id="task-detail-notify-enabled" onchange="saveTaskDetail()"><span class="slider"></span></label>
+                        <span style="font-size:0.85rem;flex:1">Notificar</span>
+                        <input type="datetime-local" id="task-detail-notify-at" style="background:rgba(255,255,255,0.1);color:white;border:none;padding:6px 10px;border-radius:8px;font-size:0.8rem" onchange="saveTaskDetail()">
+                    </div>
+                    <div style="margin-bottom:20px">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+                            <span style="font-size:0.85rem;color:var(--text-secondary);font-weight:600">SUBTAREFAS</span>
+                            <button onclick="addSubtaskInline()" style="background:none;border:none;color:var(--accent-primary);font-size:0.85rem;font-weight:700;cursor:pointer">+ Adicionar</button>
+                        </div>
+                        <div id="task-subtasks-list" style="display:flex;flex-direction:column;gap:8px;max-height:150px;overflow-y:auto"></div>
+                    </div>
+                    <div style="display:flex;gap:10px">
+                        <button onclick="deleteCurrentTask()" style="flex:1;background:rgba(255,71,87,0.15);border:1px solid var(--accent-pink);color:var(--accent-pink);padding:14px;border-radius:12px;font-weight:700"><i class="fa-solid fa-trash"></i></button>
+                        <button onclick="completeCurrentTask()" style="flex:2;background:var(--accent-green);border:none;color:white;padding:14px;border-radius:12px;font-weight:700"><i class="fa-solid fa-check"></i> Concluir</button>
+                        <button onclick="closeTaskDetail()" style="flex:1;background:rgba(255,255,255,0.1);border:none;color:white;padding:14px;border-radius:12px;font-weight:700">Fechar</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -448,7 +456,10 @@
                 <!-- Quick Tools -->
                 <h3 class="section-title" style="margin-top:20px">Ferramentas</h3>
                 <div class="actions-scroll">
-                    <button class="action-bubble" onclick="openGraphView()">
+                    <button class="action-bubble" onclick="openNoteEditor(null,null)">
+                        <i class="fa-solid fa-pen-to-square"></i><br>Nova Nota
+                    </button>
+                                        <button class="action-bubble" onclick="openGraphView()">
                         <i class="fa-solid fa-project-diagram" style="color:var(--accent-pink)"></i><br>Grafo
                     </button>
                     <button class="action-bubble" onclick="openPomodoro()">
@@ -496,11 +507,23 @@
                 </div>
 
                 
-                <!-- NOTE COVER & ICON — configurável via menu 3 pontos da nota -->
-                <div id="note-cover-container" style="display:none !important">
+                <!-- NOTE COVER & ICON (Notion Style) -->
+                <div id="note-cover-container" style="position:relative;width:100%;height:140px;background:linear-gradient(45deg, var(--bg-surface), var(--accent-purple));display:none;background-size:cover;background-position:center">
+                    <button onclick="changeNoteCover()" style="position:absolute;bottom:10px;right:10px;background:rgba(0,0,0,0.6);border:1px solid var(--border-glass);color:white;padding:6px 12px;border-radius:6px;font-size:0.8rem;backdrop-filter:blur(4px);cursor:pointer">Alterar Capa</button>
+                    <button onclick="removeNoteCover()" style="position:absolute;top:10px;right:10px;background:rgba(255,0,0,0.4);border:none;color:white;width:28px;height:28px;border-radius:50%;font-size:0.8rem;cursor:pointer"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                
+                <div style="padding:0 16px;margin-top:-24px;position:relative;z-index:2;display:flex;align-items:flex-end;gap:12px">
+                    <div id="note-icon-container" onclick="changeNoteIcon()" style="width:54px;height:54px;border-radius:12px;background:var(--bg-base);border:1px solid var(--border-glass);display:flex;align-items:center;justify-content:center;font-size:1.8rem;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,0.5)">
+                        <span id="note-icon-display">📄</span>
+                    </div>
+                    <div style="display:flex;gap:6px;margin-bottom:4px">
+                        <button id="add-cover-btn" onclick="changeNoteCover()" style="background:transparent;border:none;color:var(--text-secondary);font-size:0.85rem;cursor:pointer;display:none"><i class="fa-solid fa-image"></i> Add Capa</button>
+                    </div>
+                </div>
 
-                <!-- Meta fields moved to note 3-dot menu -->
-                <div class="note-editor-meta" style="display:none">
+                <!-- Meta fields (title derived from first H1/line in editor) -->
+                <div class="note-editor-meta">
                     <div style="display:flex;gap:8px;margin-bottom:10px">
                         <select id="note-notebook" style="flex:1;padding:7px 10px;border-radius:8px;background:rgba(255,255,255,0.05);color:var(--text-secondary);border:1px solid var(--border-glass);font-size:0.82rem">
                             <option value="">📁 Sem caderno...</option>
@@ -784,9 +807,7 @@
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
                 <h3 class="section-title" style="margin:0">Entradas</h3>
             </div>
-            <div id="journal-list" class="list-container">
-                <div style="text-align:center;color:var(--text-secondary);padding:24px">Registre seu humor e toque + para escrever.</div>
-            </div>
+            <div id="journal-list" class="list-container"></div>
 
             <!-- Journal Entry Editor (hidden overlay) -->
             <div id="journal-entry-editor" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:var(--bg-base);z-index:200;overflow-y:auto;padding:20px">
@@ -794,7 +815,6 @@
                     <button onclick="closeJournalEntry()" style="background:none;border:none;color:white;font-size:1.5rem"><i class="fa-solid fa-arrow-left"></i></button>
                     <h3 id="journal-entry-date" style="margin:0;color:white;font-size:1rem"></h3>
                     <button onclick="saveJournalEntry()" style="background:var(--accent-primary);border:none;color:white;padding:8px 18px;border-radius:8px;font-weight:700;cursor:pointer">Salvar</button>
-                    <button onclick="deleteJournalEntry()" style="background:rgba(255,71,87,0.15);border:1px solid var(--accent-pink);color:var(--accent-pink);padding:8px 12px;border-radius:8px;font-weight:700;cursor:pointer;margin-left:8px"><i class="fa-solid fa-trash"></i></button>
                 </div>
 
                 <!-- Mood selector in editor -->
@@ -852,7 +872,7 @@
             </div>
 
             <div id="goals-list" style="display: flex; flex-direction: column; gap: 15px;">
-                <div style="text-align:center;color:var(--text-secondary);padding:20px">Abra Metas para carregar ou toque + para criar.</div>
+                <div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> Carregando...</div>
             </div>
         </div>
 
@@ -875,10 +895,6 @@
 
             <!-- TREINOS TAB -->
             <div id="fitness-tab-treinos">
-                <div style="margin-bottom:12px">
-                    <div style="font-size:0.75rem;color:var(--text-secondary);margin-bottom:8px;font-weight:600">TEMPLATES RÁPIDOS</div>
-                    <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px" id="workout-templates-row"></div>
-                </div>
                 <!-- Stats Row -->
                 <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px">
                     <div class="glass" style="padding:12px;text-align:center;border-radius:12px">
@@ -894,9 +910,7 @@
                         <div style="font-size:0.7rem;color:var(--text-secondary)">Total treinos</div>
                     </div>
                 </div>
-                <div id="fitness-list" class="list-container">
-                    <div style="text-align:center;color:var(--text-secondary);padding:20px">Nenhum treino ainda. Use + ou um template acima.</div>
-                </div>
+                <div id="fitness-list" class="list-container"></div>
             </div>
 
             <!-- DIETA TAB -->
@@ -955,16 +969,10 @@
 
         <!-- IoT / Casa View -->
         <div id="view-iot" class="view">
-            <div class="view-header">
-                <h2 class="page-title" style="margin-bottom:0">Casa</h2>
-                <div class="view-header-actions">
-                    <button class="icon-btn" onclick="discoverIoT()" title="Buscar dispositivos"><i class="fa-solid fa-arrows-rotate"></i></button>
-                    <button class="icon-btn" onclick="openAddDeviceSheet()" title="Adicionar"><i class="fa-solid fa-plus"></i></button>
-                </div>
-            </div>
+            <h2 class="page-title">Casa</h2>
             <div class="glass" style="padding:16px;border-radius:14px;margin-bottom:16px">
                 <p style="margin:0;font-size:0.9rem;color:var(--text-secondary)">
-                    <i class="fa-solid fa-house-signal"></i> Busca dispositivos via Bluetooth e Wi‑Fi do celular. Também integra com o Nexus desktop na mesma rede.
+                    <i class="fa-solid fa-house-signal"></i> Controle dispositivos IoT quando o Nexus desktop estiver na mesma rede. Funciona offline com lista vazia.
                 </p>
             </div>
             <div id="iot-list" class="list-container">
@@ -988,9 +996,7 @@
                 <p style="margin:0;font-size:0.9rem;color:var(--text-secondary)"><i class="fa-solid fa-clock-rotate-left"></i> Rotinas são conjuntos de ações com lembretes. Ex: Rotina Matinal às 07:00.</p>
             </div>
 
-            <div id="routines-list" class="list-container" style="padding-bottom:80px">
-                <div style="text-align:center;color:var(--text-secondary);padding:24px">Crie rotinas matinais ou noturnas com +.</div>
-            </div>
+            <div id="routines-list" class="list-container" style="padding-bottom:80px"></div>
 
             <!-- Routine Runner Modal -->
             <div id="routine-runner-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:var(--bg-base);z-index:200;padding:20px;flex-direction:column">
@@ -1071,39 +1077,6 @@
             </div>
         </div>
 
-        <!-- ALARMS VIEW -->
-        <div id="view-alarms" class="view">
-            <div class="page-header-row">
-                <h2 class="page-title">Alarmes</h2>
-                <button class="icon-btn" onclick="openAlarmForm()" aria-label="Novo alarme"><i class="fa-solid fa-plus"></i></button>
-            </div>
-            <p style="color:var(--text-secondary);font-size:0.85rem;margin:-8px 0 16px">Hábitos, tarefas e alarmes avulsos — ordenados por horário.</p>
-            <div id="alarms-list">
-                <div style="text-align:center;color:var(--text-secondary);padding:24px">Nenhum alarme agendado. Toque + para criar.</div>
-            </div>
-        </div>
-
-        <!-- JARVIS HISTORY VIEW (chat persistente + ligações) -->
-        <div id="view-jarvis-history" class="view">
-            <h2 class="page-title">Jarvis — Histórico</h2>
-            <p style="color:var(--text-secondary);font-size:0.85rem;margin:-8px 0 12px">Chat salvo na nuvem e ligações anteriores.</p>
-            <div id="jarvis-persistent-chat" class="glass"
-                style="display:flex;flex-direction:column;gap:10px;max-height:45vh;overflow-y:auto;padding:12px;border-radius:16px;margin-bottom:12px"></div>
-            <div style="display:flex;gap:10px;margin-bottom:20px">
-                <input type="text" id="jarvis-persistent-input" placeholder="Mensagem para o Jarvis (salva no histórico)..."
-                    style="flex:1;padding:12px;border-radius:12px;background:rgba(0,0,0,0.5);color:white;border:1px solid var(--border-glass)">
-                <button onclick="sendPersistentJarvisMessage()"
-                    style="background:linear-gradient(135deg,var(--accent-purple),var(--accent-blue));color:white;border:none;padding:0 18px;border-radius:12px"><i class="fa-solid fa-paper-plane"></i></button>
-            </div>
-            <h3 class="section-title">Ligações</h3>
-            <div id="jarvis-calls-list"></div>
-        </div>
-
-        <!-- JARVIS CALL HISTORY VIEW (legado — redireciona) -->
-        <div id="view-jarvis-calls" class="view" style="display:none !important">
-            <div id="jarvis-calls-list-legacy"></div>
-        </div>
-
         <!-- SETTINGS VIEW -->
         <div id="view-settings" class="view">
             <h2 class="page-title">Configurações</h2>
@@ -1145,31 +1118,7 @@
             <h3 class="section-title">Rede &amp; Jarvis</h3>
             <div class="glass settings-card" style="margin-bottom:20px;padding:15px;border-radius:16px">
                 <div id="settings-wifi-status" class="settings-net-off" style="font-weight:700;margin-bottom:8px">Verificando...</div>
-                <label class="settings-field-label">Voz do Jarvis (TTS)</label>
-                <select id="cfg-jarvis-tts" class="settings-select" style="margin-bottom:10px">
-                    <option value="web_speech">Voz do sistema (padrão)</option>
-                    <option value="gemini">Voz Gemini (natural)</option>
-                </select>
-                <label class="settings-field-label">Velocidade da voz</label>
-                <input type="range" id="cfg-jarvis-tts-rate" min="0.6" max="1.4" step="0.1" value="1" style="width:100%;margin-bottom:12px">
-                <p style="color:var(--text-secondary);font-size:0.85rem;margin:0;line-height:1.45">Ligação de voz e chat com IA exigem <strong>Wi-Fi</strong> e login Google.</p>
-            </div>
-
-            <!-- Sounds -->
-            <h3 class="section-title">Sons</h3>
-            <div class="glass settings-card" style="margin-bottom:20px;padding:15px;border-radius:16px">
-                <div class="toggle-row" style="margin-bottom:12px">
-                    <span>Silenciar todos os sons</span>
-                    <label class="switch"><input type="checkbox" id="toggle-audio-muted" onchange="setAudioMuted(this.checked)"><span class="slider"></span></label>
-                </div>
-                <label class="settings-field-label">Volume geral</label>
-                <input type="range" id="cfg-audio-master" min="0" max="100" value="70" style="width:100%;margin-bottom:12px" oninput="setAudioMaster(this.value)">
-                <div class="toggle-row" style="margin-bottom:8px"><span>Toques de botões</span><label class="switch"><input type="checkbox" id="toggle-audio-ui" checked onchange="setAudioCategory('ui',this.checked)"><span class="slider"></span></label></div>
-                <div class="toggle-row" style="margin-bottom:8px"><span>Navegação</span><label class="switch"><input type="checkbox" id="toggle-audio-nav" checked onchange="setAudioCategory('nav',this.checked)"><span class="slider"></span></label></div>
-                <div class="toggle-row" style="margin-bottom:8px"><span>Progresso / XP</span><label class="switch"><input type="checkbox" id="toggle-audio-progress" checked onchange="setAudioCategory('progress',this.checked)"><span class="slider"></span></label></div>
-                <div class="toggle-row" style="margin-bottom:8px"><span>Sucesso</span><label class="switch"><input type="checkbox" id="toggle-audio-success" checked onchange="setAudioCategory('success',this.checked)"><span class="slider"></span></label></div>
-                <div class="toggle-row" style="margin-bottom:12px"><span>Erros</span><label class="switch"><input type="checkbox" id="toggle-audio-error" checked onchange="setAudioCategory('error',this.checked)"><span class="slider"></span></label></div>
-                <button onclick="testUiSound()" style="width:100%;background:rgba(108,92,231,0.15);border:1px solid var(--accent-purple);color:var(--accent-purple);padding:10px;border-radius:8px;font-weight:700;cursor:pointer;font-family:inherit">Testar som</button>
+                <p style="color:var(--text-secondary);font-size:0.85rem;margin:0;line-height:1.45">Ligação de voz, chat com IA e ações do Jarvis exigem <strong>Wi-Fi</strong> e o Nexus desktop ligado na mesma rede.</p>
             </div>
 
             <!-- Finance budget -->
@@ -1255,7 +1204,6 @@
     </button>
 
     <!-- Bottom Navigation -->
-    <p id="nav-scroll-hint" class="nav-scroll-hint" aria-hidden="true">Deslize a barra para ver mais módulos →</p>
     <nav class="bottom-nav">
         <a href="#" class="nav-item active" data-target="view-home">
             <i class="fa-solid fa-house"></i>
@@ -1305,15 +1253,16 @@
             <i class="fa-solid fa-book-open"></i>
             <span>Diário</span>
         </a>
-        <a href="#" class="nav-item" data-target="view-alarms" id="nav-alarms">
-            <i class="fa-solid fa-bell"></i>
-            <span>Alarmes</span>
-        </a>
         <a href="#" class="nav-item" data-target="view-cleaner" id="nav-cleaner">
             <i class="fa-solid fa-broom"></i>
             <span>Limpar</span>
         </a>
     </nav>
+
+    <!-- FAB (Floating Action Button) -->
+    <button id="fab-add" class="fab" onclick="openCreateModal()">
+        <i class="fa-solid fa-plus"></i>
+    </button>
 
     <!-- Hidden file input for OCR camera fallback -->
     <input type="file" id="ocr-file-input" accept="image/*" capture="environment" style="display:none"
@@ -1377,60 +1326,63 @@
                 <button onclick="openSettingsView()" style="width:100%;background:rgba(108,92,231,0.15);border:1px solid var(--accent-purple);color:var(--accent-purple);padding:12px;border-radius:10px;font-weight:700;cursor:pointer;margin-bottom:16px;font-family:inherit">
                     <i class="fa-solid fa-cloud"></i> Conta &amp; Sincronização
                 </button>
-                <p style="font-size:0.8rem;color:var(--text-secondary);margin:0 0 12px">Segure ⋮⋮ e arraste para reordenar a barra inferior.</p>
-                <div id="module-settings-list">
-                    <div class="toggle-row module-sort-row" data-module="habits">
-                        <span class="module-drag-handle" aria-hidden="true">⋮⋮</span><span>Hábitos</span>
-                        <label class="switch"><input type="checkbox" id="toggle-habits" onchange="toggleModule('habits')" checked><span class="slider"></span></label>
-                    </div>
-                    <div class="toggle-row module-sort-row" data-module="finance">
-                        <span class="module-drag-handle">⋮⋮</span><span>Finanças</span>
-                        <label class="switch"><input type="checkbox" id="toggle-finance" onchange="toggleModule('finance')" checked><span class="slider"></span></label>
-                    </div>
-                    <div class="toggle-row module-sort-row" data-module="routines">
-                        <span class="module-drag-handle">⋮⋮</span><span>Rotinas</span>
-                        <label class="switch"><input type="checkbox" id="toggle-routines" onchange="toggleModule('routines')" checked><span class="slider"></span></label>
-                    </div>
-                    <div class="toggle-row module-sort-row" data-module="tasks">
-                        <span class="module-drag-handle">⋮⋮</span><span>Tarefas</span>
-                        <label class="switch"><input type="checkbox" id="toggle-tasks" onchange="toggleModule('tasks')" checked><span class="slider"></span></label>
-                    </div>
-                    <div class="toggle-row module-sort-row" data-module="videos">
-                        <span class="module-drag-handle">⋮⋮</span><span>Vídeos</span>
-                        <label class="switch"><input type="checkbox" id="toggle-videos" onchange="toggleModule('videos')" checked><span class="slider"></span></label>
-                    </div>
-                    <div class="toggle-row module-sort-row" data-module="shop">
-                        <span class="module-drag-handle">⋮⋮</span><span>Loja</span>
-                        <label class="switch"><input type="checkbox" id="toggle-shop" onchange="toggleModule('shop')" checked><span class="slider"></span></label>
-                    </div>
-                    <div class="toggle-row module-sort-row" data-module="studies">
-                        <span class="module-drag-handle">⋮⋮</span><span>Estudos</span>
-                        <label class="switch"><input type="checkbox" id="toggle-studies" onchange="toggleModule('studies')" checked><span class="slider"></span></label>
-                    </div>
-                    <div class="toggle-row module-sort-row" data-module="goals">
-                        <span class="module-drag-handle">⋮⋮</span><span>Metas</span>
-                        <label class="switch"><input type="checkbox" id="toggle-goals" onchange="toggleModule('goals')" checked><span class="slider"></span></label>
-                    </div>
-                    <div class="toggle-row module-sort-row" data-module="fitness">
-                        <span class="module-drag-handle">⋮⋮</span><span>Treino</span>
-                        <label class="switch"><input type="checkbox" id="toggle-fitness" onchange="toggleModule('fitness')" checked><span class="slider"></span></label>
-                    </div>
-                    <div class="toggle-row module-sort-row" data-module="iot">
-                        <span class="module-drag-handle">⋮⋮</span><span>Casa</span>
-                        <label class="switch"><input type="checkbox" id="toggle-iot" onchange="toggleModule('iot')" checked><span class="slider"></span></label>
-                    </div>
-                    <div class="toggle-row module-sort-row" data-module="journal">
-                        <span class="module-drag-handle">⋮⋮</span><span>Diário</span>
-                        <label class="switch"><input type="checkbox" id="toggle-journal" onchange="toggleModule('journal')" checked><span class="slider"></span></label>
-                    </div>
-                    <div class="toggle-row module-sort-row" data-module="alarms">
-                        <span class="module-drag-handle">⋮⋮</span><span>Alarmes</span>
-                        <label class="switch"><input type="checkbox" id="toggle-alarms" onchange="toggleModule('alarms')" checked><span class="slider"></span></label>
-                    </div>
-                    <div class="toggle-row module-sort-row" data-module="cleaner">
-                        <span class="module-drag-handle">⋮⋮</span><span>Limpeza</span>
-                        <label class="switch"><input type="checkbox" id="toggle-cleaner" onchange="toggleModule('cleaner')" checked><span class="slider"></span></label>
-                    </div>
+                <div class="toggle-row">
+                    <span>Hábitos</span>
+                    <label class="switch"><input type="checkbox" id="toggle-habits" onchange="toggleModule('habits')"
+                            checked><span class="slider"></span></label>
+                </div>
+                <div class="toggle-row">
+                    <span>Finanças</span>
+                    <label class="switch"><input type="checkbox" id="toggle-finance" onchange="toggleModule('finance')"
+                            checked><span class="slider"></span></label>
+                </div>
+                <div class="toggle-row">
+                    <span>Tarefas</span>
+                    <label class="switch"><input type="checkbox" id="toggle-tasks" onchange="toggleModule('tasks')"
+                            checked><span class="slider"></span></label>
+                </div>
+                <div class="toggle-row">
+                    <span>Vídeos</span>
+                    <label class="switch"><input type="checkbox" id="toggle-videos" onchange="toggleModule('videos')"
+                            checked><span class="slider"></span></label>
+                </div>
+                <div class="toggle-row">
+                    <span>Loja</span>
+                    <label class="switch"><input type="checkbox" id="toggle-shop" onchange="toggleModule('shop')"
+                            checked><span class="slider"></span></label>
+                </div>
+                <div class="toggle-row">
+                    <span>Casa</span>
+                    <label class="switch"><input type="checkbox" id="toggle-iot" onchange="toggleModule('iot')"
+                            checked><span class="slider"></span></label>
+                </div>
+                <div class="toggle-row">
+                    <span>Estudos</span>
+                    <label class="switch"><input type="checkbox" id="toggle-studies" onchange="toggleModule('studies')"
+                            checked><span class="slider"></span></label>
+                </div>
+                <div class="toggle-row">
+                    <span>Rotinas</span>
+                    <label class="switch"><input type="checkbox" id="toggle-routines" onchange="toggleModule('routines')" checked><span class="slider"></span></label>
+                </div>
+                <div class="toggle-row">
+                    <span>Metas</span>
+                    <label class="switch"><input type="checkbox" id="toggle-goals" onchange="toggleModule('goals')"
+                            checked><span class="slider"></span></label>
+                </div>
+                <div class="toggle-row">
+                    <span>Diário</span>
+                    <label class="switch"><input type="checkbox" id="toggle-journal" onchange="toggleModule('journal')" checked><span class="slider"></span></label>
+                </div>
+                <div class="toggle-row">
+                    <span>Treinos</span>
+                    <label class="switch"><input type="checkbox" id="toggle-fitness" onchange="toggleModule('fitness')"
+                            checked><span class="slider"></span></label>
+                </div>
+                <div class="toggle-row">
+                    <span>Limpeza</span>
+                    <label class="switch"><input type="checkbox" id="toggle-cleaner" onchange="toggleModule('cleaner')"
+                            checked><span class="slider"></span></label>
                 </div>
             </div>
         </div>
@@ -1460,13 +1412,10 @@
     </div>
 
     <!-- Goal Form Modal -->
-    <div id="goal-form-modal" class="mobile-form-sheet" style="display:none" onclick="if(event.target===this)closeGoalForm()">
+    <div id="goal-form-modal" class="mobile-form-sheet" style="display:none">
         <div class="bottom-sheet-content glass">
             <div class="bottom-sheet-handle"></div>
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-                <h3 id="goal-form-title" style="margin:0">Nova Meta</h3>
-                <button class="icon-btn" onclick="closeGoalForm()" aria-label="Fechar"><i class="fa-solid fa-xmark"></i></button>
-            </div>
+            <h3 id="goal-form-title" style="margin:0 0 16px">Nova Meta</h3>
             <div class="form-field"><label>Nome</label><input type="text" id="goal-form-name"></div>
             <div class="form-field"><label>Descricao</label><textarea id="goal-form-description" rows="2"></textarea></div>
             <div class="form-field"><label>Data alvo</label><input type="date" id="goal-form-target-date"></div>
@@ -1476,20 +1425,16 @@
             </div>
             <div style="display:flex;gap:10px;margin-top:16px">
                 <button onclick="deleteGoalForm()" id="goal-form-delete-btn" style="flex:1;background:rgba(255,71,87,0.15);border:1px solid var(--accent-pink);color:var(--accent-pink);padding:14px;border-radius:12px;font-weight:700;display:none"><i class="fa-solid fa-trash"></i></button>
-                <button onclick="closeGoalForm()" style="flex:1;background:rgba(255,255,255,0.08);border:1px solid var(--border-glass);color:white;padding:14px;border-radius:12px;font-weight:700">Cancelar</button>
                 <button onclick="saveGoalForm()" style="flex:2;background:var(--accent-primary);border:none;color:white;padding:14px;border-radius:12px;font-weight:700">Salvar</button>
             </div>
         </div>
     </div>
 
     <!-- Workout Form Modal -->
-    <div id="workout-form-modal" class="mobile-form-sheet" style="display:none" onclick="if(event.target===this)closeWorkoutForm()">
+    <div id="workout-form-modal" class="mobile-form-sheet" style="display:none">
         <div class="bottom-sheet-content glass">
             <div class="bottom-sheet-handle"></div>
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-                <h3 id="workout-form-title" style="margin:0">Treino</h3>
-                <button class="icon-btn" onclick="closeWorkoutForm()" aria-label="Fechar"><i class="fa-solid fa-xmark"></i></button>
-            </div>
+            <h3 id="workout-form-title" style="margin:0 0 16px">Treino</h3>
             <div class="form-field"><label>Nome</label><input type="text" id="workout-form-name"></div>
             <div class="form-field"><label>Grupo muscular</label><input type="text" id="workout-form-muscle"></div>
             <div style="display:flex;gap:10px">
@@ -1504,207 +1449,28 @@
             </div>
             <div style="display:flex;gap:10px;margin-top:16px">
                 <button onclick="deleteWorkoutForm()" id="workout-form-delete-btn" style="flex:1;background:rgba(255,71,87,0.15);border:1px solid var(--accent-pink);color:var(--accent-pink);padding:14px;border-radius:12px;font-weight:700;display:none"><i class="fa-solid fa-trash"></i></button>
-                <button onclick="closeWorkoutForm()" style="flex:1;background:rgba(255,255,255,0.08);border:1px solid var(--border-glass);color:white;padding:14px;border-radius:12px;font-weight:700">Cancelar</button>
                 <button onclick="saveWorkoutForm()" style="flex:2;background:var(--accent-primary);border:none;color:white;padding:14px;border-radius:12px;font-weight:700">Salvar</button>
             </div>
         </div>
     </div>
 
-    <!-- Habit Detail Modal -->
-    <div id="habit-detail-modal" class="mobile-form-sheet" style="display:none" onclick="if(event.target===this)closeHabitDetail()">
-        <div class="bottom-sheet-content glass">
-            <div class="bottom-sheet-handle"></div>
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-                <h3 id="habit-form-title" style="margin:0;font-size:1.1rem">Habito</h3>
-                <button onclick="closeHabitDetail()" class="icon-btn" aria-label="Fechar"><i class="fa-solid fa-xmark"></i></button>
-            </div>
-            <div class="form-field"><label>Nome</label><input type="text" id="habit-form-name" placeholder="Ex: Meditar 10 min"></div>
-            <div class="form-field"><label>Descricao</label><input type="text" id="habit-form-desc" placeholder="Opcional"></div>
-            <div style="display:flex;gap:10px">
-                <div class="form-field" style="flex:1"><label>XP</label><input type="number" id="habit-form-xp" value="50" min="1"></div>
-                <div class="form-field" style="flex:1"><label>Periodo</label>
-                    <select id="habit-form-period"><option value="morning">Manha</option><option value="afternoon">Tarde</option><option value="night">Noite</option><option value="all">Qualquer</option></select>
-                </div>
-            </div>
-            <label class="form-label-sm">Dias da Semana</label>
-            <div class="dow-row" id="habit-form-dow">
-                <button type="button" class="dow-btn" data-d="0">D</button>
-                <button type="button" class="dow-btn selected" data-d="1">S</button>
-                <button type="button" class="dow-btn selected" data-d="2">T</button>
-                <button type="button" class="dow-btn selected" data-d="3">Q</button>
-                <button type="button" class="dow-btn selected" data-d="4">Q</button>
-                <button type="button" class="dow-btn selected" data-d="5">S</button>
-                <button type="button" class="dow-btn" data-d="6">S</button>
-            </div>
-            <div class="form-field" style="margin-top:12px"><label>Lembrete</label><input type="time" id="habit-alarm-time"></div>
-            <div style="display:flex;gap:8px;align-items:center;margin:12px 0;padding:10px;background:rgba(255,255,255,0.04);border-radius:10px">
-                <div style="flex:1;text-align:center"><div style="font-size:1.4rem;font-weight:800;color:#f97316" id="habit-detail-streak">0</div><div style="font-size:0.7rem;color:var(--text-secondary)">Streak</div></div>
-                <div style="flex:1;text-align:center"><div style="font-size:1.4rem;font-weight:800;color:var(--accent-green)" id="habit-detail-total">0</div><div style="font-size:0.7rem;color:var(--text-secondary)">Total</div></div>
-            </div>
-            <div style="display:flex;gap:10px;margin-top:16px">
-                <button onclick="deleteCurrentHabit()" style="flex:1;background:rgba(255,71,87,0.15);border:1px solid var(--accent-pink);color:var(--accent-pink);padding:14px;border-radius:12px;font-weight:700"><i class="fa-solid fa-trash"></i></button>
-                <button onclick="closeHabitDetail()" style="flex:1;background:rgba(255,255,255,0.08);border:1px solid var(--border-glass);color:white;padding:14px;border-radius:12px;font-weight:700">Cancelar</button>
-                <button onclick="saveHabitForm()" style="flex:2;background:var(--accent-primary);border:none;color:white;padding:14px;border-radius:12px;font-weight:700">Salvar</button>
-                <button id="habit-detail-complete-btn" onclick="completeCurrentHabit()" style="flex:2;background:rgba(255,255,255,0.1);border:none;color:white;padding:14px;border-radius:12px;font-weight:700"><i class="fa-solid fa-check"></i> Feito</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Task Detail Modal -->
-    <div id="task-detail-modal" class="mobile-form-sheet" style="display:none" onclick="if(event.target===this)closeTaskDetail()">
-        <div class="bottom-sheet-content glass">
-            <div class="bottom-sheet-handle"></div>
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-                <h3 style="margin:0;font-size:1.1rem">Tarefa</h3>
-                <button onclick="closeTaskDetail()" class="icon-btn" aria-label="Fechar"><i class="fa-solid fa-xmark"></i></button>
-            </div>
-            <div class="form-field"><label>Nome</label><input type="text" id="task-detail-name" onchange="saveTaskDetail()"></div>
-            <div class="form-field"><label>Descricao</label><textarea id="task-detail-description" placeholder="Descricao..." rows="2" onchange="saveTaskDetail()"></textarea></div>
-            <div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap">
-                <div class="form-field" style="flex:1"><label>Prioridade</label>
-                    <select id="task-detail-priority" onchange="saveTaskDetail()">
-                        <option value="low">Baixa</option>
-                        <option value="medium">Media</option>
-                        <option value="high">Alta</option>
-                    </select>
-                </div>
-                <div class="form-field" style="flex:1"><label>Status</label>
-                    <select id="task-detail-status" onchange="saveTaskDetail()">
-                        <option value="todo">A fazer</option>
-                        <option value="doing">Fazendo</option>
-                        <option value="done">Concluida</option>
-                    </select>
-                </div>
-            </div>
-            <div class="form-field"><label>Data limite</label><input type="date" id="task-detail-due" onchange="saveTaskDetail()"></div>
-            <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding:10px;background:rgba(255,255,255,0.04);border-radius:10px">
-                <label class="switch" style="margin:0"><input type="checkbox" id="task-detail-notify-enabled" onchange="saveTaskDetail()"><span class="slider"></span></label>
-                <span style="font-size:0.85rem;flex:1">Notificar</span>
-                <input type="datetime-local" id="task-detail-notify-at" style="background:rgba(255,255,255,0.1);color:white;border:1px solid var(--border-glass);padding:6px 10px;border-radius:8px;font-size:0.8rem" onchange="saveTaskDetail()">
-            </div>
-            <div style="margin-bottom:20px">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-                    <span style="font-size:0.85rem;color:var(--text-secondary);font-weight:600">SUBTAREFAS</span>
-                    <button onclick="addSubtaskInline()" style="background:none;border:none;color:var(--accent-primary);font-size:0.85rem;font-weight:700;cursor:pointer">+ Adicionar</button>
-                </div>
-                <div id="task-subtasks-list" style="display:flex;flex-direction:column;gap:8px;max-height:150px;overflow-y:auto"></div>
-            </div>
-            <div style="display:flex;gap:10px">
-                <button onclick="deleteCurrentTask()" style="flex:1;background:rgba(255,71,87,0.15);border:1px solid var(--accent-pink);color:var(--accent-pink);padding:14px;border-radius:12px;font-weight:700"><i class="fa-solid fa-trash"></i></button>
-                <button onclick="closeTaskDetail()" style="flex:1;background:rgba(255,255,255,0.08);border:1px solid var(--border-glass);color:white;padding:14px;border-radius:12px;font-weight:700">Cancelar</button>
-                <button onclick="completeCurrentTask()" style="flex:2;background:var(--accent-green);border:none;color:white;padding:14px;border-radius:12px;font-weight:700"><i class="fa-solid fa-check"></i> Concluir</button>
-                <button onclick="saveTaskDetail()" style="flex:2;background:var(--accent-primary);border:none;color:white;padding:14px;border-radius:12px;font-weight:700">Salvar</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Finance Form Modal -->
-    <div id="finance-form-modal" class="mobile-form-sheet" style="display:none" onclick="if(event.target===this)closeFinanceForm()">
-        <div class="bottom-sheet-content glass">
-            <div class="bottom-sheet-handle"></div>
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-                <h3 id="finance-form-title" style="margin:0">Transacao</h3>
-                <button class="icon-btn" onclick="closeFinanceForm()" aria-label="Fechar"><i class="fa-solid fa-xmark"></i></button>
-            </div>
-            <div class="form-field"><label>Descricao</label><input type="text" id="finance-form-desc"></div>
-            <div class="form-field"><label>Valor (R$)</label><input type="number" id="finance-form-amount" step="0.01" min="0"></div>
-            <div class="form-field"><label>Tipo</label>
-                <select id="finance-form-type">
-                    <option value="expense">Despesa</option>
-                    <option value="income">Receita</option>
-                </select>
-            </div>
-            <div class="form-field"><label>Categoria</label>
-                <select id="finance-form-category">
-                    <option value="food">Alimentacao</option>
-                    <option value="transport">Transporte</option>
-                    <option value="health">Saude</option>
-                    <option value="leisure">Lazer</option>
-                    <option value="bills">Contas</option>
-                    <option value="salary">Salário</option>
-                    <option value="other">Outros</option>
-                </select>
-            </div>
-            <div class="form-field"><label>Data</label><input type="date" id="finance-form-date"></div>
-            <div style="display:flex;gap:10px;margin-top:16px">
-                <button onclick="deleteFinanceForm()" id="finance-form-delete-btn" style="flex:1;background:rgba(255,71,87,0.15);border:1px solid var(--accent-pink);color:var(--accent-pink);padding:14px;border-radius:12px;font-weight:700;display:none"><i class="fa-solid fa-trash"></i></button>
-                <button onclick="closeFinanceForm()" style="flex:1;background:rgba(255,255,255,0.08);border:1px solid var(--border-glass);color:white;padding:14px;border-radius:12px;font-weight:700">Cancelar</button>
-                <button onclick="saveFinanceForm()" style="flex:2;background:var(--accent-primary);border:none;color:white;padding:14px;border-radius:12px;font-weight:700">Salvar</button>
-            </div>
-        </div>
-    </div>
-
     <!-- Subject Form Modal -->
-    <div id="subject-form-modal" class="mobile-form-sheet" style="display:none" onclick="if(event.target===this)closeSubjectForm()">
-        <div class="mobile-form-sheet-panel glass" onclick="event.stopPropagation()">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-                <h3 style="margin:0">Nova Matéria</h3>
-                <button class="icon-btn" onclick="closeSubjectForm()" aria-label="Fechar"><i class="fa-solid fa-xmark"></i></button>
-            </div>
+    <div id="subject-form-modal" class="bottom-sheet" style="display:none">
+        <div class="bottom-sheet-content glass">
+            <div class="bottom-sheet-handle"></div>
+            <h3 style="margin:0 0 16px">Nova Materia</h3>
             <div class="form-field"><label>Nome</label><input type="text" id="subject-form-name"></div>
             <div class="form-field"><label>Emoji</label><input type="text" id="subject-form-icon" value="📚"></div>
-            <div class="form-field"><label>Descrição (opcional)</label><input type="text" id="subject-form-description"></div>
-            <div class="form-field"><label>Cor do card</label><input type="color" id="subject-form-color" value="#6c5ce7"></div>
-            <div class="form-field"><label>Capa — URL ou imagem local</label>
-                <div style="display:flex;gap:8px">
-                    <input type="url" id="subject-form-cover" placeholder="https://..." style="flex:1">
-                    <button type="button" onclick="pickStudyCoverLocal('subject-form-cover')" class="icon-btn" title="Imagem local"><i class="fa-solid fa-image"></i></button>
-                </div>
-            </div>
-            <button onclick="saveSubjectForm()" style="width:100%;background:var(--accent-primary);border:none;color:white;padding:14px;border-radius:12px;font-weight:700;margin-top:8px">Criar matéria</button>
+            <div class="form-field"><label>URL da capa (opcional)</label><input type="url" id="subject-form-cover" placeholder="https://..."></div>
+            <button onclick="saveSubjectForm()" style="width:100%;background:var(--accent-primary);border:none;color:white;padding:14px;border-radius:12px;font-weight:700;margin-top:8px">Criar</button>
         </div>
     </div>
 
-    <!-- Folder context menu -->
-    <div id="folder-menu-popup" class="context-menu-popup" style="display:none">
-        <button onclick="openStudyEditSheet('folder', window._menuFolderId)"><i class="fa-solid fa-image"></i> Alterar capa</button>
-        <button onclick="openStudyEditSheet('folder', window._menuFolderId)"><i class="fa-solid fa-pen"></i> Alterar nome</button>
-        <button onclick="openStudyEditSheet('folder', window._menuFolderId)"><i class="fa-solid fa-palette"></i> Alterar cor</button>
-        <button onclick="openStudyEditSheet('folder', window._menuFolderId)"><i class="fa-solid fa-align-left"></i> Alterar descrição</button>
-        <button onclick="deleteFolderFromMenu()" style="color:var(--accent-pink)"><i class="fa-solid fa-trash"></i> Excluir matéria</button>
-    </div>
-
-    <!-- Note context menu -->
-    <div id="note-menu-popup" class="context-menu-popup" style="display:none">
-        <button onclick="openStudyEditSheet('note', window._menuNoteId)"><i class="fa-solid fa-image"></i> Alterar capa</button>
-        <button onclick="openStudyEditSheet('note', window._menuNoteId)"><i class="fa-solid fa-pen"></i> Alterar nome</button>
-        <button onclick="openStudyEditSheet('note', window._menuNoteId)"><i class="fa-solid fa-brain"></i> Alterar assunto</button>
-        <button onclick="deleteStudyNote()" style="color:var(--accent-pink)"><i class="fa-solid fa-trash"></i> Excluir nota</button>
-    </div>
-
-    <!-- Study entity edit sheet -->
-    <div id="study-entity-edit-modal" class="mobile-form-sheet" style="display:none" onclick="if(event.target===this)closeStudyEditSheet()">
-        <div class="mobile-form-sheet-panel glass" onclick="event.stopPropagation()">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-                <h3 id="study-entity-edit-title" style="margin:0">Editar</h3>
-                <button class="icon-btn" onclick="closeStudyEditSheet()"><i class="fa-solid fa-xmark"></i></button>
-            </div>
-            <div class="form-field"><label>Nome</label><input type="text" id="study-edit-name"></div>
-            <div class="form-field"><label>Capa (URL ou imagem local)</label>
-                <div style="display:flex;gap:8px">
-                    <input type="text" id="study-edit-cover" style="flex:1">
-                    <button type="button" onclick="pickStudyCoverLocal('study-edit-cover')" class="icon-btn"><i class="fa-solid fa-image"></i></button>
-                </div>
-            </div>
-            <div class="form-field"><label>Cor de fundo</label><input type="color" id="study-edit-color" value="#6c5ce7"></div>
-            <div class="form-field"><label>Descrição</label><input type="text" id="study-edit-description"></div>
-            <div class="form-field"><label>Assunto Jarvis</label><input type="text" id="study-edit-subject" placeholder="Tema geral da nota"></div>
-            <button onclick="saveStudyEditSheet()" style="width:100%;margin-top:12px;background:var(--accent-primary);border:none;color:white;padding:14px;border-radius:12px;font-weight:700">Salvar</button>
-        </div>
-    </div>
-
-    <!-- Subject context menu (legado no detalhe) -->
+    <!-- Subject context menu -->
     <div id="subject-menu-popup" class="context-menu-popup" style="display:none">
         <button onclick="changeSubjectCover()">Alterar capa</button>
-        <button onclick="renameSubject()">Alterar nome</button>
+        <button onclick="renameSubject()">Alterar titulo</button>
         <button onclick="deleteSubject()" style="color:var(--accent-pink)">Excluir</button>
-    </div>
-
-    <!-- YouTube embed context menu -->
-    <div id="yt-embed-menu-popup" class="context-menu-popup" style="display:none">
-        <button onclick="editYouTubeEmbedLink()"><i class="fa-solid fa-link"></i> Editar link</button>
-        <button onclick="openYouTubeEmbedExternal()"><i class="fa-brands fa-youtube"></i> Abrir no YouTube</button>
-        <button onclick="removeYouTubeEmbed()" style="color:var(--accent-pink)"><i class="fa-solid fa-trash"></i> Remover</button>
     </div>
 
     <!-- Subtask inline input -->
@@ -1716,115 +1482,7 @@
         </div>
     </div>
 
-    </div>
-
-    <!-- Alarm form modal -->
-    <div id="alarm-form-modal" class="mobile-form-sheet" style="display:none" onclick="if(event.target===this)closeAlarmForm()">
-        <div class="mobile-form-sheet-panel glass" onclick="event.stopPropagation()">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-                <h3 id="alarm-form-title">Novo alarme</h3>
-                <button class="icon-btn" onclick="closeAlarmForm()" aria-label="Fechar"><i class="fa-solid fa-xmark"></i></button>
-            </div>
-            <div class="form-field"><label>Título</label><input type="text" id="alarm-title-input" placeholder="Ex: Acordar"></div>
-            <div class="form-field"><label>Descrição</label><input type="text" id="alarm-body-input" placeholder="Opcional"></div>
-            <div class="form-field"><label>Horário</label><input type="time" id="alarm-time-input" value="07:00"></div>
-            <div class="form-field"><label>Repetir</label>
-                <select id="alarm-repeat-input" onchange="toggleAlarmDaysRow()" style="width:100%;padding:10px;border-radius:8px;background:rgba(0,0,0,0.4);color:white;border:1px solid var(--border-glass)">
-                    <option value="daily">Todos os dias</option>
-                    <option value="weekdays">Seg–Sex</option>
-                    <option value="once">Uma vez</option>
-                    <option value="custom">Dias personalizados</option>
-                </select>
-            </div>
-            <div class="form-field" id="alarm-days-row" style="display:none">
-                <label>Dias</label>
-                <div class="alarm-days-chips" id="alarm-days-chips">
-                    <button type="button" class="alarm-day-chip" data-day="0" onclick="toggleAlarmDayChip(this)">D</button>
-                    <button type="button" class="alarm-day-chip" data-day="1" onclick="toggleAlarmDayChip(this)">S</button>
-                    <button type="button" class="alarm-day-chip" data-day="2" onclick="toggleAlarmDayChip(this)">T</button>
-                    <button type="button" class="alarm-day-chip" data-day="3" onclick="toggleAlarmDayChip(this)">Q</button>
-                    <button type="button" class="alarm-day-chip" data-day="4" onclick="toggleAlarmDayChip(this)">Q</button>
-                    <button type="button" class="alarm-day-chip" data-day="5" onclick="toggleAlarmDayChip(this)">S</button>
-                    <button type="button" class="alarm-day-chip" data-day="6" onclick="toggleAlarmDayChip(this)">S</button>
-                </div>
-            </div>
-            <div class="form-field"><label>Soneca (minutos)</label><input type="number" id="alarm-snooze-input" min="1" max="30" value="5"></div>
-            <div class="form-field"><label>Máx. sonecas</label><input type="number" id="alarm-max-snooze-input" min="0" max="10" value="3"></div>
-            <div style="display:flex;gap:10px;margin-top:20px">
-                <button onclick="closeAlarmForm()" style="flex:1;padding:12px;border-radius:10px;background:rgba(255,255,255,0.08);border:1px solid var(--border-glass);color:white">Cancelar</button>
-                <button onclick="saveAlarmForm()" style="flex:1;padding:12px;border-radius:10px;background:var(--accent-primary);border:none;color:white;font-weight:700">Salvar</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Jarvis call detail modal -->
-    <div id="jarvis-call-detail-modal" class="mobile-form-sheet" style="display:none" onclick="if(event.target===this)closeJarvisCallDetail()">
-        <div class="mobile-form-sheet-panel glass" onclick="event.stopPropagation()" style="max-height:80vh;overflow:auto">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-                <h3>Transcrição</h3>
-                <button class="icon-btn" onclick="closeJarvisCallDetail()"><i class="fa-solid fa-xmark"></i></button>
-            </div>
-            <div id="jarvis-call-detail-body"></div>
-        </div>
-    </div>
-
-    <!-- Finance overflow menu -->
-    <div id="finance-overflow-popup" class="context-menu-popup" style="display:none">
-        <button onclick="openFinanceForm();closeFinanceOverflow()"><i class="fa-solid fa-plus"></i> Nova transação</button>
-        <button onclick="switchFinanceTab('investments');closeFinanceOverflow()"><i class="fa-solid fa-chart-line"></i> Investimentos</button>
-        <button onclick="switchFinanceTab('budgets');closeFinanceOverflow()"><i class="fa-solid fa-wallet"></i> Orçamentos</button>
-        <button onclick="exportFinanceCsv();closeFinanceOverflow()"><i class="fa-solid fa-file-export"></i> Exportar CSV</button>
-    </div>
-
-    <!-- Investment form -->
-    <div id="investment-form-modal" class="mobile-form-sheet" style="display:none" onclick="if(event.target===this)closeInvestmentForm()">
-        <div class="mobile-form-sheet-panel glass" onclick="event.stopPropagation()">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-                <h3 id="investment-form-title" style="margin:0">Ativo</h3>
-                <button class="icon-btn" onclick="closeInvestmentForm()"><i class="fa-solid fa-xmark"></i></button>
-            </div>
-            <div class="form-field"><label>Nome</label><input type="text" id="investment-form-name" placeholder="Ex: Bitcoin, PETR4"></div>
-            <div class="form-field"><label>Tipo</label>
-                <select id="investment-form-type">
-                    <option value="crypto">Criptomoeda</option>
-                    <option value="stock">Ação</option>
-                    <option value="cdb">CDB / Renda Fixa</option>
-                    <option value="fund">Fundo</option>
-                    <option value="other">Outro</option>
-                </select>
-            </div>
-            <div class="form-field"><label>Quantidade</label><input type="number" id="investment-form-qty" step="any" min="0"></div>
-            <div class="form-field"><label>Preço médio (R$)</label><input type="number" id="investment-form-price" step="0.01" min="0"></div>
-            <div class="form-field"><label>Cotação atual (R$) — opcional</label><input type="number" id="investment-form-current" step="0.01" min="0"></div>
-            <div style="display:flex;gap:10px;margin-top:16px">
-                <button onclick="deleteInvestmentForm()" id="investment-form-delete-btn" style="flex:1;background:rgba(255,71,87,0.15);border:1px solid var(--accent-pink);color:var(--accent-pink);padding:14px;border-radius:12px;font-weight:700;display:none"><i class="fa-solid fa-trash"></i></button>
-                <button onclick="saveInvestmentForm()" style="flex:2;background:var(--accent-primary);border:none;color:white;padding:14px;border-radius:12px;font-weight:700">Salvar</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Add IoT device sheet -->
-    <div id="add-device-modal" class="mobile-form-sheet" style="display:none" onclick="if(event.target===this)closeAddDeviceSheet()">
-        <div class="mobile-form-sheet-panel glass" onclick="event.stopPropagation()">
-            <h3 style="margin:0 0 16px">Adicionar dispositivo</h3>
-            <div class="form-field"><label>Nome</label><input type="text" id="device-form-name" placeholder="Ex: Lâmpada quarto"></div>
-            <div class="form-field"><label>Tipo</label>
-                <select id="device-form-type">
-                    <option value="light">Lâmpada</option>
-                    <option value="plug">Tomada</option>
-                    <option value="sensor">Sensor</option>
-                    <option value="speaker">Alto-falante</option>
-                    <option value="other">Outro</option>
-                </select>
-            </div>
-            <div class="form-field"><label>Endereço (IP, MAC ou ID)</label><input type="text" id="device-form-address" placeholder="192.168.0.10 ou AA:BB:CC:DD:EE:FF"></div>
-            <button onclick="saveManualDevice()" style="width:100%;background:var(--accent-primary);border:none;color:white;padding:14px;border-radius:12px;font-weight:700;margin-top:8px">Salvar</button>
-        </div>
-    </div>
-
-    <script src="nexus-audio.js"></script>
     <script src="app.js"></script>
-    <script src="nexus-phase15.js"></script>
     <script>
         if ('serviceWorker' in navigator && /^https?:$/.test(window.location.protocol)) {
             window.addEventListener('load', () => {

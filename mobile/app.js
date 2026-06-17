@@ -1,26 +1,8 @@
-/**
- * AUTO-GENERATED bundle — edit mobile/js/*.js then run:
- *   python scripts/split_mobile_app_js.py --bundle
- */
-/** Nexus Mobile — nexus-core.js */
-window.NEXUS_WEB_VERSION = window.NEXUS_WEB_VERSION || '2026.06.16.2';
-
 window.onerror = function(msg, url, line) {
     console.error("JS Error:", msg, "at", url, "line", line);
     if (typeof showToast === 'function') showToast("Erro: " + msg);
     return true;
 };
-
-function todayISO() {
-    return new Date().toISOString().split('T')[0];
-}
-window.todayISO = todayISO;
-
-function escapeHtml(str) {
-    if (!str) return '';
-    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-window.escapeHtml = escapeHtml;
 
 // Supabase Configuration
 const supabaseUrl = 'https://oxwpwfhjyiiwdhcggtlt.supabase.co';
@@ -60,16 +42,12 @@ function isWifiConnected() {
 }
 
 function isJarvisCloudReady() {
-    return isNetworkOnline() && !!window.nexusSupabase;
+    return isWifiConnected() && !!window.nexusSupabase;
 }
 
 function requireWifiForJarvis(label) {
     if (isWifiConnected()) return true;
-    if (!isNetworkOnline()) {
-        showToast('Sem internet para usar o Jarvis' + (label ? ' (' + label + ')' : '') + '.');
-    } else {
-        showToast('Jarvis requer Wi-Fi' + (label ? ' (' + label + ')' : '') + '. Conecte-se a uma rede Wi-Fi.');
-    }
+    showToast('Conecte-se ao Wi-Fi para usar o Jarvis' + (label ? ' (' + label + ')' : '') + '.');
     updateJarvisFabState();
     return false;
 }
@@ -77,12 +55,10 @@ function requireWifiForJarvis(label) {
 function updateJarvisFabState() {
     const fab = document.getElementById('nexus-ai-fab');
     if (!fab) return;
-    const homeActive = !!document.getElementById('view-home')?.classList.contains('active-view');
-    const ok = isNetworkOnline();
-    fab.style.display = homeActive ? 'flex' : 'none';
+    const ok = isWifiConnected();
     fab.classList.toggle('jarvis-disabled', !ok);
     fab.setAttribute('aria-disabled', ok ? 'false' : 'true');
-    fab.title = ok ? 'Ligar para o Jarvis' : 'Internet necessária';
+    fab.title = ok ? 'Ligar para o Jarvis' : 'Wi-Fi necessário';
 }
 
 function updateNetworkSettingsUI() {
@@ -149,6 +125,7 @@ function initAppPreferences() {
 }
 
 window.addEventListener('online', () => {
+    updateSyncIndicator('synced');
     updateJarvisFabState();
     updateNetworkSettingsUI();
     backgroundSync();
@@ -208,84 +185,11 @@ class LocalDB {
         this.set(table, rows);
         return record;
     }
-    static patchRow(table, id, changes) {
-        const existing = this.getSingle(table, id);
-        if (!existing) return null;
-        return this.upsert(table, { ...existing, ...changes });
-    }
-    static deleteRow(table, id) {
-        return this.patchRow(table, id, { is_deleted: 1 });
-    }
-}
-
-function getUserStats() {
-    let stats = LocalDB.get('user_stats');
-    if (!stats || typeof stats !== 'object' || Array.isArray(stats)) {
-        stats = { xp: 0, points: 0, level: 1, xp_today: 0, last_xp_date: '' };
-    }
-    stats.xp = Number(stats.xp) || 0;
-    stats.points = Number(stats.points) || 0;
-    stats.level = Math.max(1, Number(stats.level) || 1);
-    stats.xp_today = Number(stats.xp_today) || 0;
-    return stats;
-}
-window.getUserStats = getUserStats;
-
-function ensureDefaultUserStats() {
-    const stats = getUserStats();
-    LocalDB.set('user_stats', stats);
-    return stats;
-}
-
-function ensureDefaultRewards() {
-    const rewards = LocalDB.get('nexus_rewards').filter(r => !r.is_deleted);
-    if (rewards.length > 0) return;
-    const now = new Date().toISOString();
-    LocalDB.set('nexus_rewards', [
-        { id: 1, name: 'Pausa Café', cost: 50, description: '15 min de descanso merecido', created_at: now, updated_at: now, sync_status: 'pending' },
-        { id: 2, name: 'Episódio Série', cost: 100, description: 'Assistir um episódio favorito', created_at: now, updated_at: now, sync_status: 'pending' },
-        { id: 3, name: 'Jantar Especial', cost: 200, description: 'Comida favorita no fim de semana', created_at: now, updated_at: now, sync_status: 'pending' }
-    ]);
-}
-window.ensureDefaultRewards = ensureDefaultRewards;
-
-const _origLocalDbGet = LocalDB.get;
-LocalDB.get = function(key) {
-    const objectDefaults = {
-        study_notebooks: [], pomo_sessions: [], journal_entries: [],
-        diet_meals: [], body_measures: [], xp_log: [],
-        user_stats: { xp: 0, points: 0, level: 1, xp_today: 0, last_xp_date: '' }
-    };
-    const val = _origLocalDbGet.call(this, key);
-    if (val === null || val === undefined || (Array.isArray(val) && val.length === 0 && objectDefaults[key] && !Array.isArray(objectDefaults[key]))) {
-        return objectDefaults[key] !== undefined ? JSON.parse(JSON.stringify(objectDefaults[key])) : val;
-    }
-    return val;
-};
-
-function bootNexusMobileCore() {
-    ensureDefaultUserStats();
-    ensureDefaultRewards();
-    if (typeof loadUserStats === 'function') loadUserStats();
-    else {
-        setTextIfPresent('user-level', 1);
-        if (typeof updateAppVersionDebug === 'function') updateAppVersionDebug();
-    }
-    updateSyncIndicator('offline');
-    updateJarvisFabState();
-    updateNetworkSettingsUI();
-}
-window.bootNexusMobileCore = bootNexusMobileCore;
-
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', bootNexusMobileCore);
-} else {
-    bootNexusMobileCore();
 }
 
 function setTextIfPresent(id, value) {
     const el = document.getElementById(id);
-    if (el && value != null && value !== '') el.textContent = String(value);
+    if (el) el.innerText = value;
 }
 
 function showToast(message, duration = 2500) {
@@ -298,11 +202,6 @@ function showToast(message, duration = 2500) {
     }
     toast.textContent = String(message || '');
     toast.style.opacity = '1';
-    if (window.NexusAudio) {
-        const msg = String(message || '').toLowerCase();
-        if (msg.includes('erro') || msg.includes('falha')) window.NexusAudio.play('error');
-        else window.NexusAudio.play('tap');
-    }
     clearTimeout(showToast._timer);
     showToast._timer = setTimeout(() => { toast.style.opacity = '0'; }, duration);
 }
@@ -326,7 +225,6 @@ function closeTransientMobileSurfaces() {
         'goal-form-modal',
         'workout-form-modal',
         'subject-form-modal',
-        'study-entity-edit-modal',
         'subtask-inline-modal',
         'habit-detail-modal',
         'task-detail-modal',
@@ -365,17 +263,53 @@ let jarvisCallTimerId = null;
 
 function updateJarvisCallTimer() {
     const timer = document.getElementById('jarvis-call-timer');
-    const timerOverlay = document.getElementById('jarvis-call-timer-overlay');
-    if (!jarvisCallStartedAt) return;
+    if (!timer || !jarvisCallStartedAt) return;
     const elapsed = Math.floor((Date.now() - jarvisCallStartedAt) / 1000);
     const minutes = String(Math.floor(elapsed / 60)).padStart(2, '0');
     const seconds = String(elapsed % 60).padStart(2, '0');
-    const label = `${minutes}:${seconds}`;
-    if (timer) timer.textContent = label;
-    if (timerOverlay) timerOverlay.textContent = label;
+    timer.textContent = `${minutes}:${seconds}`;
 }
 
-// toggleJarvisCall / endJarvisCall — implementados em nexus-phase15.js (overlay + voz)
+window.toggleJarvisCall = function() {
+    if (jarvisCallActive) {
+        window.endJarvisCall();
+        return;
+    }
+    if (!requireWifiForJarvis('ligação')) return;
+    if (!window.nexusSupabase) {
+        showToast('Entre com Google nas configurações para usar o Jarvis.');
+        return;
+    }
+    jarvisCallActive = true;
+    jarvisCallStartedAt = Date.now();
+    const banner = document.getElementById('jarvis-call-banner');
+    const fab = document.getElementById('nexus-ai-fab');
+    if (banner) banner.style.display = 'flex';
+    if (fab) fab.classList.add('active');
+    updateJarvisCallTimer();
+    jarvisCallTimerId = setInterval(updateJarvisCallTimer, 1000);
+    if (window.AndroidNative && typeof window.AndroidNative.startJarvisCall === 'function') {
+        window.AndroidNative.startJarvisCall();
+    } else {
+        showToast('Ligacao Jarvis indisponivel no modo web.');
+    }
+};
+
+window.endJarvisCall = function() {
+    jarvisCallActive = false;
+    jarvisCallStartedAt = 0;
+    clearInterval(jarvisCallTimerId);
+    jarvisCallTimerId = null;
+    const banner = document.getElementById('jarvis-call-banner');
+    const fab = document.getElementById('nexus-ai-fab');
+    const timer = document.getElementById('jarvis-call-timer');
+    if (banner) banner.style.display = 'none';
+    if (fab) fab.classList.remove('active');
+    if (timer) timer.textContent = '00:00';
+    if (window.AndroidNative && typeof window.AndroidNative.stopJarvisCall === 'function') {
+        window.AndroidNative.stopJarvisCall();
+    }
+};
 
 window.requestJarvisVision = function() {
     if (window.AndroidNative && typeof window.AndroidNative.captureScreenAndClipboard === 'function') {
@@ -395,12 +329,10 @@ window.receiveNativeVision = function(text) {
 // Sync Engine (unified offline-first)
 // ----------------------------------------------------
 const SYNC_TABLES = [
-    'nexus_user', 'habits', 'habit_logs', 'tasks', 'finance_transactions', 'finance_investments',
+    'nexus_user', 'habits', 'habit_logs', 'tasks', 'finance_transactions',
     'nexus_rewards', 'study_notes', 'study_notebooks', 'flashcards', 'nexus_goals',
     'fitness_workouts', 'nexus_videos', 'routines', 'journal_entries',
-    'pomo_sessions', 'reading_books', 'reading_sessions', 'quiz_attempts',
-    'jarvis_chat_messages', 'jarvis_call_sessions', 'jarvis_call_turns',
-    'nexus_alarms', 'nexus_user_settings', 'iot_devices'
+    'pomo_sessions', 'reading_books', 'reading_sessions', 'quiz_attempts'
 ];
 let syncInProgress = false;
 
@@ -444,29 +376,10 @@ function mergeRemoteRow(table, remoteRow, localRows) {
     return localRows;
 }
 
-async function hasAuthenticatedSession() {
-    const supabaseClient = window.nexusSupabase;
-    if (!supabaseClient) return false;
-    try {
-        const { data: { session } } = await supabaseClient.auth.getSession();
-        if (session?.user) {
-            if (typeof currentUser !== 'undefined') currentUser = session.user;
-            return true;
-        }
-    } catch (e) {
-        console.warn('Session check failed:', e);
-    }
-    return false;
-}
-
 async function syncData() {
     if (syncInProgress) return;
     const supabaseClient = window.nexusSupabase;
     if (!navigator.onLine || !supabaseClient) {
-        updateSyncIndicator('offline');
-        return;
-    }
-    if (!(await hasAuthenticatedSession())) {
         updateSyncIndicator('offline');
         return;
     }
@@ -531,7 +444,13 @@ async function syncData() {
         updateSyncIndicator(conflictCount ? 'conflicts' : 'synced', conflictCount ? `${conflictCount} conflito(s)` : `Sync ${timeLabel}`);
 
         const activeView = document.querySelector('.active-view');
-        if (activeView && typeof refreshViewContent === 'function') refreshViewContent(activeView.id);
+        if (activeView) {
+            if (activeView.id === 'view-habits') loadHabits();
+            if (activeView.id === 'view-finance') loadFinances();
+            if (activeView.id === 'view-tasks') loadTasks();
+            if (activeView.id === 'view-videos') loadVideos();
+            if (activeView.id === 'view-shop') loadShop();
+        }
         loadUserStats();
     } catch (e) {
         console.error('Sync error:', e);
@@ -542,14 +461,6 @@ async function syncData() {
 }
 
 async function backgroundSync() {
-    if (!navigator.onLine || !window.nexusSupabase) {
-        updateSyncIndicator('offline');
-        return;
-    }
-    if (!(await hasAuthenticatedSession())) {
-        updateSyncIndicator('offline');
-        return;
-    }
     return syncData();
 }
 
@@ -557,131 +468,39 @@ window.syncData = syncData;
 window.backgroundSync = backgroundSync;
 
 // ----------------------------------------------------
-// UI Logic — central view refresh (all modules)
+// UI Logic
 // ----------------------------------------------------
-window.refreshViewContent = function(viewId) {
-    if (!viewId) return;
-    const run = (label, fn) => {
-        if (typeof fn !== 'function') {
-            console.warn('[refreshViewContent] missing loader:', viewId, label);
+document.querySelectorAll('.nav-item').forEach(item => {
+    item.addEventListener('click', (e) => {
+        e.preventDefault();
+        closeTransientMobileSurfaces();
+        
+        document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
+        item.classList.add('active');
+        
+        const targetId = item.getAttribute('data-target');
+        const targetView = document.getElementById(targetId);
+        if (!targetView) {
+            console.warn("Missing mobile view:", targetId);
             return;
         }
-        try { fn(); } catch (err) { console.error('[refreshViewContent]', viewId, label, err); }
-    };
-    switch (viewId) {
-            case 'view-home':
-                run('loadTodayDashboard', loadTodayDashboard);
-                break;
-            case 'view-habits':
-                run('loadHabits', window.loadHabits);
-                break;
-            case 'view-finance':
-                run('loadFinances', window.loadFinances);
-                break;
-            case 'view-tasks':
-                run('loadTasks', window.loadTasks);
-                break;
-            case 'view-videos':
-                run('loadVideos', window.loadVideos);
-                break;
-            case 'view-shop':
-                run('loadShop', window.loadShop);
-                break;
-            case 'view-studies':
-                run('loadStudies', window.loadStudies);
-                break;
-            case 'view-goals':
-                run('loadGoals', window.loadGoals);
-                break;
-            case 'view-fitness':
-                if (typeof switchFitnessTab === 'function') {
-                    try {
-                        const treinosBtn = document.querySelector('#view-fitness .fitness-tab');
-                        switchFitnessTab('treinos', treinosBtn);
-                    } catch (err) { console.error('[refreshViewContent]', viewId, 'switchFitnessTab', err); }
-                } else {
-                    run('loadFitness', window.loadFitness);
-                }
-                break;
-            case 'view-routines':
-                run('loadRoutines', window.loadRoutines);
-                break;
-            case 'view-journal':
-                run('loadJournal', window.loadJournal);
-                break;
-            case 'view-alarms':
-                run('loadAlarms', window.loadAlarms);
-                break;
-            case 'view-iot':
-                run('discoverIoT', window.discoverIoT);
-                break;
-            case 'view-cleaner':
-                run('loadCleaner', window.loadCleaner);
-                break;
-            case 'view-jarvis-history':
-                run('loadJarvisPersistentHistory', window.loadJarvisPersistentHistory);
-                break;
-            case 'view-jarvis-calls':
-                run('loadJarvisCallHistory', window.loadJarvisCallHistory);
-                break;
-            case 'view-settings':
-                run('initAppPreferences', initAppPreferences);
-                run('updateSettingsUI', updateSettingsUI);
-                break;
-            default:
-                break;
-        }
-};
-
-const MODULE_NAV_KEYS = ['habits', 'finance', 'routines', 'tasks', 'videos', 'shop', 'studies', 'goals', 'fitness', 'iot', 'journal', 'alarms', 'cleaner'];
-
-window.ensureModuleNavVisible = function() {
-    let prefs = {};
-    try { prefs = JSON.parse(localStorage.getItem('nexus_ui_prefs') || '{}'); } catch (_) {}
-    const hidden = MODULE_NAV_KEYS.filter(mod => {
-        const navItem = document.querySelector('.nav-item[data-target="view-' + mod + '"]');
-        return navItem && navItem.style.display === 'none';
+        document.querySelectorAll('.view').forEach(view => view.classList.remove('active-view'));
+        targetView.classList.add('active-view');
+        
+        if(targetId === 'view-habits' && typeof loadHabits === 'function') loadHabits();
+        if(targetId === 'view-finance' && typeof loadFinances === 'function') loadFinances();
+        if(targetId === 'view-tasks' && typeof loadTasks === 'function') loadTasks();
+        if(targetId === 'view-videos' && typeof loadVideos === 'function') loadVideos();
+        if(targetId === 'view-shop' && typeof loadShop === 'function') loadShop();
+        if(targetId === 'view-iot' && typeof discoverIoT === 'function') discoverIoT();
+        if(targetId === 'view-studies' && typeof loadStudies === 'function') loadStudies();
+        if(targetId === 'view-goals' && typeof loadGoals === 'function') loadGoals();
+        if(targetId === 'view-fitness' && typeof loadFitness === 'function') loadFitness();
+        if(targetId === 'view-routines' && typeof loadRoutines === 'function') loadRoutines();
+        if(targetId === 'view-journal' && typeof loadJournal === 'function') loadJournal();
+        if(targetId === 'view-cleaner' && typeof loadCleaner === 'function') loadCleaner();
     });
-    if (hidden.length >= MODULE_NAV_KEYS.length - 1) {
-        MODULE_NAV_KEYS.forEach(mod => { prefs[mod] = true; });
-        localStorage.setItem('nexus_ui_prefs', JSON.stringify(prefs));
-        if (typeof showToast === 'function') showToast('Módulos restaurados na barra inferior.');
-    }
-    if (typeof applyModuleOrderAndVisibility === 'function') applyModuleOrderAndVisibility();
-    else if (typeof applyUiPrefs === 'function') applyUiPrefs();
-};
-
-function activateMobileView(viewId, navItem) {
-    if (typeof closeTransientMobileSurfaces === 'function') closeTransientMobileSurfaces();
-    document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
-    if (navItem) navItem.classList.add('active');
-    document.querySelectorAll('.view').forEach(view => view.classList.remove('active-view'));
-    const targetView = document.getElementById(viewId);
-    if (!targetView) {
-        console.warn('Missing mobile view:', viewId);
-        if (typeof showToast === 'function') showToast('Tela não encontrada: ' + viewId);
-        return false;
-    }
-    targetView.classList.add('active-view');
-    if (typeof updateJarvisFabState === 'function') updateJarvisFabState();
-    refreshViewContent(viewId);
-    requestAnimationFrame(() => refreshViewContent(viewId));
-    if (window.NexusAudio && typeof window.NexusAudio.play === 'function') window.NexusAudio.play('nav');
-    return true;
-}
-
-function bindMobileNavItems() {
-    document.querySelectorAll('.nav-item').forEach(item => {
-        if (item.dataset.navBound) return;
-        item.dataset.navBound = '1';
-        item.addEventListener('click', (e) => {
-            e.preventDefault();
-            if (typeof closeTransientMobileSurfaces === 'function') closeTransientMobileSurfaces();
-            activateMobileView(item.getAttribute('data-target'), item);
-        });
-    });
-}
-bindMobileNavItems();
+});
 
 // ----------------------------------------------------
 // Notifications
@@ -695,13 +514,7 @@ async function requestNotificationPermission() {
     }
 }
 
-function notificationsEnabled() {
-    return localStorage.getItem('nexus_notifications') !== 'false';
-}
-window.notificationsEnabled = notificationsEnabled;
-
 function sendLocalNotification(title, body) {
-    if (!notificationsEnabled()) return;
     if (window.AndroidNative && typeof window.AndroidNative.showNotification === 'function') {
         window.AndroidNative.showNotification(title, body);
         return;
@@ -719,66 +532,28 @@ function sendLocalNotification(title, body) {
 }
 
 // ----------------------------------------------------
+
 // Offline-First Data Operations
 // ----------------------------------------------------
 
 function syncUserStatsToNexusUser() {
-    const stats = getUserStats();
+    const stats = LocalDB.get('user_stats') || { xp: 0, points: 0, level: 1 };
     const user = LocalDB.getSingle('nexus_user', 1) || { id: 1, name: 'Comandante' };
-    user.xp = stats.xp;
-    user.points = stats.points;
-    user.level = stats.level;
+    user.xp = stats.xp || 0;
+    user.points = stats.points || 0;
+    user.level = stats.level || 1;
     LocalDB.upsert('nexus_user', user);
 }
 
 function loadUserStats() {
-    const stats = ensureDefaultUserStats();
     syncUserStatsToNexusUser();
+    const stats = LocalDB.get('user_stats') || { xp: 0, level: 1, points: 0 };
     const user = LocalDB.getSingle('nexus_user', 1) || { name: 'Comandante' };
     setTextIfPresent('user-level', stats.level);
     setTextIfPresent('user-name', user.name || 'Comandante');
     setTextIfPresent('val-xp', stats.xp);
     setTextIfPresent('val-points', stats.points);
-    updateAppVersionDebug();
 }
-
-window.updateAppVersionDebug = function() {
-    const el = document.getElementById('app-version-debug');
-    if (!el) return;
-    let webVer = window.NEXUS_WEB_VERSION || '—';
-    try {
-        const raw = localStorage.getItem('nexus_web_version');
-        if (raw) webVer = JSON.parse(raw).version || raw;
-    } catch (_) {}
-    const applyLabel = (wv, av) => {
-        el.textContent = 'web ' + (wv || '—') + ' · apk ' + (av || '—');
-    };
-    applyLabel(webVer, window.__nexusApkVersion || '—');
-    if (webVer === '—' || !window.__nexusApkVersion) {
-        fetch('version.json').then(r => r.ok ? r.json() : null).then(j => {
-            if (j && j.version) {
-                webVer = j.version;
-                window.NEXUS_WEB_VERSION = j.version;
-                localStorage.setItem('nexus_web_version', JSON.stringify(j));
-            }
-            let apkVer = window.__nexusApkVersion || '—';
-            if (window.AndroidNative && typeof window.AndroidNative.getAppInfo === 'function') {
-                try {
-                    const info = JSON.parse(window.AndroidNative.getAppInfo());
-                    apkVer = info.versionName || info.version || apkVer;
-                    window.__nexusApkVersion = apkVer;
-                } catch (_) {}
-            } else if (window.AndroidNative && typeof window.AndroidNative.getShellInfo === 'function') {
-                try {
-                    const info = JSON.parse(window.AndroidNative.getShellInfo());
-                    apkVer = info.versionName || info.version || apkVer;
-                    window.__nexusApkVersion = apkVer;
-                } catch (_) {}
-            }
-            applyLabel(webVer, apkVer);
-        }).catch(() => applyLabel(webVer, window.__nexusApkVersion || '—'));
-    }
-};
 
 function loadVideos() {
     const container = document.getElementById('videos-list');
@@ -844,184 +619,17 @@ window.completeTask = function(id, btn) {
 };
 
 function loadFinances() {
-    renderFinanceSummary();
     const container = document.getElementById('finance-list');
-    if (!container) return;
-    const data = LocalDB.get('finance_transactions').filter(t => !t.is_deleted)
-        .sort((a,b) => (b.occurred_at || b.created_at || '').localeCompare(a.occurred_at || a.created_at || ''));
+    const data = LocalDB.get('finance_transactions').filter(t => !t.is_deleted).sort((a,b) => (b.occurred_at || b.created_at || '').localeCompare(a.occurred_at || a.created_at || ''));
     
     container.innerHTML = data.length ? '' : '<div style="text-align:center; color:var(--text-secondary); margin-top:20px;">Sem transações.</div>';
-    const catLabels = { food: 'Alimentação', transport: 'Transporte', health: 'Saúde', leisure: 'Lazer', bills: 'Contas', salary: 'Salário', other: 'Outros' };
-    data.slice(0, 30).forEach(t => {
+    data.slice(0, 15).forEach(t => {
         const el = document.createElement('div');
         el.className = 'list-item glass';
-        el.style.cursor = 'pointer';
-        el.onclick = () => { if (typeof openFinanceForm === 'function') openFinanceForm(t.id); };
-        const isIncome = t.type === 'income';
-        const dateStr = (t.occurred_at || t.created_at || '').slice(0, 10).split('-').reverse().join('/');
-        el.innerHTML = `<div class="item-main"><span class="item-title">${escapeHtml(t.description || 'Transação')}</span>
-            <span class="item-subtitle">${catLabels[t.category] || t.category || 'Outros'} · ${dateStr}</span></div>
-            <span style="font-weight:700;color:${isIncome?'#34d399':'#fb7185'}">${isIncome?'+':'−'} R$ ${Number(t.amount).toFixed(2)}</span>`;
+        el.innerHTML = `<div class="item-main"><span class="item-title">${t.description || 'Transação'}</span><span class="item-subtitle" style="color:${t.type==='income'?'#00b894':'#fd79a8'}">${t.type==='income'?'+':'-'} $${t.amount}</span></div>`;
         container.appendChild(el);
     });
-    if (typeof ensureChartJs === 'function') ensureChartJs().then(() => setTimeout(renderFinanceCharts, 80));
-    if (typeof renderCategoryBudgets === 'function') renderCategoryBudgets();
-    if (typeof loadInvestments === 'function') loadInvestments();
 }
-
-function renderFinanceSummary() {
-    const month = new Date().toISOString().slice(0, 7);
-    const txs = (LocalDB.get('finance_transactions') || []).filter(t => !t.is_deleted);
-    const inMonth = txs.filter(t => (t.occurred_at || t.created_at || '').slice(0, 7) === month);
-    const income = inMonth.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount || 0), 0);
-    const expense = inMonth.filter(t => t.type !== 'income').reduce((s, t) => s + Number(t.amount || 0), 0);
-    const balance = income - expense;
-    const fmt = v => 'R$ ' + v.toFixed(2).replace('.', ',');
-    const balEl = document.getElementById('finance-balance-month');
-    const incEl = document.getElementById('finance-income-month');
-    const expEl = document.getElementById('finance-expense-month');
-    if (balEl) { balEl.textContent = fmt(balance); balEl.style.color = balance >= 0 ? 'var(--accent-green)' : '#fb7185'; }
-    if (incEl) incEl.textContent = fmt(income);
-    if (expEl) expEl.textContent = fmt(expense);
-}
-
-window.switchFinanceTab = function(tab, btn) {
-    ['transactions', 'investments', 'budgets'].forEach(t => {
-        const panel = document.getElementById('finance-panel-' + t);
-        if (panel) panel.style.display = t === tab ? 'block' : 'none';
-    });
-    document.querySelectorAll('#view-finance .fitness-tab').forEach(b => b.classList.remove('active'));
-    if (btn) btn.classList.add('active');
-    if (tab === 'investments' && typeof loadInvestments === 'function') loadInvestments();
-    if (tab === 'budgets' && typeof renderCategoryBudgets === 'function') renderCategoryBudgets();
-};
-
-window.closeFinanceOverflow = function() {
-    const p = document.getElementById('finance-overflow-popup');
-    if (p) p.style.display = 'none';
-};
-
-const FINANCE_CATEGORY_LABELS = { food: 'Alimentação', transport: 'Transporte', health: 'Saúde', leisure: 'Lazer', bills: 'Contas', salary: 'Salário', other: 'Outros' };
-
-function getCategoryBudgets() {
-    try { return JSON.parse(localStorage.getItem('nexus_category_budgets') || '{}'); } catch (_) { return {}; }
-}
-
-window.renderCategoryBudgets = function() {
-    const list = document.getElementById('finance-budgets-list');
-    if (!list) return;
-    const budgets = getCategoryBudgets();
-    const month = new Date().toISOString().slice(0, 7);
-    const spent = {};
-    (LocalDB.get('finance_transactions') || []).filter(t => !t.is_deleted && t.type !== 'income')
-        .filter(t => (t.occurred_at || '').slice(0, 7) === month)
-        .forEach(t => { spent[t.category || 'other'] = (spent[t.category || 'other'] || 0) + Number(t.amount || 0); });
-    list.innerHTML = Object.keys(FINANCE_CATEGORY_LABELS).map(cat => {
-        const limit = budgets[cat] || 0;
-        const used = spent[cat] || 0;
-        const pct = limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
-        const warn = limit > 0 && pct >= 80;
-        return `<div class="glass" style="padding:12px;border-radius:12px;margin-bottom:10px">
-            <div style="display:flex;justify-content:space-between;margin-bottom:6px">
-                <span style="font-weight:600">${FINANCE_CATEGORY_LABELS[cat]}</span>
-                <span style="font-size:0.8rem;color:${warn?'#fb7185':'var(--text-secondary)'}">R$ ${used.toFixed(0)}${limit ? ' / R$ ' + limit : ''}</span>
-            </div>
-            <input type="number" min="0" step="50" value="${limit || ''}" placeholder="Limite mensal"
-                onchange="saveCategoryBudget('${cat}', this.value)"
-                style="width:100%;padding:8px;border-radius:8px;background:rgba(0,0,0,0.35);color:white;border:1px solid var(--border-glass);font-family:inherit">
-            ${limit ? `<div style="margin-top:6px;background:rgba(255,255,255,0.08);border-radius:4px;height:6px"><div style="height:100%;width:${pct}%;border-radius:4px;background:${warn?'#fb7185':'var(--accent-primary)'}"></div></div>` : ''}
-        </div>`;
-    }).join('');
-};
-
-window.saveCategoryBudget = function(cat, val) {
-    const budgets = getCategoryBudgets();
-    const n = parseFloat(val);
-    if (n > 0) budgets[cat] = n; else delete budgets[cat];
-    localStorage.setItem('nexus_category_budgets', JSON.stringify(budgets));
-    renderCategoryBudgets();
-};
-
-let editingInvestmentId = null;
-window.loadInvestments = function() {
-    const list = document.getElementById('finance-investments-list');
-    const totalEl = document.getElementById('finance-investments-total');
-    if (!list) return;
-    const items = (LocalDB.get('finance_investments') || []).filter(i => !i.is_deleted);
-    const typeIcons = { crypto: '₿', stock: '📈', cdb: '🏦', fund: '📊', other: '💼' };
-    let total = 0;
-    list.innerHTML = items.length ? items.map(i => {
-        const price = Number(i.current_price || i.avg_price || 0);
-        const qty = Number(i.quantity || 0);
-        const value = price * qty;
-        total += value;
-        return `<div class="list-item glass" onclick="openInvestmentForm('${i.id}')" style="cursor:pointer">
-            <div class="item-main"><span class="item-title">${typeIcons[i.type] || '💼'} ${escapeHtml(i.name)}</span>
-            <span class="item-subtitle">${i.quantity} un · médio R$ ${Number(i.avg_price||0).toFixed(2)}</span></div>
-            <span style="font-weight:700;color:var(--accent-blue)">R$ ${value.toFixed(2)}</span></div>`;
-    }).join('') : '<div style="text-align:center;color:var(--text-secondary);padding:20px">Nenhum ativo. Toque em + Ativo.</div>';
-    if (totalEl) totalEl.textContent = 'R$ ' + total.toFixed(2).replace('.', ',');
-};
-
-window.openInvestmentForm = function(id) {
-    editingInvestmentId = id || null;
-    const items = LocalDB.get('finance_investments') || [];
-    const i = id ? items.find(x => String(x.id) === String(id)) : null;
-    document.getElementById('investment-form-title').textContent = i ? 'Editar ativo' : 'Novo ativo';
-    document.getElementById('investment-form-name').value = i?.name || '';
-    document.getElementById('investment-form-type').value = i?.type || 'stock';
-    document.getElementById('investment-form-qty').value = i?.quantity || '';
-    document.getElementById('investment-form-price').value = i?.avg_price || '';
-    document.getElementById('investment-form-current').value = i?.current_price || '';
-    document.getElementById('investment-form-delete-btn').style.display = i ? 'block' : 'none';
-    document.getElementById('investment-form-modal').style.display = 'flex';
-};
-
-window.closeInvestmentForm = function() {
-    document.getElementById('investment-form-modal').style.display = 'none';
-    editingInvestmentId = null;
-};
-
-window.saveInvestmentForm = function() {
-    const name = document.getElementById('investment-form-name')?.value?.trim();
-    const qty = parseFloat(document.getElementById('investment-form-qty')?.value || '0');
-    const avg = parseFloat(document.getElementById('investment-form-price')?.value || '0');
-    if (!name || !qty) { showToast('Nome e quantidade são obrigatórios.'); return; }
-    LocalDB.upsert('finance_investments', {
-        id: editingInvestmentId || Date.now(),
-        name,
-        type: document.getElementById('investment-form-type')?.value || 'other',
-        quantity: qty,
-        avg_price: avg,
-        current_price: parseFloat(document.getElementById('investment-form-current')?.value || '0') || avg,
-        updated_at: new Date().toISOString()
-    });
-    closeInvestmentForm();
-    loadInvestments();
-    if (typeof backgroundSync === 'function') backgroundSync();
-    showToast('Ativo salvo.');
-};
-
-window.deleteInvestmentForm = function() {
-    if (!editingInvestmentId || !confirm('Excluir este ativo?')) return;
-    LocalDB.deleteRow('finance_investments', editingInvestmentId);
-    closeInvestmentForm();
-    loadInvestments();
-};
-
-window.exportFinanceCsv = function() {
-    const txs = (LocalDB.get('finance_transactions') || []).filter(t => !t.is_deleted);
-    const rows = [['data', 'tipo', 'categoria', 'descricao', 'valor'].join(',')];
-    txs.forEach(t => {
-        rows.push([(t.occurred_at||'').slice(0,10), t.type, t.category, '"' + (t.description||'').replace(/"/g,'""') + '"', t.amount].join(','));
-    });
-    const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'nexus-financas-' + todayISO() + '.csv';
-    a.click();
-    showToast('CSV exportado.');
-};
 
 // ----------------------------------------------------
 // ----------------------------------------------------
@@ -1043,20 +651,11 @@ function loadShop() {
                     <span class="item-title">${item.name}</span>
                     <span class="item-subtitle">${item.description || ''}</span>
                 </div>
-                <button class="item-action" style="font-size:12px; width:auto; padding: 0 10px;" data-reward-id="${item.id}" data-reward-name="${escapeHtml(item.name)}" data-reward-cost="${item.cost}">
+                <button class="item-action" style="font-size:12px; width:auto; padding: 0 10px;" onclick="buyItem(${item.id}, '${item.name}', ${item.cost})">
                     ${item.cost} pts
                 </button>
             `;
             container.appendChild(el);
-        });
-        container.querySelectorAll('[data-reward-id]').forEach(btn => {
-            btn.addEventListener('click', () => {
-                buyItem(
-                    parseInt(btn.getAttribute('data-reward-id'), 10),
-                    btn.getAttribute('data-reward-name') || '',
-                    parseInt(btn.getAttribute('data-reward-cost'), 10) || 0
-                );
-            });
         });
     } else {
         container.innerHTML = '<div style="text-align:center; color:var(--text-secondary); margin-top:20px; padding:20px;"><i class="fa-solid fa-store" style="font-size:2rem;opacity:0.4;margin-bottom:10px;display:block"></i>Nenhuma recompensa ainda.<br><button onclick="ensureDefaultRewards();loadShop()" style="margin-top:12px;background:var(--accent-primary);border:none;color:white;padding:10px 18px;border-radius:8px;cursor:pointer;font-family:inherit">Carregar recompensas padrão</button></div>';
@@ -1087,6 +686,19 @@ window.buyItem = function(id, name, cost) {
         backgroundSync();
     }
 };
+
+function loadStudies() {
+    const container = document.getElementById('studies-list');
+    if(!container) return;
+    const data = LocalDB.get('study_notes').filter(t => !t.is_deleted);
+    container.innerHTML = data.length ? '' : '<div style="text-align:center; color:var(--text-secondary); margin-top:20px;">Nenhuma nota de estudo.</div>';
+    data.forEach(t => {
+        const el = document.createElement('div');
+        el.className = 'list-item glass';
+        el.innerHTML = `<div class="item-main"><span class="item-title">${t.title}</span><span class="item-subtitle">${t.subject || 'Geral'}</span></div>`;
+        container.appendChild(el);
+    });
+}
 
 function loadGoals() {
     const container = document.getElementById('goals-list');
@@ -1180,146 +792,57 @@ window.loadTasks = window.loadTasks || loadTasks;
 window.loadFinances = window.loadFinances || loadFinances;
 window.loadFinance = window.loadFinance || loadFinances;
 window.loadShop = window.loadShop || loadShop;
+window.loadStudies = window.loadStudies || loadStudies;
 window.loadGoals = window.loadGoals || loadGoals;
 window.loadFitness = window.loadFitness || loadFitness;
-window.updateFitnessStats = window.updateFitnessStats || updateFitnessStats;
 
-window.loadRoutines = window.loadRoutines || function() {
-    const list = document.getElementById('routines-list');
-    if (!list) return;
-    const routines = LocalDB.get('routines') || [];
-    if (!routines.length) {
-        list.innerHTML = '<div style="text-align:center;color:var(--text-secondary);padding:30px">Voce nao tem rotinas criadas.<br><br><button onclick="createDefaultRoutines()" style="background:var(--accent-primary);color:white;border:none;padding:10px 20px;border-radius:10px;font-weight:700">Criar Rotinas Padrao</button></div>';
-        return;
-    }
-    list.innerHTML = routines.map(r => `
-        <div class="list-item glass" style="cursor:pointer" onclick="openRoutineRunner('${r.id}')">
-            <div class="item-main"><div class="item-title">${escapeHtml(r.name)}</div>
-            <div class="item-subtitle"><i class="fa-regular fa-clock"></i> ${r.time || 'Sem horario'} · ${(r.steps || []).length} passos</div></div>
-            <button class="icon-btn" style="background:var(--accent-primary);color:white;width:40px;height:40px"><i class="fa-solid fa-play"></i></button>
-        </div>`).join('');
+window.ensureDefaultRewards = function() {
+    const rewards = LocalDB.get('nexus_rewards').filter(r => !r.is_deleted);
+    if (rewards.length > 0) return;
+    const now = new Date().toISOString();
+    LocalDB.set('nexus_rewards', [
+        { id: 1, name: 'Pausa Café', cost: 50, description: '15 min de descanso merecido', created_at: now, updated_at: now, sync_status: 'pending' },
+        { id: 2, name: 'Episódio Série', cost: 100, description: 'Assistir um episódio favorito', created_at: now, updated_at: now, sync_status: 'pending' },
+        { id: 3, name: 'Jantar Especial', cost: 200, description: 'Comida favorita no fim de semana', created_at: now, updated_at: now, sync_status: 'pending' }
+    ]);
 };
-
-window.loadJournal = window.loadJournal || function() {
-    const list = document.getElementById('journal-list');
-    if (list) {
-        const entries = (LocalDB.get('journal_entries') || [])
-            .filter(e => e.content || e.best || e.challenge || e.gratitude)
-            .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-        list.innerHTML = entries.length ? entries.map(e => `
-            <div class="list-item glass" onclick="openJournalEntry('${e.date}')" style="cursor:pointer">
-                <div class="item-main"><span class="item-title">${escapeHtml(e.date)}</span>
-                <span class="item-subtitle">${escapeHtml((e.content || '').slice(0, 80))}</span></div>
-            </div>`).join('') : '<div style="text-align:center;color:var(--text-secondary);padding:24px">Registre seu humor e toque + para escrever.</div>';
-    }
-};
-
-window.loadAlarms = window.loadAlarms || function() {
-    const list = document.getElementById('alarms-list');
-    if (!list) return;
-    const alarms = (LocalDB.get('nexus_alarms') || []).filter(a => !a.is_deleted);
-    list.innerHTML = alarms.length ? alarms.map(a => `
-        <div class="list-item glass" style="padding:14px;margin-bottom:10px">
-            <div class="item-main"><div class="item-title">${escapeHtml(a.title || 'Alarme')}</div>
-            <div style="font-size:0.8rem;color:var(--text-secondary)">${escapeHtml(a.alarm_time || '')}</div></div>
-        </div>`).join('') : '<div style="text-align:center;color:var(--text-secondary);padding:24px">Nenhum alarme agendado. Toque + para criar.</div>';
-};
-
-window.loadCleaner = window.loadCleaner || function() {
-    if (typeof scanPhoneStorage === 'function') scanPhoneStorage();
-    else {
-        const el = document.getElementById('cleaner-scan-results');
-        if (el) el.innerHTML = '<div style="color:var(--text-secondary);padding:16px">Toque em escanear para analisar o armazenamento.</div>';
-    }
-};
-
-// loadStudies — no módulo nexus-studies.js
 
 window.discoverIoT = async function() {
     const container = document.getElementById('iot-list');
     if (!container) return;
-    container.innerHTML = '<div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> Buscando Bluetooth e Wi‑Fi...</div>';
-
-    const manual = (LocalDB.get('iot_devices') || []).filter(d => !d.is_deleted);
-    const devices = manual.map(d => ({ ...d, source: 'manual' }));
-
-    if (window.AndroidNative && typeof AndroidNative.scanNearbyDevices === 'function') {
-        try {
-            const raw = AndroidNative.scanNearbyDevices();
-            const scanned = typeof raw === 'string' ? JSON.parse(raw) : raw;
-            if (Array.isArray(scanned)) scanned.forEach(d => devices.push(d));
-        } catch (_) {}
-    }
-
-    if (isNetworkOnline() && window.location.protocol !== 'file:') {
-        try {
-            const res = await fetch('/api/nexus/iot/discover');
-            const data = await res.json();
-            if (data?.devices) data.devices.forEach(d => devices.push({ ...d, source: 'desktop' }));
-        } catch (_) {}
-    }
-
-    if (!devices.length) {
-        container.innerHTML = '<div style="text-align:center;color:var(--text-secondary);margin-top:20px;padding:20px"><i class="fa-solid fa-wifi" style="font-size:2rem;margin-bottom:10px;opacity:0.5"></i><p>Nenhum dispositivo encontrado.<br>Toque + para adicionar manualmente ou ative Bluetooth/Wi‑Fi.</p></div>';
+    const offlineMsg = '<div style="text-align:center;color:var(--text-secondary);margin-top:20px;padding:20px"><i class="fa-solid fa-house-signal" style="font-size:2rem;opacity:0.4;margin-bottom:10px;display:block"></i>Casa IoT requer o Nexus desktop na mesma rede.<br>Use o app desktop para controlar lâmpadas e sensores.</div>';
+    if (!navigator.onLine || window.location.protocol === 'file:') {
+        container.innerHTML = offlineMsg;
         return;
     }
-
-    const typeIcons = { light: '💡', plug: '🔌', sensor: '📡', speaker: '🔊', bluetooth: '📶', wifi: '📡' };
-    container.innerHTML = devices.map((dev, idx) => {
-        const id = dev.id || dev.address || dev.ip || ('dev-' + idx);
-        const name = dev.name || dev.title || 'Dispositivo';
-        const addr = dev.address || dev.ip || dev.mac || '';
-        const isOn = dev.status === 'LIGADO' || dev.on === true;
-        const icon = typeIcons[dev.type] || typeIcons[dev.source] || '🏠';
-        return `<div class="list-item glass">
-            <div class="item-main"><span class="item-title">${icon} ${escapeHtml(name)}</span>
-            <span class="item-subtitle">${escapeHtml(addr)} · ${dev.source || 'local'}</span></div>
-            <button class="icon-btn ${isOn ? 'done' : ''}" onclick="toggleIoTDevice('${String(id).replace(/'/g, '')}', ${!isOn})"><i class="fa-solid fa-power-off"></i></button>
-        </div>`;
-    }).join('');
-};
-
-window.openAddDeviceSheet = function() {
-    document.getElementById('device-form-name').value = '';
-    document.getElementById('device-form-address').value = '';
-    document.getElementById('add-device-modal').style.display = 'flex';
-};
-
-window.closeAddDeviceSheet = function() {
-    document.getElementById('add-device-modal').style.display = 'none';
-};
-
-window.saveManualDevice = function() {
-    const name = document.getElementById('device-form-name')?.value?.trim();
-    const address = document.getElementById('device-form-address')?.value?.trim();
-    if (!name) { showToast('Informe o nome do dispositivo.'); return; }
-    LocalDB.upsert('iot_devices', {
-        id: Date.now(),
-        name,
-        type: document.getElementById('device-form-type')?.value || 'other',
-        address: address || '',
-        status: 'DESLIGADO',
-        created_at: new Date().toISOString()
-    });
-    closeAddDeviceSheet();
-    discoverIoT();
-    showToast('Dispositivo adicionado.');
-};
-
-window.toggleIoTDevice = function(deviceId, turnOn) {
-    const devices = LocalDB.get('iot_devices') || [];
-    const d = devices.find(x => String(x.id) === String(deviceId) || String(x.address) === String(deviceId));
-    if (d) {
-        d.status = turnOn ? 'LIGADO' : 'DESLIGADO';
-        LocalDB.set('iot_devices', devices);
-        showToast((d.name || 'Dispositivo') + (turnOn ? ' ligado' : ' desligado'));
-        discoverIoT();
-        return;
+    container.innerHTML = '<div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> Buscando...</div>';
+    try {
+        const res = await fetch('/api/nexus/iot/discover');
+        const data = await res.json();
+        if (data && data.devices) {
+            container.innerHTML = data.devices.length ? '' : offlineMsg;
+            data.devices.forEach(dev => {
+                const el = document.createElement('div');
+                el.className = 'list-item glass';
+                const is_on = dev.status === "LIGADO";
+                el.innerHTML = `
+                    <div class="item-main">
+                        <span class="item-title">${dev.name}</span>
+                        <span class="item-subtitle">IP: ${dev.ip}</span>
+                    </div>
+                    <button class="item-action ${is_on ? 'done' : ''}" style="width:auto; padding: 0 15px;" onclick="toggleIoT('${dev.ip}', ${!is_on})">
+                        ${is_on ? 'Desligar' : 'Ligar'}
+                    </button>
+                `;
+                container.appendChild(el);
+            });
+        } else {
+            container.innerHTML = offlineMsg;
+        }
+    } catch (e) {
+        container.innerHTML = offlineMsg;
     }
-    showToast('Controle remoto requer Nexus desktop na mesma rede.');
 };
-
-window.toggleIoT = window.toggleIoTDevice;
 
 window.promptAddHabit = function() {
     const modal = document.getElementById('create-modal');
@@ -1371,37 +894,36 @@ function appendChatBubble(role, text, loading) {
 
 function tryLocalJarvisCommand(text) {
     const t = text.toLowerCase().trim();
-    if (t.startsWith('/habito ') || t.startsWith('/hábito ')) {
-        const name = text.split(/\s+/).slice(1).join(' ').trim();
-        if (!name) return 'Use: /habito nome do hábito';
+    if (/^(oi|olá|ola|hey|jarvis)/.test(t)) {
+        return 'Olá! Posso criar hábitos, tarefas, registrar treinos ou ajudar nos estudos. O que precisa?';
+    }
+    const habitMatch = t.match(/(?:criar|adicionar|novo)\s+h[aá]bito\s+(.+)/i) || t.match(/h[aá]bito:\s*(.+)/i);
+    if (habitMatch) {
+        const name = habitMatch[1].trim();
         LocalDB.upsert('habits', { id: Date.now(), name, active: 1, current_streak: 0, period: 'all' });
         loadHabits();
         backgroundSync();
-        return `Hábito "${name}" criado.`;
+        return `Hábito "${name}" criado. Boa sorte mantendo a consistência!`;
     }
-    if (t.startsWith('/tarefa ')) {
-        const title = text.split(/\s+/).slice(1).join(' ').trim();
-        if (!title) return 'Use: /tarefa nome da tarefa';
+    const taskMatch = t.match(/(?:criar|adicionar|nova)\s+tarefa\s+(.+)/i) || t.match(/tarefa:\s*(.+)/i);
+    if (taskMatch) {
+        const title = taskMatch[1].trim();
         LocalDB.upsert('tasks', { id: Date.now(), title, name: title, points_reward: 10 });
         loadTasks();
         backgroundSync();
-        return `Tarefa "${title}" adicionada.`;
-    }
-    const goalMatch = t.match(/meta\s+(.+?)\s*([+-])\s*(\d+)/i);
-    if (goalMatch) {
-        const namePart = goalMatch[1].trim();
-        const delta = (goalMatch[2] === '-' ? -1 : 1) * parseInt(goalMatch[3], 10);
-        const goals = LocalDB.get('nexus_goals').filter(g => !g.is_deleted);
-        const goal = goals.find(g => (g.name || '').toLowerCase().includes(namePart.toLowerCase()));
-        if (goal && typeof adjustGoalProgress === 'function') {
-            adjustGoalProgress(goal.id, delta);
-            return `Progresso da meta "${goal.name}" ajustado em ${delta > 0 ? '+' : ''}${delta}%.`;
-        }
+        return `Tarefa "${title}" adicionada à sua lista.`;
     }
     if (/quantos\s+cards|srs|flashcard/.test(t)) {
         const cards = LocalDB.get('flashcards').filter(c => !c.is_deleted);
         const due = cards.filter(c => !c.next_review || c.next_review <= new Date().toISOString()).length;
         return `Você tem ${due} flashcards para revisar hoje (${cards.length} no total).`;
+    }
+    if (/briefing|resumo\s+do\s+dia|hoje/.test(t)) {
+        const habits = LocalDB.get('habits').filter(h => h.active === 1 && !h.is_deleted);
+        const today = new Date().toISOString().split('T')[0];
+        const done = LocalDB.get('habit_logs').filter(l => l.date === today).length;
+        const tasks = LocalDB.get('tasks').filter(x => !x.done_at && !x.is_deleted).length;
+        return `Hoje: ${done}/${habits.length} hábitos feitos, ${tasks} tarefas pendentes. Foco no ENEM — revise seus cards SRS!`;
     }
     return null;
 }
@@ -1440,26 +962,33 @@ window.sendChatMessage = async function() {
         return;
     }
 
-    if (!isNetworkOnline()) {
-        if (pending) pending.querySelector('p').textContent = 'Sem internet. Use /habito e /tarefa offline.';
+    if (!isWifiConnected()) {
+        if (pending) pending.querySelector('p').textContent = 'Sem Wi-Fi. Comandos locais: "criar hábito X", "criar tarefa Y", "quantos cards", "briefing".';
         return;
     }
 
-    if (typeof callJarvisChat === 'function') {
-        const history = [];
-        document.querySelectorAll('#chat-history .chat-message').forEach(el => {
-            const role = el.classList.contains('user-msg') ? 'user' : 'assistant';
-            const content = el.querySelector('p')?.textContent?.trim();
-            if (content && content !== 'Processando...') history.push({ role, content });
-        });
-        const reply = await callJarvisChat(text, history.slice(-8));
-        if (reply) {
-            if (pending) pending.querySelector('p').textContent = reply;
-            return;
+    if (window.nexusSupabase && isNetworkOnline()) {
+        try {
+            const { data, error } = await window.nexusSupabase.from('nexus_commands').insert({
+                command: 'MOBILE_CHAT: ' + text,
+                source: 'mobile',
+                status: 'pending'
+            }).select('id').single();
+            if (!error && data?.id) {
+                const reply = await pollCommandResult(data.id, 25000);
+                if (reply) {
+                    if (pending) pending.querySelector('p').textContent = reply;
+                    backgroundSync();
+                    return;
+                }
+            }
+        } catch (e) {
+            console.warn('Chat queue error:', e);
         }
     }
 
-    if (pending) pending.querySelector('p').textContent = 'Jarvis indisponível. Verifique login Google e conexão.';
+    const fallback = 'Jarvis offline. Comandos locais: "criar hábito X", "criar tarefa Y", "quantos cards". Com o PC ligado, processo ações completas.';
+    if (pending) pending.querySelector('p').textContent = fallback;
 };
 
 window.requestMorningBriefing = function() {
@@ -1470,7 +999,7 @@ window.requestMorningBriefing = function() {
 
 window.navigateTo = function(viewId) {
     const nav = document.querySelector(`.nav-item[data-target="${viewId}"]`);
-    activateMobileView(viewId, nav || null);
+    if (nav) nav.click();
 };
 
 function loadTodayDashboard() {
@@ -1481,7 +1010,7 @@ function loadTodayDashboard() {
         dateLabel.textContent = now.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'short' });
     }
 
-    const habits = LocalDB.get('habits').filter(h => h.active !== 0 && !h.is_deleted);
+    const habits = LocalDB.get('habits').filter(h => h.active === 1 && !h.is_deleted);
     const logs = LocalDB.get('habit_logs');
     const doneToday = logs.filter(l => l.date === today).length;
     const tasks = LocalDB.get('tasks').filter(t => !t.done_at && !t.is_deleted);
@@ -1544,30 +1073,11 @@ function setupRealtime() {
     .subscribe();
 }
 
-// Form handler stubs (real implementations in nexus-forms.js)
-function deferToFormHandler(name, args) {
-    const real = window[name];
-    if (typeof real === 'function' && real !== window['__stub_' + name]) {
-        return real.apply(window, args);
-    }
-    showToast('Carregando formulários...');
-    setTimeout(() => {
-        const fn = window[name];
-        if (typeof fn === 'function' && fn !== window['__stub_' + name]) fn.apply(window, args);
-        else showToast('Formulário indisponível — atualize o bundle web (Configurações → OTA).');
-    }, 400);
-}
-
-window.__stub_openFinanceForm = function(txId) { deferToFormHandler('openFinanceForm', [txId]); };
-window.__stub_openHabitForm = function(habitId) { deferToFormHandler('openHabitForm', [habitId]); };
-window.__stub_openSubjectForm = function() { deferToFormHandler('openSubjectForm', []); };
-window.openFinanceForm = window.openFinanceForm || window.__stub_openFinanceForm;
-window.openHabitForm = window.openHabitForm || window.__stub_openHabitForm;
-window.openSubjectForm = window.openSubjectForm || window.__stub_openSubjectForm;
+// App Initialization
 
 
-/** Nexus Mobile — nexus-studies.js */
 // ================================================================
+
 // STUDIES MODULE — Enhanced
 // ================================================================
 
@@ -1582,11 +1092,9 @@ const MOOD_COLORS = ['', '#ef4444', '#f97316', '#6b7280', '#10b981', '#8b5cf6'];
 
 function loadStudies() {
     loadStudyStats();
-    loadSubjectsGrid();
-    const list = document.getElementById('studies-list');
-    if (list) renderStudyNotesList('all', null);
+    loadNotebooksGrid();
+    renderStudyNotesList('all', null);
 }
-window.loadStudies = loadStudies;
 
 function loadStudyStats() {
     const notes = LocalDB.get('study_notes').filter(n => !n.is_deleted);
@@ -1739,310 +1247,19 @@ function renderStudyNotesList(filter, query) {
     list.innerHTML = notes.map(renderNoteCard).join('');
 }
 
-window.openSubjectForm = function() {
-    const modal = document.getElementById('subject-form-modal');
-    if (!modal) { showToast('Formulário de matéria indisponível'); return; }
-    document.getElementById('subject-form-name').value = '';
-    document.getElementById('subject-form-icon').value = '📚';
-    document.getElementById('subject-form-cover').value = '';
-    document.getElementById('subject-form-description').value = '';
-    document.getElementById('subject-form-color').value = '#6c5ce7';
-    modal.style.display = 'flex';
-};
-
-window.closeSubjectForm = function() {
-    const modal = document.getElementById('subject-form-modal');
-    if (modal) modal.style.display = 'none';
-};
-
-window.saveSubjectForm = function() {
-    const name = document.getElementById('subject-form-name')?.value?.trim();
-    if (!name) { showToast('Digite o nome da matéria'); return; }
-    const nb = {
-        id: Date.now().toString(),
-        name,
-        icon: document.getElementById('subject-form-icon')?.value || '📚',
-        cover_image: document.getElementById('subject-form-cover')?.value?.trim() || null,
-        description: document.getElementById('subject-form-description')?.value?.trim() || '',
-        color_bg: document.getElementById('subject-form-color')?.value || '#6c5ce7',
-        color_text: '#ffffff',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-    };
-    const notebooks = LocalDB.get('study_notebooks') || [];
-    notebooks.push(nb);
-    LocalDB.set('study_notebooks', notebooks);
-    closeSubjectForm();
-    loadSubjectsGrid();
-    if (typeof loadStudies === 'function') loadStudies();
-    showToast('Matéria criada!');
-};
-
-function formatStudyDate(iso) {
-    if (!iso) return '—';
-    try {
-        return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
-    } catch (_) { return '—'; }
-}
-
-function stripHtmlText(html) {
-    return String(html || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-}
-
-function inferJarvisNoteSubject(title, content, notebookId, excludeId) {
-    const text = (title + ' ' + stripHtmlText(content)).toLowerCase();
-    const keywords = text.split(/\W+/).filter(w => w.length > 3);
-    const notes = (LocalDB.get('study_notes') || []).filter(n =>
-        !n.is_deleted && String(n.notebook_id) === String(notebookId) && String(n.id) !== String(excludeId));
-    let bestSubject = null;
-    let bestScore = 0;
-    notes.forEach(n => {
-        const subj = (n.jarvis_subject || n.subject || '').trim();
-        if (!subj) return;
-        const subWords = subj.toLowerCase().split(/\W+/);
-        const score = keywords.filter(k => subWords.some(s => s.includes(k) || k.includes(s))).length;
-        if (score > bestScore) { bestScore = score; bestSubject = subj; }
-    });
-    if (bestScore >= 2) return bestSubject;
-    const fromTitle = (title || '').trim().split(/\s+/).slice(0, 5).join(' ');
-    return fromTitle || 'Geral';
-}
-
-function renderStudyNoteTile(n) {
-    const cover = n.cover_image
-        ? `<div class="study-note-cover" style="background-image:url('${escapeHtml(n.cover_image)}')"></div>`
-        : '';
-    const desc = n.description || stripHtmlText(n.content).substring(0, 120);
-    const created = formatStudyDate(n.created_at);
-    const updated = formatStudyDate(n.updated_at || n.created_at);
-    const jarvisSubject = n.jarvis_subject || n.subject || '';
-    return `<div class="study-note-tile glass" onclick="openNoteEditor('${n.id}','${n.notebook_id || ''}')">
-        ${cover}
-        <div class="study-note-tile-body">
-            <button type="button" class="card-menu-btn" onclick="openNoteMenu(event,'${n.id}')" aria-label="Opções"><i class="fa-solid fa-ellipsis-vertical"></i></button>
-            <div class="study-note-tile-title">${escapeHtml(n.title || 'Sem título')}</div>
-            ${desc ? `<div class="study-note-tile-desc">${escapeHtml(desc)}</div>` : ''}
-            <div class="study-note-tile-meta"><span>Criado ${created}</span><span>·</span><span>Editado ${updated}</span></div>
-            ${jarvisSubject ? `<div class="study-note-tile-subject" title="Assunto Jarvis">${escapeHtml(jarvisSubject)}</div>` : ''}
-        </div>
-    </div>`;
-}
-
-function renderSubjectFolderCard(nb) {
-    const notes = (LocalDB.get('study_notes') || []).filter(n => !n.is_deleted && String(n.notebook_id) === String(nb.id));
-    const bg = nb.color_bg || '#6c5ce7';
-    const fg = nb.color_text || '#ffffff';
-    const coverStyle = nb.cover_image
-        ? `background-image:url('${nb.cover_image}')`
-        : `background:linear-gradient(135deg,${bg},${bg}cc)`;
-    return `<div class="subject-folder-card glass" style="--folder-bg:${bg};--folder-fg:${fg}" onclick="openSubjectDetail('${nb.id}')">
-        <button type="button" class="card-menu-btn" onclick="openFolderMenu(event,'${nb.id}')" aria-label="Opções"><i class="fa-solid fa-ellipsis-vertical"></i></button>
-        <div class="subject-folder-cover" style="${coverStyle}"></div>
-        <div class="subject-folder-body">
-            <div class="subject-folder-name">${nb.icon || '📚'} ${escapeHtml(nb.name)}</div>
-            ${nb.description ? `<div class="subject-folder-desc">${escapeHtml(nb.description)}</div>` : ''}
-            <div class="subject-folder-count">${notes.length} nota${notes.length !== 1 ? 's' : ''}</div>
-        </div>
-    </div>`;
-}
-
-window.openFolderMenu = function(ev, notebookId) {
-    ev.stopPropagation();
-    window._menuFolderId = notebookId;
-    showStudyContextMenu('folder-menu-popup', ev);
-};
-
-window.openNoteMenu = function(ev, noteId) {
-    ev.stopPropagation();
-    window._menuNoteId = noteId;
-    showStudyContextMenu('note-menu-popup', ev);
-};
-
-function showStudyContextMenu(popupId, ev) {
-    const popup = document.getElementById(popupId);
-    if (!popup) return;
-    popup.style.display = 'block';
-    const x = Math.min(Math.max(12, ev.clientX - 100), window.innerWidth - 180);
-    const y = Math.min(Math.max(12, ev.clientY + 8), window.innerHeight - 200);
-    popup.style.left = x + 'px';
-    popup.style.top = y + 'px';
-    setTimeout(() => document.addEventListener('click', closeStudyContextMenus, { once: true }), 30);
-}
-
-function closeStudyContextMenus() {
-    ['folder-menu-popup', 'note-menu-popup', 'subject-menu-popup'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.style.display = 'none';
-    });
-}
-
-window.openStudyEditSheet = function(type, id) {
-    closeStudyContextMenus();
-    const sheet = document.getElementById('study-entity-edit-modal');
-    const title = document.getElementById('study-entity-edit-title');
-    if (!sheet) return;
-    window._studyEditType = type;
-    window._studyEditId = id;
-    const set = (fid, val) => { const el = document.getElementById(fid); if (el) el.value = val ?? ''; };
-    const show = (fid, on) => { const el = document.getElementById(fid); if (el) el.parentElement.style.display = on ? '' : 'none'; };
-    if (type === 'folder') {
-        const nb = (LocalDB.get('study_notebooks') || []).find(n => String(n.id) === String(id));
-        if (!nb) return;
-        title.textContent = 'Editar matéria';
-        set('study-edit-name', nb.name);
-        set('study-edit-cover', nb.cover_image || '');
-        set('study-edit-color', nb.color_bg || '#6c5ce7');
-        set('study-edit-description', nb.description || '');
-        set('study-edit-subject', '');
-        show('study-edit-name', true); show('study-edit-cover', true); show('study-edit-color', true);
-        show('study-edit-description', true); show('study-edit-subject', false);
-    } else {
-        const note = (LocalDB.get('study_notes') || []).find(n => String(n.id) === String(id));
-        if (!note) return;
-        title.textContent = 'Editar nota';
-        set('study-edit-name', note.title || '');
-        set('study-edit-cover', note.cover_image || '');
-        set('study-edit-description', note.description || stripHtmlText(note.content).substring(0, 200));
-        set('study-edit-subject', note.jarvis_subject || note.subject || '');
-        show('study-edit-name', true); show('study-edit-cover', true); show('study-edit-color', false);
-        show('study-edit-description', false); show('study-edit-subject', true);
-    }
-    sheet.style.display = 'flex';
-};
-
-window.closeStudyEditSheet = function() {
-    const sheet = document.getElementById('study-entity-edit-modal');
-    if (sheet) sheet.style.display = 'none';
-};
-
-window.saveStudyEditSheet = function() {
-    const type = window._studyEditType;
-    const id = window._studyEditId;
-    if (!type || !id) return;
-    const name = document.getElementById('study-edit-name')?.value?.trim();
-    if (type === 'folder') {
-        const notebooks = LocalDB.get('study_notebooks') || [];
-        const idx = notebooks.findIndex(n => String(n.id) === String(id));
-        if (idx === -1) return;
-        notebooks[idx] = {
-            ...notebooks[idx],
-            name: name || notebooks[idx].name,
-            cover_image: document.getElementById('study-edit-cover')?.value?.trim() || null,
-            color_bg: document.getElementById('study-edit-color')?.value || '#6c5ce7',
-            description: document.getElementById('study-edit-description')?.value?.trim() || '',
-            updated_at: new Date().toISOString()
-        };
-        LocalDB.set('study_notebooks', notebooks);
-        if (String(currentNotebookId) === String(id)) openSubjectDetail(id);
-    } else {
-        const notes = LocalDB.get('study_notes') || [];
-        const idx = notes.findIndex(n => String(n.id) === String(id));
-        if (idx === -1) return;
-        notes[idx] = {
-            ...notes[idx],
-            title: name || notes[idx].title,
-            cover_image: document.getElementById('study-edit-cover')?.value?.trim() || null,
-            jarvis_subject: document.getElementById('study-edit-subject')?.value?.trim() || notes[idx].jarvis_subject,
-            updated_at: new Date().toISOString()
-        };
-        LocalDB.set('study_notes', notes);
-        if (currentNotebookId) openSubjectDetail(currentNotebookId);
-    }
-    closeStudyEditSheet();
-    if (typeof loadStudies === 'function') loadStudies();
-};
-
-window.pickStudyCoverLocal = function(targetInputId) {
-    const inp = document.createElement('input');
-    inp.type = 'file';
-    inp.accept = 'image/*';
-    inp.onchange = (e) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = () => {
-            const el = document.getElementById(targetInputId);
-            if (el) el.value = reader.result;
-        };
-        reader.readAsDataURL(file);
-    };
-    inp.click();
-};
-
-window.openSubjectDetail = function(notebookId) {
-    currentNotebookId = notebookId;
-    const nb = (LocalDB.get('study_notebooks') || []).find(n => String(n.id) === String(notebookId));
-    const view = document.getElementById('subject-detail-view');
-    if (!view || !nb) return;
-    document.getElementById('subject-detail-title').textContent = (nb.icon || '') + ' ' + nb.name;
-    view.style.display = 'block';
-    const notes = (LocalDB.get('study_notes') || []).filter(n => !n.is_deleted && String(n.notebook_id) === String(notebookId))
-        .sort((a, b) => (b.updated_at || b.created_at || '').localeCompare(a.updated_at || a.created_at || ''));
-    const list = document.getElementById('subject-notes-list');
-    list.className = 'notes-grid';
-    list.innerHTML = notes.length
-        ? notes.map(n => renderStudyNoteTile(n)).join('')
-        : '<div style="grid-column:1/-1;text-align:center;padding:30px;color:var(--text-secondary)">Sem notas nesta matéria.</div>';
-};
-
-window.deleteFolderFromMenu = function() {
-    const id = window._menuFolderId;
-    if (!id || !confirm('Excluir esta matéria?')) return;
-    const notebooks = (LocalDB.get('study_notebooks') || []).filter(n => String(n.id) !== String(id));
-    LocalDB.set('study_notebooks', notebooks);
-    if (String(currentNotebookId) === String(id)) closeSubjectDetail();
-    closeStudyContextMenus();
-    if (typeof loadStudies === 'function') loadStudies();
-};
-
-window.closeSubjectDetail = function() {
-    const view = document.getElementById('subject-detail-view');
-    if (view) view.style.display = 'none';
-    currentNotebookId = null;
-};
-
-function loadSubjectsGrid() {
-    const grid = document.getElementById('subjects-grid');
-    if (!grid) return;
-    const notebooks = (LocalDB.get('study_notebooks') || []).filter(n => !n.is_deleted);
-    if (!notebooks.length) {
-        grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--text-secondary);padding:20px">Sem matérias. Toque em + para criar.</div>';
-        return;
-    }
-    grid.innerHTML = notebooks.map(nb => renderSubjectFolderCard(nb)).join('');
-}
-window.loadSubjectsGrid = loadSubjectsGrid;
-
-window.assignNoteToNotebookByJarvis = function(notePayload, notebookId) {
-    const notes = LocalDB.get('study_notes') || [];
-    const title = notePayload.title || 'Nova nota';
-    const content = notePayload.content || '';
-    const subject = inferJarvisNoteSubject(title, content, notebookId);
-    const existing = notes.find(n => !n.is_deleted && String(n.notebook_id) === String(notebookId)
-        && (n.jarvis_subject || n.subject) === subject && subject !== 'Geral');
-    if (existing && notePayload.merge !== false) {
-        existing.content = (existing.content || '') + '\n\n' + content;
-        existing.updated_at = new Date().toISOString();
-        LocalDB.set('study_notes', notes);
-        return existing.id;
-    }
-    const id = Date.now().toString();
-    notes.push({
-        id,
-        notebook_id: notebookId,
-        title,
-        content,
-        jarvis_subject: subject,
-        description: stripHtmlText(content).substring(0, 160),
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-    });
-    LocalDB.set('study_notes', notes);
-    return id;
-};
-
 function renderNoteCard(n) {
-    return renderStudyNoteTile(n);
+    const tags = (n.tags||'').split('#').filter(t => t.trim()).map(t => `<span class="tag-badge">#${t.trim()}</span>`).join('');
+    const date = n.updated_at ? new Date(n.updated_at).toLocaleDateString('pt-BR', {day:'2-digit',month:'short'}) : '';
+    const pin = n.pinned ? '<i class="fa-solid fa-thumbtack" style="color:var(--accent-primary);font-size:0.7rem;margin-right:4px"></i>' : '';
+    return `
+    <div class="note-card ${n.pinned?'pinned':''}" onclick="openNoteEditor('${n.id}', '${n.notebook_id||''}')">
+        <div class="note-title">${pin}${escapeHtml(n.title||'Sem titulo')}</div>
+        <div class="note-excerpt">${escapeHtml((n.content||'').replace(/[#*`_>-]/g,'').trim())}</div>
+        <div class="note-meta">
+            <div class="note-tags">${tags}</div>
+            <span style="font-size:0.7rem;color:var(--text-secondary)">${date}</span>
+        </div>
+    </div>`;
 }
 
 window.filterNotes = function(filter, btn) {
@@ -2068,23 +1285,17 @@ window.searchNotes = function(query) {
 };
 
 window.openNoteEditor = function(noteId, notebookId) {
-    const nbId = notebookId || currentNotebookId;
-    if (!nbId && !noteId) {
-        showToast('Abra uma matéria e crie a nota dentro dela.');
-        return;
-    }
     const view = document.getElementById('note-editor-view');
     if (!view) return;
     view.style.display = 'flex';
     editingNoteId = noteId || null;
-    currentNotebookId = nbId || currentNotebookId;
     
-    // Populate notebook selector (hidden — notebook vem do grid atual)
+    // Populate notebook selector
     const sel = document.getElementById('note-notebook');
     if (sel) {
         const notebooks = LocalDB.get('study_notebooks');
         sel.innerHTML = '<option value="">Sem caderno...</option>' +
-            notebooks.map(nb => `<option value="${nb.id}" ${String(nb.id) === String(nbId || currentNotebookId) ? 'selected' : ''}>${nb.icon||''} ${escapeHtml(nb.name)}</option>`).join('');
+            notebooks.map(nb => `<option value="${nb.id}" ${(nb.id === notebookId || nb.id === currentNotebookId) ? 'selected' : ''}>${nb.icon||''} ${escapeHtml(nb.name)}</option>`).join('');
     }
     
     if (noteId) {
@@ -2281,14 +1492,12 @@ const _patchedPomoEnd = function() {
     loadStudyStats();
 };
 
-
-/** Nexus Mobile — nexus-gamification.js */
 // ================================================================
 // XP & GAMIFICATION SYSTEM
 // ================================================================
 
 function awardXP(amount, reason) {
-    const stats = (typeof getUserStats === 'function' ? getUserStats() : null) || { xp: 0, points: 0, level: 1, xp_today: 0, last_xp_date: '' };
+    const stats = LocalDB.get('user_stats') || { xp: 0, points: 0, level: 1, xp_today: 0, last_xp_date: '' };
     const todayStr = new Date().toDateString();
     if (stats.last_xp_date !== todayStr) {
         stats.xp_today = 0;
@@ -2313,10 +1522,7 @@ function awardXP(amount, reason) {
     
     if (leveledUp) {
         showInAppNotification('LEVEL UP! Voce chegou ao nivel ' + newLevel + '!', 'success');
-        if (window.NexusAudio) window.NexusAudio.play('complete');
         if (navigator.vibrate) navigator.vibrate([100, 50, 100, 50, 200]);
-    } else if (window.NexusAudio) {
-        window.NexusAudio.play('progress');
     }
     
     loadXPPanel();
@@ -2325,9 +1531,7 @@ function awardXP(amount, reason) {
 }
 
 function loadXPPanel() {
-    const stats = (typeof getUserStats === 'function' ? getUserStats() : null) || { xp: 0, points: 0, level: 1, xp_today: 0 };
-    const xpVal = Number(stats.xp) || 0;
-    const ptsVal = Number(stats.points) || 0;
+    const stats = LocalDB.get('user_stats') || { xp: 0, points: 0, level: 1, xp_today: 0 };
     const xpForCurrentLevel = (stats.level - 1) * 500;
     const xpProgress = stats.xp - xpForCurrentLevel;
     const xpForNextLevel = 500;
@@ -2339,8 +1543,8 @@ function loadXPPanel() {
     const lvlEl = document.getElementById('xp-level-label');
     const streakBadge = document.getElementById('xp-streak-badge');
     
-    if (xpEl) xpEl.textContent = xpVal.toLocaleString('pt-BR');
-    if (ptsEl) ptsEl.textContent = ptsVal.toLocaleString('pt-BR');
+    if (xpEl) xpEl.textContent = stats.xp.toLocaleString('pt-BR');
+    if (ptsEl) ptsEl.textContent = (stats.points || 0).toLocaleString('pt-BR');
     if (barEl) barEl.style.width = pct + '%';
     if (lvlEl) lvlEl.textContent = 'Nivel ' + (stats.level||1) + ' \u2022 ' + pct + '% para nivel ' + ((stats.level||1)+1);
     
@@ -2383,11 +1587,224 @@ window.loadUserStats = function() {
     loadXPPanel();
 };
 
-
-/** Nexus Mobile — nexus-journal.js */
 // ================================================================
+
 // JOURNAL / MOOD MODULE
-/** Nexus Mobile — nexus-fitness.js */
+// ================================================================
+
+let selectedEditorMood = 0;
+let editingJournalId = null;
+
+window.startJournalDictation = function() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const status = document.getElementById('journal-mic-status');
+    const textarea = document.getElementById('journal-content');
+    if (!textarea) return;
+    if (!SpeechRecognition) {
+        if (status) status.textContent = 'Ditado indisponível neste dispositivo';
+        showToast('Ditado não suportado no WebView');
+        return;
+    }
+    const rec = new SpeechRecognition();
+    rec.lang = 'pt-BR';
+    rec.interimResults = false;
+    rec.maxAlternatives = 1;
+    if (status) status.textContent = 'Ouvindo... fale agora';
+    rec.onresult = (e) => {
+        const text = e.results[0][0].transcript;
+        textarea.value = (textarea.value ? textarea.value + ' ' : '') + text;
+        if (status) status.textContent = 'Texto adicionado!';
+    };
+    rec.onerror = () => {
+        if (status) status.textContent = 'Erro no ditado — tente novamente';
+        showToast('Erro no reconhecimento de voz');
+    };
+    rec.onend = () => {
+        if (status && status.textContent === 'Ouvindo... fale agora') {
+            status.textContent = 'Pressione para ditar';
+        }
+    };
+    try { rec.start(); } catch (e) {
+        if (status) status.textContent = 'Microfone indisponível';
+        showToast('Permissão de microfone necessária');
+    }
+};
+
+window.loadJournal = function() {
+    loadMoodCalendarStrip();
+    loadJournalList();
+    loadTodayMood();
+};
+
+function loadTodayMood() {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const entries = LocalDB.get('journal_entries');
+    const today = entries.find(e => e.date === todayStr);
+    if (today && today.mood) {
+        document.querySelectorAll('.mood-btn').forEach(b => {
+            b.classList.toggle('selected', parseInt(b.dataset.mood) === today.mood);
+        });
+        const label = document.getElementById('mood-selected-label');
+        if (label) label.textContent = MOOD_EMOJIS[today.mood] + ' ' + MOOD_LABELS[today.mood];
+    }
+}
+
+window.setTodayMood = function(mood) {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const entries = LocalDB.get('journal_entries');
+    let entry = entries.find(e => e.date === todayStr);
+    if (entry) {
+        entry.mood = mood;
+    } else {
+        entries.push({ id: Date.now().toString(), date: todayStr, mood, created_at: new Date().toISOString() });
+        awardXP(5, 'Registro de humor');
+    }
+    LocalDB.set('journal_entries', entries);
+    document.querySelectorAll('.mood-btn').forEach(b => b.classList.toggle('selected', parseInt(b.dataset.mood) === mood));
+    const label = document.getElementById('mood-selected-label');
+    if (label) label.textContent = MOOD_EMOJIS[mood] + ' ' + MOOD_LABELS[mood];
+    loadMoodCalendarStrip();
+    showInAppNotification('Humor registrado: ' + MOOD_LABELS[mood], 'info');
+    console.info('[Journal] Mood set to ' + mood + ' (' + MOOD_LABELS[mood] + ')');
+};
+
+function loadMoodCalendarStrip() {
+    const strip = document.getElementById('mood-calendar-strip');
+    if (!strip) return;
+    const entries = LocalDB.get('journal_entries');
+    const avgEl = document.getElementById('mood-avg-label');
+    
+    let html = '';
+    const moods = [];
+    const days = ['D','S','T','Q','Q','S','S'];
+    
+    for (let i = 13; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        const ds = d.toISOString().split('T')[0];
+        const entry = entries.find(e => e.date === ds);
+        const mood = entry ? entry.mood : 0;
+        if (mood) moods.push(mood);
+        const color = mood ? MOOD_COLORS[mood] : 'rgba(255,255,255,0.05)';
+        const emoji = mood ? MOOD_EMOJIS[mood] : '\u00b7';
+        const dayLabel = days[d.getDay()];
+        html += `<div class="mood-day-dot" style="background:${color}20;border:1px solid ${color}40" title="${ds}" onclick="openJournalEntry('${ds}')">
+            <span class="mood-day-emoji">${emoji}</span>
+            <span class="mood-day-label">${dayLabel}</span>
+        </div>`;
+    }
+    strip.innerHTML = html;
+    
+    if (moods.length > 0 && avgEl) {
+        const avg = (moods.reduce((a,b) => a+b, 0) / moods.length).toFixed(1);
+        avgEl.textContent = 'Media: ' + avg + '/5';
+    }
+}
+
+function loadJournalList() {
+    const list = document.getElementById('journal-list');
+    if (!list) return;
+    const entries = LocalDB.get('journal_entries')
+        .filter(e => e.content || e.best || e.challenge || e.gratitude)
+        .sort((a,b) => b.date.localeCompare(a.date))
+        .slice(0, 30);
+    
+    if (!entries.length) {
+        list.innerHTML = '<div style="text-align:center;color:var(--text-secondary);padding:30px">Nenhuma entrada ainda. Comece seu diario!</div>';
+        return;
+    }
+    list.innerHTML = entries.map(e => {
+        const mood = e.mood || 0;
+        const preview = (e.best || e.content || e.challenge || '').substring(0, 80);
+        const dateStr = new Date(e.date + 'T12:00:00').toLocaleDateString('pt-BR', {weekday:'short', day:'2-digit', month:'short'});
+        return `<div class="journal-entry-card" onclick="openJournalEntry('${e.date}')">
+            <div class="journal-entry-emoji">${mood ? MOOD_EMOJIS[mood] : '\u{1F4D3}'}</div>
+            <div style="flex:1;min-width:0">
+                <div class="journal-entry-meta">${dateStr}</div>
+                <div class="journal-entry-preview">${escapeHtml(preview)}${preview.length >= 80 ? '...' : ''}</div>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+window.openJournalEntry = function(dateStr) {
+    const date = dateStr || new Date().toISOString().split('T')[0];
+    const editor = document.getElementById('journal-entry-editor');
+    if (!editor) return;
+    editor.style.display = 'block';
+    
+    const dateEl = document.getElementById('journal-entry-date');
+    if (dateEl) dateEl.textContent = new Date(date + 'T12:00:00').toLocaleDateString('pt-BR', {weekday:'long', day:'2-digit', month:'long', year:'numeric'});
+    
+    const entries = LocalDB.get('journal_entries');
+    const existing = entries.find(e => e.date === date);
+    editingJournalId = date;
+    selectedEditorMood = existing ? (existing.mood || 0) : 0;
+    
+    ['journal-best','journal-challenge','journal-gratitude','journal-content'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+    });
+    
+    document.querySelectorAll('.mood-btn-sm').forEach(b => b.classList.remove('selected'));
+    
+    if (existing) {
+        if (document.getElementById('journal-best')) document.getElementById('journal-best').value = existing.best || '';
+        if (document.getElementById('journal-challenge')) document.getElementById('journal-challenge').value = existing.challenge || '';
+        if (document.getElementById('journal-gratitude')) document.getElementById('journal-gratitude').value = existing.gratitude || '';
+        if (document.getElementById('journal-content')) document.getElementById('journal-content').value = existing.content || '';
+        if (existing.mood) {
+            document.querySelectorAll('.mood-btn-sm').forEach(b => b.classList.toggle('selected', parseInt(b.dataset.mood) === existing.mood));
+        }
+    }
+};
+
+window.closeJournalEntry = function() {
+    const editor = document.getElementById('journal-entry-editor');
+    if (editor) editor.style.display = 'none';
+    editingJournalId = null;
+};
+
+window.selectEditorMood = function(mood) {
+    selectedEditorMood = mood;
+    document.querySelectorAll('.mood-btn-sm').forEach(b => b.classList.toggle('selected', parseInt(b.dataset.mood) === mood));
+};
+
+window.saveJournalEntry = function() {
+    const date = editingJournalId || new Date().toISOString().split('T')[0];
+    const best = document.getElementById('journal-best')?.value || '';
+    const challenge = document.getElementById('journal-challenge')?.value || '';
+    const gratitude = document.getElementById('journal-gratitude')?.value || '';
+    const content = document.getElementById('journal-content')?.value || '';
+    
+    if (!best && !challenge && !gratitude && !content && !selectedEditorMood) {
+        showInAppNotification('Escreva algo antes de salvar!', 'warn');
+        return;
+    }
+    
+    const entries = LocalDB.get('journal_entries');
+    const idx = entries.findIndex(e => e.date === date);
+    const entry = { id: Date.now().toString(), date, mood: selectedEditorMood, best, challenge, gratitude, content, updated_at: new Date().toISOString() };
+    
+    if (idx !== -1) {
+        entries[idx] = { ...entries[idx], ...entry };
+    } else {
+        entry.created_at = entry.updated_at;
+        entries.push(entry);
+        awardXP(10, 'Entrada de diario');
+    }
+    LocalDB.set('journal_entries', entries);
+    
+    // Sync mood with today card if editing today
+    const todayStr = new Date().toISOString().split('T')[0];
+    if (date === todayStr && selectedEditorMood) setTodayMood(selectedEditorMood);
+    
+    closeJournalEntry();
+    loadJournal();
+    showInAppNotification('Diario salvo!', 'success');
+    console.info('[Journal] Entry saved for ' + date);
+};
+
 // ================================================================
 // FITNESS MODULE — Enhanced
 // ================================================================
@@ -2504,15 +1921,200 @@ function loadMeasures() {
     }
 }
 
+// ================================================================
+// INIT — update DOMContentLoaded
+// ================================================================
 
-/** Nexus Mobile — nexus-habits.js */
-// Heatmap + loadHabits delegando para nexus-forms.js (filterHabits / toggleHabitDirect)
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
 
+// Ensure LocalDB has new keys
+const _origLocalDB_get = LocalDB.get.bind(LocalDB);
+const _newDefaults = {
+    study_notebooks: [], pomo_sessions: [], journal_entries: [], 
+    diet_meals: [], body_measures: [], xp_log: [],
+    user_stats: { xp: 0, points: 0, level: 1, xp_today: 0, last_xp_date: '' }
+};
+const _origGet = LocalDB.get;
+LocalDB.get = function(key) {
+    const val = _origGet.call(this, key);
+    if (val === null || val === undefined || (Array.isArray(val) && val.length === 0 && _newDefaults[key] && !Array.isArray(_newDefaults[key]))) {
+        return _newDefaults[key] !== undefined ? JSON.parse(JSON.stringify(_newDefaults[key])) : val;
+    }
+    return val;
+};
+
+
+
+// ================================================================
+
+// HABITS MODULE — Enhanced (Phase 3)
+// ================================================================
+
+let currentHabitId = null;
+
+function filterHabits(filter, btn) {
+    document.querySelectorAll('#view-habits .study-chip').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    
+    const container = document.getElementById('habits-list');
+    if(!container) return;
+    
+    let habits = LocalDB.get('habits').filter(h => h.active === 1 && !h.is_deleted);
+    if (filter === 'morning') habits = habits.filter(h => h.period === 'morning');
+    else if (filter === 'afternoon') habits = habits.filter(h => h.period === 'afternoon');
+    else if (filter === 'night') habits = habits.filter(h => h.period === 'night');
+    
+    const logs = LocalDB.get('habit_logs');
+    const today = new Date().toISOString().split('T')[0];
+    
+    if (habits.length === 0) {
+        container.innerHTML = '<div style="text-align:center;color:var(--text-secondary);margin-top:20px;">Nenhum habito nesta categoria.</div>';
+        return;
+    }
+    
+    container.innerHTML = habits.map(h => {
+        const isDone = logs.some(l => l.habit_id === h.id && l.date === today);
+        let streak = 0;
+        const now = new Date();
+        for (let i = 0; i < 60; i++) {
+            const d = new Date(now); d.setDate(d.getDate() - i);
+            const ds = d.toISOString().split('T')[0];
+            if (logs.some(l => l.habit_id === h.id && l.date === ds)) streak++;
+            else if (i > 0) break;
+        }
+        
+        return `
+        <div class="list-item glass ${isDone ? 'done' : ''}" style="cursor:pointer" onclick="openHabitDetail('${h.id}')">
+            <div class="item-main">
+                <div class="item-title">${escapeHtml(h.name)}</div>
+                <div class="item-subtitle">${h.period === 'morning' ? '\u2600 Manha' : h.period === 'afternoon' ? '\u26C5 Tarde' : h.period === 'night' ? '\uD83C\uDF19 Noite' : 'Qualquer horario'}</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px">
+                ${streak > 0 ? `<span style="font-size:0.75rem;font-weight:700;color:#f97316;background:rgba(249,115,22,0.15);padding:3px 8px;border-radius:10px">\uD83D\uDD25 ${streak}</span>` : ''}
+                <button class="icon-btn ${isDone ? 'done' : ''}" style="background:var(--accent-primary);color:white;width:32px;height:32px;font-size:0.9rem" onclick="event.stopPropagation(); toggleHabitDirect('${h.id}')">
+                    <i class="fa-solid ${isDone ? 'fa-check' : 'fa-plus'}"></i>
+                </button>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+window.openHabitDetail = function(habitId) {
+    currentHabitId = habitId;
+    const habits = LocalDB.get('habits');
+    const logs = LocalDB.get('habit_logs');
+    const h = habits.find(x => x.id === habitId);
+    if (!h) return;
+    
+    const today = new Date().toISOString().split('T')[0];
+    const isDone = logs.some(l => l.habit_id === h.id && l.date === today);
+    
+    let streak = 0;
+    const now = new Date();
+    for (let i = 0; i < 60; i++) {
+        const d = new Date(now); d.setDate(d.getDate() - i);
+        const ds = d.toISOString().split('T')[0];
+        if (logs.some(l => l.habit_id === h.id && l.date === ds)) streak++;
+        else if (i > 0) break;
+    }
+    const total = logs.filter(l => l.habit_id === h.id).length;
+    
+    const modal = document.getElementById('habit-detail-modal');
+    if (document.getElementById('habit-detail-name')) document.getElementById('habit-detail-name').textContent = h.name;
+    if (document.getElementById('habit-detail-streak')) document.getElementById('habit-detail-streak').textContent = streak;
+    if (document.getElementById('habit-detail-total')) document.getElementById('habit-detail-total').textContent = total;
+    if (document.getElementById('habit-alarm-time')) document.getElementById('habit-alarm-time').value = h.alarm_time || '';
+    
+    const btn = document.getElementById('habit-detail-complete-btn');
+    if (btn) {
+        btn.innerHTML = isDone ? '<i class="fa-solid fa-xmark"></i> Desmarcar Hoje' : '<i class="fa-solid fa-check"></i> Feito Hoje';
+        btn.style.background = isDone ? 'rgba(255,255,255,0.1)' : 'var(--accent-primary)';
+    }
+    
+    if (modal) modal.style.display = 'flex';
+};
+
+window.closeHabitDetail = function() {
+    const modal = document.getElementById('habit-detail-modal');
+    if (modal) modal.style.display = 'none';
+    currentHabitId = null;
+};
+
+window.toggleHabitDirect = function(habitId) {
+    const logs = LocalDB.getAll('habit_logs');
+    const today = new Date().toISOString().split('T')[0];
+    const idx = logs.findIndex(l => String(l.habit_id) === String(habitId) && l.date === today && !l.is_deleted);
+    if (idx !== -1) {
+        logs.splice(idx, 1);
+        LocalDB.set('habit_logs', logs);
+    } else {
+        const entry = {
+            id: Date.now(),
+            habit_id: habitId,
+            date: today,
+            completed_date: today
+        };
+        LocalDB.upsert('habit_logs', entry);
+        logs.push(entry);
+        LocalDB.set('habit_logs', logs);
+        awardXP(5, 'Habito concluido');
+    }
+    filterHabits(document.querySelector('#view-habits .study-chip.active')?.dataset?.filter || 'all');
+    loadXPPanel();
+    backgroundSync();
+};
+
+window.completeCurrentHabit = function() {
+    if (currentHabitId) {
+        toggleHabitDirect(currentHabitId);
+        closeHabitDetail();
+    }
+};
+
+window.saveHabitAlarm = function() {
+    if (!currentHabitId) return;
+    const time = document.getElementById('habit-alarm-time')?.value;
+    const habits = LocalDB.get('habits');
+    const idx = habits.findIndex(h => String(h.id) === String(currentHabitId));
+    if (idx !== -1) {
+        habits[idx].alarm_time = time;
+        habits[idx].target_time = time;
+        LocalDB.set('habits', habits);
+        syncHabitReminders();
+        showInAppNotification(time ? 'Alarme configurado para ' + time : 'Alarme removido', 'success');
+        
+        // Request notification permission if enabling alarm
+        if (time && "Notification" in window && Notification.permission !== "granted") {
+            Notification.requestPermission();
+        }
+    }
+};
+
+window.deleteCurrentHabit = function() {
+    if (!currentHabitId) return;
+    if (!confirm('Deseja realmente excluir este habito? O historico sera perdido.')) return;
+    const habits = LocalDB.get('habits');
+    const idx = habits.findIndex(h => String(h.id) === String(currentHabitId));
+    if (idx !== -1) {
+        habits[idx].is_deleted = true;
+        LocalDB.set('habits', habits);
+        syncHabitReminders();
+        closeHabitDetail();
+        filterHabits('all');
+        showInAppNotification('Habito excluido.', 'info');
+    }
+};
+
+// Override original loadHabits to use our new filtered view
 window.loadHabits = function() {
+    // Also build the heatmap
     const heatmapContainer = document.getElementById('habit-heatmap-container');
-    const habits = LocalDB.get('habits').filter(h => h.active !== 0 && !h.is_deleted);
-    const logs = LocalDB.get('habit_logs') || [];
-
+    const habits = LocalDB.get('habits').filter(h => h.active === 1 && !h.is_deleted);
+    const logs = LocalDB.get('habit_logs');
+    
     if (heatmapContainer) {
         heatmapContainer.innerHTML = '';
         const now = new Date();
@@ -2522,34 +2124,26 @@ window.loadHabits = function() {
             const dateStr = d.toISOString().split('T')[0];
             const completedCount = logs.filter(l => l.date === dateStr && habits.some(h => String(h.id) === String(l.habit_id))).length;
             const level = completedCount === 0 ? 0 : completedCount < 3 ? 1 : completedCount < 5 ? 2 : 3;
+            
             const box = document.createElement('div');
             box.className = 'heatmap-box level-' + level;
             box.title = dateStr + ': ' + completedCount + ' habitos';
             heatmapContainer.appendChild(box);
         }
     }
-
-    if (typeof window.filterHabits === 'function') {
-        const chip = document.querySelector('#view-habits .study-chip.active') || document.querySelector('#view-habits .study-chip[data-filter="all"]');
-        window.filterHabits(chip?.dataset?.filter || 'all', chip || null);
-    }
-};
-
-window.closeHabitDetail = window.closeHabitDetail || function() {
-    const modal = document.getElementById('habit-detail-modal');
-    if (modal) modal.style.display = 'none';
+    filterHabits('all', document.querySelector('#view-habits .study-chip[data-filter="all"]'));
 };
 
 
-/** Nexus Mobile — nexus-tasks.js */
-// Kanban helpers — CRUD principal em nexus-forms.js
+// ================================================================
+// TASKS MODULE — Enhanced (Phase 4)
+// ================================================================
 
+let currentTaskId = null;
 let taskKanbanMode = false;
-window.taskKanbanMode = false;
 
 window.toggleTaskKanban = function() {
     taskKanbanMode = !taskKanbanMode;
-    window.taskKanbanMode = taskKanbanMode;
     const list = document.getElementById('tasks-list-view');
     const kanban = document.getElementById('tasks-kanban-view');
     const filters = document.querySelector('#view-tasks .habit-filters-scroll');
@@ -2557,46 +2151,210 @@ window.toggleTaskKanban = function() {
     if (kanban) kanban.style.display = taskKanbanMode ? 'flex' : 'none';
     if (filters) filters.style.display = taskKanbanMode ? 'none' : 'flex';
     if (taskKanbanMode) renderTaskKanban();
-    else if (typeof window.filterTasks === 'function') {
-        window.filterTasks(document.querySelector('#view-tasks .study-chip.active')?.dataset?.filter || 'all');
-    }
+    else filterTasks(document.querySelector('#view-tasks .study-chip.active')?.dataset?.filter || 'all');
 };
+
+window.filterTasks = function(filter, btn) {
+    if (btn) {
+        document.querySelectorAll('#view-tasks .study-chip').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+    }
+    
+    if (taskKanbanMode) { renderTaskKanban(); return; }
+    
+    const container = document.getElementById('tasks-list-view');
+    if(!container) return;
+    
+    let tasks = LocalDB.get('tasks').filter(t => !t.is_deleted);
+    const today = new Date().toISOString().split('T')[0];
+    
+    if (filter === 'done') tasks = tasks.filter(t => t.done_at);
+    else tasks = tasks.filter(t => !t.done_at);
+    
+    if (filter === 'today') tasks = tasks.filter(t => t.due_date === today);
+    if (filter === 'high') tasks = tasks.filter(t => t.priority === 'high');
+    
+    tasks.sort((a,b) => {
+        if (a.priority === 'high' && b.priority !== 'high') return -1;
+        if (a.priority !== 'high' && b.priority === 'high') return 1;
+        return (a.due_date||'9999').localeCompare(b.due_date||'9999');
+    });
+    
+    if (tasks.length === 0) {
+        container.innerHTML = '<div style="text-align:center;color:var(--text-secondary);margin-top:20px;">Nenhuma tarefa encontrada.</div>';
+        return;
+    }
+    
+    container.innerHTML = tasks.map(t => {
+        const isDone = !!t.done_at;
+        const dueText = t.due_date ? '<i class="fa-regular fa-clock"></i> ' + new Date(t.due_date).toLocaleDateString('pt-BR') : '';
+        const prioText = t.priority === 'high' ? '<span style="color:var(--accent-pink);font-weight:700;font-size:0.7rem">\uD83D\uDD25 ALTA</span>' : '';
+        const subs = (t.subtasks || []).length;
+        const subsDone = (t.subtasks || []).filter(s => s.done).length;
+        const subText = subs > 0 ? `<span style="font-size:0.75rem;color:var(--text-secondary)"><i class="fa-solid fa-list-check"></i> ${subsDone}/${subs}</span>` : '';
+        
+        return `
+        <div class="list-item glass ${isDone ? 'done' : ''}" style="cursor:pointer;opacity:${isDone?0.6:1}" onclick="openTaskDetail('${t.id}')">
+            <div class="item-main">
+                <div class="item-title" style="text-decoration:${isDone?'line-through':'none'}">${escapeHtml(t.name)}</div>
+                <div class="item-subtitle" style="display:flex;gap:8px;align-items:center">
+                    ${prioText}
+                    ${subText}
+                    ${dueText}
+                </div>
+            </div>
+            <button class="icon-btn ${isDone ? 'done' : ''}" style="width:32px;height:32px;border:1px solid ${isDone?'var(--accent-green)':'var(--border-glass)'};color:${isDone?'var(--accent-green)':'white'}" onclick="event.stopPropagation(); toggleTaskDirect('${t.id}')">
+                <i class="fa-solid ${isDone ? 'fa-check' : 'fa-minus'}"></i>
+            </button>
+        </div>`;
+    }).join('');
+}
 
 function renderTaskKanban() {
     const tasks = LocalDB.get('tasks').filter(t => !t.is_deleted);
     const todo = tasks.filter(t => !t.done_at && t.status !== 'doing');
     const doing = tasks.filter(t => !t.done_at && t.status === 'doing');
     const done = tasks.filter(t => t.done_at);
-
+    
     const renderCard = (t) => {
         const prioColor = t.priority === 'high' ? 'var(--accent-pink)' : t.priority === 'medium' ? '#f59e0b' : 'var(--text-secondary)';
         return `
         <div class="glass" style="padding:12px;border-radius:12px;cursor:pointer;border-left:3px solid ${prioColor}" onclick="openTaskDetail('${t.id}')">
-            <div style="font-size:0.9rem;font-weight:600;margin-bottom:6px">${escapeHtml(t.name || t.title || 'Tarefa')}</div>
+            <div style="font-size:0.9rem;font-weight:600;margin-bottom:6px">${escapeHtml(t.name)}</div>
             ${t.due_date ? `<div style="font-size:0.7rem;color:var(--text-secondary)"><i class="fa-regular fa-clock"></i> ${new Date(t.due_date).toLocaleDateString('pt-BR')}</div>` : ''}
         </div>`;
     };
-
+    
     const elTodo = document.getElementById('kanban-todo');
     const elDoing = document.getElementById('kanban-doing');
     const elDone = document.getElementById('kanban-done');
-
+    
     if (elTodo) elTodo.innerHTML = todo.map(renderCard).join('') || '<div style="color:var(--text-secondary);font-size:0.8rem;text-align:center;padding:20px;border:1px dashed var(--border-glass);border-radius:8px">Vazio</div>';
-    if (elDoing) elDoing.innerHTML = doing.map(renderCard).join('') || '<div style="color:var(--text-secondary);font-size:0.8rem;text-align:center;padding:20px;border:1px dashed var(--border-glass);border-radius:8px">Arraste tarefas para cá</div>';
+    if (elDoing) elDoing.innerHTML = doing.map(renderCard).join('') || '<div style="color:var(--text-secondary);font-size:0.8rem;text-align:center;padding:20px;border:1px dashed var(--border-glass);border-radius:8px">Arraste tarefas para ca</div>';
     if (elDone) elDone.innerHTML = done.map(renderCard).join('') || '<div style="color:var(--text-secondary);font-size:0.8rem;text-align:center;padding:20px;border:1px dashed var(--border-glass);border-radius:8px">Vazio</div>';
 }
 
-window.renderTaskKanban = renderTaskKanban;
+window.openTaskDetail = function(taskId) {
+    currentTaskId = taskId;
+    const tasks = LocalDB.get('tasks');
+    const t = tasks.find(x => x.id === taskId);
+    if (!t) return;
+    
+    const modal = document.getElementById('task-detail-modal');
+    if (document.getElementById('task-detail-name')) document.getElementById('task-detail-name').value = t.name || '';
+    if (document.getElementById('task-detail-priority')) document.getElementById('task-detail-priority').value = t.priority || 'medium';
+    if (document.getElementById('task-detail-due')) document.getElementById('task-detail-due').value = t.due_date || '';
+    
+    renderSubtasks(t.subtasks || []);
+    
+    if (modal) modal.style.display = 'flex';
+};
 
-window.loadTasks = function() {
+window.closeTaskDetail = function() {
+    const modal = document.getElementById('task-detail-modal');
+    if (modal) modal.style.display = 'none';
+    currentTaskId = null;
     if (taskKanbanMode) renderTaskKanban();
-    else if (typeof window.filterTasks === 'function') {
-        window.filterTasks('all', document.querySelector('#view-tasks .study-chip[data-filter="all"]'));
+    else filterTasks(document.querySelector('#view-tasks .study-chip.active')?.dataset?.filter || 'all');
+};
+
+function renderSubtasks(subs) {
+    const list = document.getElementById('task-subtasks-list');
+    if (!list) return;
+    list.innerHTML = subs.map((s, i) => `
+        <div style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.04);padding:8px;border-radius:8px">
+            <input type="checkbox" ${s.done ? 'checked' : ''} onchange="toggleSubtask(${i})" style="accent-color:var(--accent-primary)">
+            <span style="flex:1;font-size:0.9rem;text-decoration:${s.done ? 'line-through' : 'none'};color:${s.done ? 'var(--text-secondary)' : 'white'}">${escapeHtml(s.name)}</span>
+            <button onclick="removeSubtask(${i})" style="background:none;border:none;color:var(--text-secondary)"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+    `).join('');
+}
+
+window.addSubtask = function() {
+    const name = prompt('Nome da subtarefa:');
+    if (!name || !currentTaskId) return;
+    const tasks = LocalDB.get('tasks');
+    const t = tasks.find(x => x.id === currentTaskId);
+    if (t) {
+        if (!t.subtasks) t.subtasks = [];
+        t.subtasks.push({ name, done: false });
+        LocalDB.set('tasks', tasks);
+        renderSubtasks(t.subtasks);
     }
 };
 
+window.toggleSubtask = function(idx) {
+    if (!currentTaskId) return;
+    const tasks = LocalDB.get('tasks');
+    const t = tasks.find(x => x.id === currentTaskId);
+    if (t && t.subtasks && t.subtasks[idx]) {
+        t.subtasks[idx].done = !t.subtasks[idx].done;
+        LocalDB.set('tasks', tasks);
+        renderSubtasks(t.subtasks);
+    }
+};
 
-/** Nexus Mobile — nexus-routines.js */
+window.removeSubtask = function(idx) {
+    if (!currentTaskId) return;
+    const tasks = LocalDB.get('tasks');
+    const t = tasks.find(x => x.id === currentTaskId);
+    if (t && t.subtasks) {
+        t.subtasks.splice(idx, 1);
+        LocalDB.set('tasks', tasks);
+        renderSubtasks(t.subtasks);
+    }
+};
+
+window.saveTaskDetail = function() {
+    if (!currentTaskId) return;
+    const name = document.getElementById('task-detail-name')?.value;
+    const prio = document.getElementById('task-detail-priority')?.value;
+    const due = document.getElementById('task-detail-due')?.value;
+    
+    const tasks = LocalDB.get('tasks');
+    const t = tasks.find(x => x.id === currentTaskId);
+    if (t) {
+        t.name = name;
+        t.priority = prio;
+        t.due_date = due;
+        LocalDB.set('tasks', tasks);
+    }
+};
+
+window.toggleTaskDirect = function(taskId) {
+    const tasks = LocalDB.get('tasks');
+    const t = tasks.find(x => x.id === taskId);
+    if (t) {
+        if (t.done_at) t.done_at = null;
+        else {
+            t.done_at = new Date().toISOString();
+            awardXP(10, 'Tarefa concluida');
+        }
+        LocalDB.set('tasks', tasks);
+        if (taskKanbanMode) renderTaskKanban();
+        else filterTasks(document.querySelector('#view-tasks .study-chip.active')?.dataset?.filter || 'all');
+        loadXPPanel();
+    }
+};
+
+window.deleteCurrentTask = function() {
+    if (!currentTaskId) return;
+    const tasks = LocalDB.get('tasks');
+    const t = tasks.find(x => x.id === currentTaskId);
+    if (t) {
+        t.is_deleted = true;
+        LocalDB.set('tasks', tasks);
+        closeTaskDetail();
+    }
+};
+
+// Override original loadTasks to use our new view
+window.loadTasks = function() {
+    if (taskKanbanMode) renderTaskKanban();
+    else filterTasks('all', document.querySelector('#view-tasks .study-chip[data-filter="all"]'));
+};
+
+
 // ================================================================
 // ROUTINES MODULE (Phase 7)
 // ================================================================
@@ -2734,8 +2492,6 @@ window.finishRoutine = function() {
     closeRoutineRunner();
 };
 
-
-/** Nexus Mobile — nexus-theme.js */
 // ================================================================
 // AMOLED THEME (Phase 8)
 // ================================================================
@@ -2766,28 +2522,20 @@ window.initTheme = function() {
 
 
 document.addEventListener('DOMContentLoaded', () => {
-    if (typeof ensureDefaultRewards === 'function') ensureDefaultRewards();
+    ensureDefaultRewards();
     initAppPreferences();
     loadUserStats();
     loadHabits();
     loadTodayDashboard();
-    if (typeof ensureModuleNavVisible === 'function') ensureModuleNavVisible();
     applyUiPrefs();
-    bindMobileNavItems();
     updateJarvisFabState();
     updateNetworkSettingsUI();
-    updateSyncIndicator('offline');
-    if (window.NexusAudio && typeof window.NexusAudio.initSettingsUI === 'function') window.NexusAudio.initSettingsUI();
+    updateSyncIndicator(isNetworkOnline() && window.nexusSupabase ? 'synced' : 'offline');
 
     setTimeout(requestNotificationPermission, 2000);
     setTimeout(backgroundSync, 1000);
     setupRealtime();
     startSyncInterval();
-
-    setTimeout(() => {
-        const active = document.querySelector('.view.active-view');
-        if (active && typeof refreshViewContent === 'function') refreshViewContent(active.id);
-    }, 100);
 });
 
 // ----------------------------------------------------
@@ -2795,41 +2543,17 @@ document.addEventListener('DOMContentLoaded', () => {
 // ----------------------------------------------------
 window.openSettingsView = function() {
     if (typeof closeSettingsModal === 'function') closeSettingsModal();
-    if (typeof activateMobileView === 'function') {
-        activateMobileView('view-settings', null);
-    } else {
-        document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
-        document.querySelectorAll('.view').forEach(view => view.classList.remove('active-view'));
-        const view = document.getElementById('view-settings');
-        if (view) view.classList.add('active-view');
-    }
+    document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
+    document.querySelectorAll('.view').forEach(view => view.classList.remove('active-view'));
+    const view = document.getElementById('view-settings');
+    if (view) view.classList.add('active-view');
     updateNetworkSettingsUI();
     initAppPreferences();
     if (typeof updateSettingsUI === 'function') updateSettingsUI();
-    const authEl = document.getElementById('btn-login-google');
-    if (authEl) authEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-};
-
-window.openSettingsAccount = function(ev) {
-    if (ev) {
-        ev.preventDefault();
-        ev.stopPropagation();
+    const stats = typeof getNativeStorageStatsSync === 'function' ? getNativeStorageStatsSync() : null;
+    if (stats && stats.cacheBytes != null && typeof updateStorageWarningBadge === 'function') {
+        updateStorageWarningBadge(stats.cacheBytes);
     }
-    if (typeof closeSettingsModal === 'function') closeSettingsModal();
-    requestAnimationFrame(() => {
-        if (typeof activateMobileView === 'function') {
-            activateMobileView('view-settings', null);
-        } else {
-            openSettingsView();
-            return;
-        }
-        const main = document.getElementById('main-content');
-        if (main) main.scrollTop = 0;
-        setTimeout(() => {
-            const authEl = document.getElementById('btn-login-google');
-            if (authEl) authEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }, 120);
-    });
 };
 
 window.openSettingsModal = () => {
@@ -2854,25 +2578,29 @@ function applyUiPrefs() {
     try {
         prefs = JSON.parse(localStorage.getItem('nexus_ui_prefs')) || {};
     } catch(e) {}
-    const modules = ['habits', 'finance', 'tasks', 'videos', 'shop', 'iot', 'studies', 'goals', 'fitness', 'journal', 'routines', 'alarms', 'cleaner'];
+    const modules = ['habits', 'finance', 'tasks', 'videos', 'shop', 'iot', 'studies', 'goals', 'fitness', 'journal', 'routines', 'cleaner'];
     
     modules.forEach(mod => {
-        const isEnabled = prefs[mod] !== false;
+        const isEnabled = prefs[mod] !== false; // Default true
+        
+        // Update checkbox
         const cb = document.getElementById('toggle-' + mod);
         if (cb) cb.checked = isEnabled;
+        
+        // Hide/show nav item
         const navItem = document.querySelector(`.nav-item[data-target="view-${mod}"]`);
         if (navItem) {
             navItem.style.display = isEnabled ? 'flex' : 'none';
         }
     });
-    if (typeof applyModuleOrderAndVisibility === 'function') applyModuleOrderAndVisibility();
 }
 
 // Call applyUiPrefs on boot
 
 
-/** Nexus Mobile — nexus-editor.js */
+
 // ================================================================
+
 // RICH TEXT EDITOR — Notion-Style v2
 // ================================================================
 
@@ -3093,8 +2821,6 @@ function initRichEditorKeyListeners() {
         updateToolbarState();
     });
 
-    editor.addEventListener('paste', handleNoteEditorPaste);
-
     // Prevent default tab behaviour
     editor.addEventListener('keydown', function(e) {
         if (e.key === 'Tab') {
@@ -3145,42 +2871,19 @@ function getYouTubeEmbedSrc(videoId) {
 }
 
 function insertYouTubeEmbed() {
-    const raw = document.getElementById('yt-url-input')?.value?.trim();
-    if (!raw) return;
-    const ids = extractAllYouTubeIds(raw);
-    if (!ids.length) {
-        const single = extractYouTubeId(raw);
-        if (single) ids.push(single);
-    }
-    if (!ids.length) {
+    const url = document.getElementById('yt-url-input')?.value?.trim();
+    if (!url) return;
+    const videoId = extractYouTubeId(url);
+    if (!videoId) {
         alert('URL do YouTube inválida!');
         return;
     }
     closeYouTubeModal();
-    insertYouTubeEmbedsAtCursor(ids);
-}
-
-function extractAllYouTubeIds(text) {
-    const compact = String(text || '').replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ');
-    const patterns = [
-        /(?:https?:\/\/)?(?:www\.)?youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})/gi,
-        /(?:https?:\/\/)?youtu\.be\/([a-zA-Z0-9_-]{11})/gi,
-        /(?:https?:\/\/)?(?:www\.)?youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/gi,
-        /(?:https?:\/\/)?(?:www\.)?youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/gi,
-    ];
-    const ids = [];
-    patterns.forEach(p => {
-        let m;
-        while ((m = p.exec(compact)) !== null) {
-            if (!ids.includes(m[1])) ids.push(m[1]);
-        }
-    });
-    return ids;
-}
-
-function buildYouTubeEmbedHtml(videoId) {
+    const editor = document.getElementById('note-content-rich');
+    if (!editor) return;
+    editor.focus();
     const embedSrc = getYouTubeEmbedSrc(videoId);
-    return `<div class="yt-embed-block" contenteditable="false">
+    const embedHTML = `<div class="yt-embed-block" contenteditable="false">
         <iframe
             src="${embedSrc}"
             title="YouTube video player"
@@ -3189,27 +2892,10 @@ function buildYouTubeEmbedHtml(videoId) {
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
             allowfullscreen></iframe>
     </div><p><br></p>`;
-}
-
-function insertYouTubeEmbedsAtCursor(videoIds) {
-    const editor = document.getElementById('note-content-rich');
-    if (!editor || !videoIds.length) return;
-    editor.focus();
-    const html = videoIds.map(id => buildYouTubeEmbedHtml(id)).join('');
-    document.execCommand('insertHTML', false, html);
-    if (typeof saveNoteDebounced === 'function') saveNoteDebounced();
-}
-
-function handleNoteEditorPaste(e) {
-    const text = e.clipboardData?.getData('text/plain') || '';
-    const ids = extractAllYouTubeIds(text);
-    if (!ids.length) return;
-    e.preventDefault();
-    insertYouTubeEmbedsAtCursor(ids);
+    document.execCommand('insertHTML', false, embedHTML);
 }
 
 function extractYouTubeId(url) {
-    const compact = String(url || '').replace(/\s+/g, '');
     const patterns = [
         /(?:youtube\.com\/watch\?v=)([a-zA-Z0-9_-]{11})/,
         /(?:youtu\.be\/)([a-zA-Z0-9_-]{11})/,
@@ -3217,7 +2903,7 @@ function extractYouTubeId(url) {
         /(?:youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/,
     ];
     for (const p of patterns) {
-        const m = compact.match(p);
+        const m = url.match(p);
         if (m) return m[1];
     }
     return null;
@@ -3381,40 +3067,20 @@ async function runJarvisAction() {
         }
 
         let apiResponse = null;
-        if (window.nexusSupabase && typeof window.nexusSupabase.functions?.invoke === 'function') {
-            try {
-                const { data, error } = await window.nexusSupabase.functions.invoke('jarvis-note-action', {
-                    body: payload
-                });
-                if (!error && data?.result) {
-                    result = data.result;
-                    apiResponse = data;
-                } else if (error) {
-                    console.warn('jarvis-note-action:', error);
-                }
-            } catch (fnErr) {
-                console.warn('jarvis-note-action invoke:', fnErr);
+        try {
+            const res = await fetch('/api/nexus/jarvis/note-action', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+                signal: AbortSignal.timeout(30000)
+            });
+            if (res.ok) {
+                const data = await res.json();
+                result = data.result || data.text || JSON.stringify(data);
+                apiResponse = data;
             }
-        }
-        if (!result) {
-            try {
-                const res = await fetch('/api/nexus/jarvis/note-action', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload),
-                    signal: AbortSignal.timeout(30000)
-                });
-                if (res.ok) {
-                    const data = await res.json();
-                    result = data.result || data.text || JSON.stringify(data);
-                    apiResponse = data;
-                }
-            } catch (fetchErr) {
-                console.warn('desktop jarvis API:', fetchErr);
-            }
-        }
-        if (!result) {
-            result = jarvisSimulate(_jarvisMode, prompt);
+        } catch(fetchErr) {
+            result = 'Jarvis indisponível. Verifique Wi-Fi e se o Nexus desktop está ligado.';
         }
 
         _jarvisLastResult = result;
@@ -3474,89 +3140,6 @@ function copyJarvisResult() {
     if (!_jarvisLastResult) return;
     navigator.clipboard.writeText(_jarvisLastResult).then(() => {
         showToast('Copiado para a área de transferência!');
-    });
-}
-
-let _pendingAiDiffHtml = null;
-let _selectedYtEmbedBlock = null;
-
-window.acceptAiDiff = function() {
-    const panel = document.getElementById('ai-diff-panel');
-    const editor = document.getElementById('note-content-rich');
-    if (editor && _pendingAiDiffHtml) {
-        editor.innerHTML = _pendingAiDiffHtml;
-        saveNoteDebounced();
-        if (typeof window.saveNote === 'function') window.saveNote();
-    }
-    _pendingAiDiffHtml = null;
-    if (panel) panel.style.display = 'none';
-};
-
-window.rejectAiDiff = function() {
-    _pendingAiDiffHtml = null;
-    const panel = document.getElementById('ai-diff-panel');
-    if (panel) panel.style.display = 'none';
-};
-
-function closeYtEmbedMenu() {
-    const pop = document.getElementById('yt-embed-menu-popup');
-    if (pop) pop.style.display = 'none';
-}
-
-window.editYouTubeEmbedLink = function() {
-    closeYtEmbedMenu();
-    if (!_selectedYtEmbedBlock) return;
-    const iframe = _selectedYtEmbedBlock.querySelector('iframe');
-    const src = iframe?.src || '';
-    const m = src.match(/embed\/([a-zA-Z0-9_-]{11})/) || src.match(/video=([a-zA-Z0-9_-]{11})/);
-    const current = m ? m[1] : '';
-    const url = prompt('Nova URL ou ID do YouTube:', current ? 'https://youtu.be/' + current : '');
-    if (!url) return;
-    const ids = extractAllYouTubeIds(url);
-    const id = ids[0] || extractYouTubeId(url);
-    if (!id) { alert('URL inválida'); return; }
-    _selectedYtEmbedBlock.outerHTML = buildYouTubeEmbedHtml(id);
-    _selectedYtEmbedBlock = null;
-    saveNoteDebounced();
-};
-
-window.openYouTubeEmbedExternal = function() {
-    closeYtEmbedMenu();
-    if (!_selectedYtEmbedBlock) return;
-    const iframe = _selectedYtEmbedBlock.querySelector('iframe');
-    const src = iframe?.src || '';
-    const m = src.match(/embed\/([a-zA-Z0-9_-]{11})/) || src.match(/video=([a-zA-Z0-9_-]{11})/);
-    if (m) window.open('https://www.youtube.com/watch?v=' + m[1], '_blank');
-};
-
-window.removeYouTubeEmbed = function() {
-    closeYtEmbedMenu();
-    if (_selectedYtEmbedBlock) {
-        _selectedYtEmbedBlock.remove();
-        _selectedYtEmbedBlock = null;
-        saveNoteDebounced();
-    }
-};
-
-function initYouTubeEmbedMenus() {
-    const editor = document.getElementById('note-content-rich');
-    if (!editor) return;
-    editor.addEventListener('click', (e) => {
-        const block = e.target.closest('.yt-embed-block');
-        if (!block) return;
-        e.preventDefault();
-        _selectedYtEmbedBlock = block;
-        const pop = document.getElementById('yt-embed-menu-popup');
-        if (pop) {
-            pop.style.display = 'block';
-            pop.style.left = Math.min(e.clientX || 20, window.innerWidth - 200) + 'px';
-            pop.style.top = Math.min(e.clientY || 20, window.innerHeight - 120) + 'px';
-        }
-    });
-    document.addEventListener('click', (e) => {
-        if (!e.target.closest('#yt-embed-menu-popup') && !e.target.closest('.yt-embed-block')) {
-            closeYtEmbedMenu();
-        }
     });
 }
 
@@ -3666,8 +3249,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.target === noteLinkModal) closeNoteLinkModal();
     });
 
-    initYouTubeEmbedMenus();
-
     // Init if editor view is open
     const editorView = document.getElementById('note-editor-view');
     if (editorView && editorView.style.display !== 'none') {
@@ -3681,6 +3262,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ----------------------------------------------------
+
 // Quick Add Logic (FAB)
 // ----------------------------------------------------
 window.openCreateModal = () => {
@@ -3801,7 +3383,6 @@ window.resetPomodoro = () => {
 // Habit Alarms (Local checks)
 // ----------------------------------------------------
 function playBeep(freq, duration) {
-    if (!notificationsEnabled()) return;
     try {
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         const oscillator = audioCtx.createOscillator();
@@ -3835,14 +3416,14 @@ function checkHabitAlarms() {
     });
 }
 
-// Habit/task alarm web fallback (native scheduling in syncHabitReminders)
-setInterval(function () {
-    if (typeof window.checkHabitAlarms === 'function') window.checkHabitAlarms();
-}, 30000);
+// Add alarm checker to main loop
+setInterval(checkHabitAlarms, 30000); // checks every 30 seconds
 
 
-/** Nexus Mobile — nexus-study-tools.js */
+
+
 // ================================================================
+
 // FLASHCARDS (SRS - Anki Style) & POMODORO TIMER
 // ================================================================
 
@@ -4178,8 +3759,8 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 
-/** Nexus Mobile — nexus-studies-graph.js */
 // ================================================================
+
 // STUDIES 3.0: NOTION COVERS & OBSIDIAN GRAPH VIEW
 // ================================================================
 
@@ -4263,41 +3844,43 @@ function changeNoteIcon() {
 
 // Hook into openNoteEditor to load covers and icons
 const _origOpenNoteEditorForCover = window.openNoteEditor;
-window.openNoteEditor = function(noteOrId, notebookId) {
-    if (typeof _origOpenNoteEditorForCover === 'function') _origOpenNoteEditorForCover(noteOrId, notebookId);
-
+window.openNoteEditor = function(note, notebookId) {
+    if (typeof _origOpenNoteEditorForCover === 'function') _origOpenNoteEditorForCover(note, notebookId);
+    
+    // Clear temp variables
     window._tempCoverImage = null;
     window._tempIcon = null;
-
+    
     setTimeout(() => {
-        let note = null;
-        if (noteOrId && typeof noteOrId === 'object') note = noteOrId;
-        else if (noteOrId) {
-            const notes = LocalDB.get('study_notes') || [];
-            note = notes.find(n => String(n.id) === String(noteOrId)) || null;
-        }
-
         const titleEl = document.getElementById('note-title');
-        if (titleEl) titleEl.dataset.noteId = note ? note.id : '';
-
+        if (titleEl) {
+            titleEl.dataset.noteId = note ? note.id : '';
+        }
+        
+        // Render Cover
         const coverContainer = document.getElementById('note-cover-container');
         const addBtn = document.getElementById('add-cover-btn');
-        if (coverContainer) {
-            if (note && note.coverImage) {
-                coverContainer.style.display = 'block';
-                coverContainer.style.backgroundImage = 'url(' + note.coverImage + ')';
-                if (addBtn) addBtn.style.display = 'none';
-            } else {
-                coverContainer.style.display = 'none';
-                coverContainer.style.backgroundImage = 'none';
-                if (addBtn) addBtn.style.display = 'inline-block';
-            }
+        if (note && note.coverImage) {
+            coverContainer.style.display = 'block';
+            coverContainer.style.backgroundImage = `url(${note.coverImage})`;
+            addBtn.style.display = 'none';
+        } else {
+            coverContainer.style.display = 'none';
+            coverContainer.style.backgroundImage = 'none';
+            addBtn.style.display = 'inline-block';
         }
-
+        
+        // Render Icon
         const iconDisplay = document.getElementById('note-icon-display');
-        if (iconDisplay) iconDisplay.textContent = (note && note.icon) ? note.icon : '📄';
-
+        if (note && note.icon) {
+            iconDisplay.textContent = note.icon;
+        } else {
+            iconDisplay.textContent = '📄';
+        }
+        
+        // Scan for backlinks
         renderBacklinks(note ? note.id : null);
+        
     }, 100);
 };
 
@@ -4617,8 +4200,8 @@ function centerGraph() {
 }
 
 
-/** Nexus Mobile — nexus-analytics.js */
 // ================================================================
+
 // ANALYTICS & CHARTS DASHBOARD (Chart.js)
 // ================================================================
 
@@ -4675,13 +4258,7 @@ function renderFinanceCharts() {
     if (typeof Chart === 'undefined') return;
     initChartDefaults();
     
-    const raw = (LocalDB.get('finance_transactions') || []).filter(t => !t.is_deleted);
-    const txDate = t => (t.occurred_at || t.date || t.created_at || '').slice(0, 10);
-    const transactions = raw.map(t => ({
-        ...t,
-        date: txDate(t),
-        amount: Number(t.amount) || 0
-    }));
+    const transactions = LocalDB.getAll('transactions') || [];
     
     // 1. PIE CHART: Expenses by Category (Current Month)
     const now = new Date();
@@ -4897,7 +4474,6 @@ window.loadStudies = function() {
 };
 
 
-/** Nexus Mobile — nexus-auth.js */
 // ================================================================
 // MULTI-USER AUTH & SETTINGS
 // ================================================================
@@ -4956,7 +4532,6 @@ function getOAuthRedirectUrl() {
 }
 
 window.handleOAuthCallback = async function(callbackUrl) {
-    closeOAuthOverlay();
     if (!window.nexusSupabase || !callbackUrl) return;
     try {
         const parsed = new URL(callbackUrl.replace('com.nexus.mobile://', 'https://local/'));
@@ -4997,58 +4572,22 @@ async function loginWithGoogle() {
         return;
     }
     const redirectTo = getOAuthRedirectUrl();
+    const useExternalBrowser = !!(window.NexusAndroid && typeof window.NexusAndroid.openOAuthUrl === 'function');
     const { data, error } = await window.nexusSupabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
             redirectTo,
-            skipBrowserRedirect: true
+            skipBrowserRedirect: useExternalBrowser
         }
     });
     if (error) {
         showToast("Erro no login: " + error.message);
         return;
     }
-    if (!data?.url) {
-        showToast("Não foi possível iniciar login Google.");
-        return;
-    }
-    // Google bloqueia OAuth em WebView/iframe (erro 403). Abre Custom Tab / navegador e volta via deep link.
-    if (window.NexusAndroid && typeof window.NexusAndroid.openOAuthUrl === 'function') {
+    if (useExternalBrowser && data?.url) {
         window.NexusAndroid.openOAuthUrl(data.url);
-        showToast("Complete o login na janela que abriu...");
-        return;
+        showToast("Complete o login no navegador...");
     }
-    window.location.href = data.url;
-}
-
-function openOAuthOverlay(url) {
-    let overlay = document.getElementById('oauth-overlay');
-    if (!overlay) {
-        overlay = document.createElement('div');
-        overlay.id = 'oauth-overlay';
-        overlay.className = 'oauth-overlay';
-        overlay.innerHTML = `
-            <div class="oauth-overlay-panel glass">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-                    <strong style="color:white">Entrar com Google</strong>
-                    <button type="button" class="icon-btn" id="oauth-overlay-close" aria-label="Fechar"><i class="fa-solid fa-xmark"></i></button>
-                </div>
-                <iframe id="oauth-overlay-frame" title="Login Google" referrerpolicy="no-referrer-when-downgrade"></iframe>
-            </div>`;
-        document.body.appendChild(overlay);
-        overlay.querySelector('#oauth-overlay-close').onclick = closeOAuthOverlay;
-        overlay.addEventListener('click', (e) => { if (e.target === overlay) closeOAuthOverlay(); });
-    }
-    const frame = document.getElementById('oauth-overlay-frame');
-    if (frame) frame.src = url;
-    overlay.style.display = 'flex';
-}
-
-function closeOAuthOverlay() {
-    const overlay = document.getElementById('oauth-overlay');
-    if (overlay) overlay.style.display = 'none';
-    const frame = document.getElementById('oauth-overlay-frame');
-    if (frame) frame.src = 'about:blank';
 }
 
 async function logoutGoogle() {
@@ -5329,9 +4868,8 @@ function clearLocalDB() {
     }
 }
 
-
-/** Nexus Mobile — nexus-forms.js */
 // ================================================================
+
 // SPRINT 4 — NexusCalendar, CRUD forms, reminders, studies redesign
 // ================================================================
 
@@ -5536,8 +5074,7 @@ function clearLocalDB() {
         }
         if (typeof filterHabits === 'function') filterHabits(document.querySelector('#view-habits .study-chip.active')?.dataset?.filter || 'all');
         loadXPPanel();
-        if (typeof loadTodayDashboard === 'function') loadTodayDashboard();
-        if (typeof backgroundSync === 'function') backgroundSync();
+        backgroundSync();
     };
 
     window.openHabitForm = function(habitId) {
@@ -5561,40 +5098,6 @@ function clearLocalDB() {
     };
 
     window.openHabitDetail = function(habitId) { openHabitForm(habitId); };
-
-    window.closeHabitDetail = function() {
-        const modal = document.getElementById('habit-detail-modal');
-        if (modal) modal.style.display = 'none';
-        currentHabitId = null;
-    };
-
-    window.archiveCurrentHabit = function() {
-        if (!currentHabitId) return;
-        const habits = LocalDB.get('habits') || [];
-        const idx = habits.findIndex(h => String(h.id) === String(currentHabitId));
-        if (idx === -1) return;
-        habits[idx].active = 0;
-        LocalDB.set('habits', habits);
-        closeHabitDetail();
-        if (typeof loadHabits === 'function') loadHabits();
-        showToast('Hábito arquivado.');
-    };
-
-    window.deleteCurrentHabit = function() {
-        if (!currentHabitId) return;
-        if (!confirm('Deseja realmente excluir este hábito?')) return;
-        const habits = LocalDB.get('habits') || [];
-        const idx = habits.findIndex(h => String(h.id) === String(currentHabitId));
-        if (idx !== -1) {
-            habits[idx].is_deleted = 1;
-            habits[idx].active = 0;
-            LocalDB.set('habits', habits);
-            if (typeof syncHabitReminders === 'function') syncHabitReminders();
-            closeHabitDetail();
-            if (typeof loadHabits === 'function') loadHabits();
-            showToast('Hábito excluído.');
-        }
-    };
 
     function openHabitDetailStats(h) {
         const logs = LocalDB.get('habit_logs') || [];
@@ -5669,9 +5172,7 @@ function clearLocalDB() {
         if (btn) btn.classList.add('active');
         const container = document.getElementById('habits-list');
         if (!container) return;
-        let habits = (LocalDB.get('habits') || []).filter(h => !h.is_deleted);
-        if (filter === 'archived') habits = habits.filter(h => h.active === 0);
-        else habits = habits.filter(h => h.active === 1);
+        let habits = (LocalDB.get('habits') || []).filter(h => h.active === 1 && !h.is_deleted);
         if (filter === 'morning') habits = habits.filter(h => h.period === 'morning');
         else if (filter === 'afternoon') habits = habits.filter(h => h.period === 'afternoon');
         else if (filter === 'night') habits = habits.filter(h => h.period === 'night');
@@ -5683,47 +5184,13 @@ function clearLocalDB() {
         }
         container.innerHTML = habits.map(h => {
             const isDone = logs.some(l => String(l.habit_id) === String(h.id) && l.date === sel);
-            const streak = computeHabitStreak(h.id, logs);
-            const rate = computeHabitCompletionRate(h.id, logs, 30);
             return `<div class="list-item glass ${isDone ? 'done' : ''}" style="cursor:pointer" onclick="openHabitDetail('${h.id}')">
                 <div class="item-main"><div class="item-title">${escapeHtml(h.name)}</div>
-                <div class="item-subtitle">🔥 ${streak} dias · ${rate}% (30d) · ${sel === todayISO() ? 'Hoje' : sel}</div></div>
-                <button class="icon-btn" onclick="event.stopPropagation();openHabitDetail('${h.id}')" aria-label="Editar"><i class="fa-solid fa-pen"></i></button>
-                <button class="icon-btn" onclick="event.stopPropagation();deleteHabitFromGrid('${h.id}')" aria-label="Excluir" style="color:var(--accent-pink)"><i class="fa-solid fa-trash"></i></button>
+                <div class="item-subtitle">${sel === todayISO() ? 'Hoje' : sel}</div></div>
                 <button class="icon-btn ${isDone ? 'done' : ''}" onclick="event.stopPropagation();toggleHabitDirect('${h.id}')"><i class="fa-solid ${isDone ? 'fa-check' : 'fa-plus'}"></i></button>
             </div>`;
         }).join('');
     };
-
-    function computeHabitStreak(habitId, logs) {
-        logs = logs || LocalDB.get('habit_logs') || [];
-        let streak = 0;
-        const d = new Date();
-        for (let i = 0; i < 365; i++) {
-            const iso = d.toISOString().split('T')[0];
-            if (logs.some(l => String(l.habit_id) === String(habitId) && l.date === iso)) streak++;
-            else if (i > 0) break;
-            d.setDate(d.getDate() - 1);
-        }
-        return streak;
-    }
-
-    function computeHabitCompletionRate(habitId, logs, days) {
-        logs = logs || LocalDB.get('habit_logs') || [];
-        const habits = LocalDB.get('habits') || [];
-        const h = habits.find(x => String(x.id) === String(habitId));
-        let scheduled = 0, done = 0;
-        const d = new Date();
-        for (let i = 0; i < days; i++) {
-            const iso = d.toISOString().split('T')[0];
-            if (h && typeof habitScheduledOnDay === 'function' && habitScheduledOnDay(h, iso)) {
-                scheduled++;
-                if (logs.some(l => String(l.habit_id) === String(habitId) && l.date === iso)) done++;
-            }
-            d.setDate(d.getDate() - 1);
-        }
-        return scheduled ? Math.round((done / scheduled) * 100) : 0;
-    }
 
     function renderHabitChartsFixed() {
         if (typeof Chart === 'undefined') return;
@@ -5761,44 +5228,9 @@ function clearLocalDB() {
         openTaskDetail(t.id);
     };
 
-    window.toggleTaskDirect = function(taskId) {
-        const tasks = LocalDB.get('tasks') || [];
-        const t = tasks.find(x => String(x.id) === String(taskId));
-        if (!t) return;
-        if (t.done_at) {
-            t.done_at = null;
-            t.status = 'todo';
-        } else {
-            t.done_at = new Date().toISOString();
-            t.status = 'done';
-            if (typeof awardXP === 'function') awardXP(10, 'Tarefa concluida');
-        }
-        LocalDB.set('tasks', tasks);
-        if (typeof filterTasks === 'function') filterTasks(document.querySelector('#view-tasks .study-chip.active')?.dataset?.filter || 'all');
-        if (typeof loadXPPanel === 'function') loadXPPanel();
-        if (typeof loadTodayDashboard === 'function') loadTodayDashboard();
-    };
-
-    window.deleteCurrentTask = window.deleteCurrentTask || function() {
-        if (!currentTaskId) return;
-        if (!confirm('Excluir esta tarefa?')) return;
-        const tasks = LocalDB.get('tasks') || [];
-        const t = tasks.find(x => String(x.id) === String(currentTaskId));
-        if (t) {
-            t.is_deleted = 1;
-            LocalDB.set('tasks', tasks);
-            if (typeof syncTaskReminders === 'function') syncTaskReminders();
-            closeTaskDetail();
-            if (typeof loadTasks === 'function') loadTasks();
-            if (typeof loadTodayDashboard === 'function') loadTodayDashboard();
-            showToast('Tarefa excluída.');
-        }
-    };
-
     window.completeCurrentTask = function() {
         if (!currentTaskId) return;
         toggleTaskDirect(currentTaskId);
-        if (typeof loadTodayDashboard === 'function') loadTodayDashboard();
         closeTaskDetail();
     };
 
@@ -5824,34 +5256,6 @@ function clearLocalDB() {
 
     window.addSubtask = window.addSubtaskInline;
 
-    function renderSubtasks(subtasks) {
-        const list = document.getElementById('task-subtasks-list');
-        if (!list) return;
-        const items = Array.isArray(subtasks) ? subtasks : [];
-        if (!items.length) {
-            list.innerHTML = '<div style="color:var(--text-secondary);font-size:0.85rem;padding:4px 0">Nenhuma subtarefa.</div>';
-            return;
-        }
-        list.innerHTML = items.map((s, i) => `
-            <div style="display:flex;align-items:center;gap:10px;padding:8px;background:rgba(255,255,255,0.05);border-radius:8px">
-                <input type="checkbox" ${s.done ? 'checked' : ''} onchange="toggleSubtask(${i})">
-                <span style="flex:1;${s.done ? 'text-decoration:line-through;opacity:0.6' : ''}">${escapeHtml(s.name || '')}</span>
-            </div>`).join('');
-    }
-    window.renderSubtasks = renderSubtasks;
-
-    window.toggleSubtask = function(idx) {
-        if (!currentTaskId) return;
-        const tasks = LocalDB.get('tasks') || [];
-        const t = tasks.find(x => String(x.id) === String(currentTaskId));
-        if (t && t.subtasks && t.subtasks[idx]) {
-            t.subtasks[idx].done = !t.subtasks[idx].done;
-            t.subtasks_json = t.subtasks;
-            LocalDB.set('tasks', tasks);
-            renderSubtasks(t.subtasks);
-        }
-    };
-
     const _saveTaskDetailOrig = window.saveTaskDetail;
     window.saveTaskDetail = function() {
         if (!currentTaskId) return;
@@ -5871,9 +5275,6 @@ function clearLocalDB() {
         LocalDB.set('tasks', tasks);
         syncTaskReminders();
         if (typeof _saveTaskDetailOrig === 'function') _saveTaskDetailOrig();
-        if (typeof loadTasks === 'function') loadTasks();
-        if (typeof loadTodayDashboard === 'function') loadTodayDashboard();
-        showToast('Tarefa salva.');
     };
 
     const _openTaskDetailOrig = window.openTaskDetail;
@@ -5899,19 +5300,12 @@ function clearLocalDB() {
         if (modal) modal.style.display = 'flex';
     };
 
-    window.closeTaskDetail = function() {
-        const modal = document.getElementById('task-detail-modal');
-        if (modal) modal.style.display = 'none';
-        currentTaskId = null;
-        if (typeof loadTasks === 'function') loadTasks();
-    };
-
     window.filterTasks = function(filter, btn) {
         if (btn) {
             document.querySelectorAll('#view-tasks .study-chip').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
         }
-        if (window.taskKanbanMode && typeof renderTaskKanban === 'function') { renderTaskKanban(); return; }
+        if (taskKanbanMode) { renderTaskKanban(); return; }
         const container = document.getElementById('tasks-list-view');
         if (!container) return;
         let tasks = (LocalDB.get('tasks') || []).filter(t => !t.is_deleted);
@@ -5931,8 +5325,6 @@ function clearLocalDB() {
             const isDone = !!t.done_at;
             return `<div class="list-item glass" onclick="openTaskDetail('${t.id}')">
                 <div class="item-main"><div class="item-title" style="text-decoration:${isDone?'line-through':'none'}">${escapeHtml(t.name || t.title)}</div></div>
-                <button class="icon-btn" onclick="event.stopPropagation();openTaskDetail('${t.id}')" aria-label="Editar"><i class="fa-solid fa-pen"></i></button>
-                <button class="icon-btn" onclick="event.stopPropagation();deleteTaskFromGrid('${t.id}')" aria-label="Excluir" style="color:var(--accent-pink)"><i class="fa-solid fa-trash"></i></button>
                 <button class="icon-btn" onclick="event.stopPropagation();toggleTaskDirect('${t.id}')"><i class="fa-solid fa-check"></i></button>
             </div>`;
         }).join('');
@@ -5944,30 +5336,9 @@ function clearLocalDB() {
         closeHabitDetail();
     };
 
-    window.deleteHabitFromGrid = function(habitId) {
-        if (!confirm('Excluir este hábito?')) return;
-        const habits = LocalDB.get('habits') || [];
-        const h = habits.find(x => String(x.id) === String(habitId));
-        if (h) {
-            h.is_deleted = 1;
-            h.active = 0;
-            LocalDB.set('habits', habits);
-            if (typeof syncHabitReminders === 'function') syncHabitReminders();
-            if (typeof backgroundSync === 'function') backgroundSync();
-        }
-        if (typeof loadHabits === 'function') loadHabits();
-    };
-
-    window.deleteTaskFromGrid = function(taskId) {
-        currentTaskId = taskId;
-        if (typeof deleteCurrentTask === 'function') deleteCurrentTask();
-    };
-
     // --- Native reminders ---
-    function scheduleNativeReminder(id, title, body, triggerAtMs, isAlarm) {
-        if (window.AndroidNative && typeof AndroidNative.scheduleAlarm === 'function') {
-            AndroidNative.scheduleAlarm(id, title, body, triggerAtMs, !!isAlarm, 5, 3);
-        } else if (window.AndroidNative && typeof AndroidNative.scheduleReminder === 'function') {
+    function scheduleNativeReminder(id, title, body, triggerAtMs) {
+        if (window.AndroidNative && typeof AndroidNative.scheduleReminder === 'function') {
             AndroidNative.scheduleReminder(id, title, body, triggerAtMs);
         }
     }
@@ -5984,7 +5355,7 @@ function clearLocalDB() {
             const rid = parseInt(String(t.id).replace(/\D/g,'').slice(-7) || '0', 10) || Math.abs(Number(t.id) % 100000);
             if (t.notify_enabled && t.notify_at && !t.done_at) {
                 const ms = new Date(t.notify_at).getTime();
-                if (ms > Date.now()) scheduleNativeReminder(rid, t.name || 'Tarefa', t.description || 'Lembrete de tarefa', ms, false);
+                if (ms > Date.now()) scheduleNativeReminder(rid, t.name || 'Tarefa', t.description || 'Lembrete de tarefa', ms);
                 else cancelNativeReminder(rid);
             } else cancelNativeReminder(rid);
         });
@@ -6004,7 +5375,7 @@ function clearLocalDB() {
             const trigger = new Date();
             trigger.setHours(hh, mm, 0, 0);
             if (trigger.getTime() <= Date.now()) trigger.setDate(trigger.getDate() + 1);
-            scheduleNativeReminder(rid, 'Hora do Habito', h.name, trigger.getTime(), false);
+            scheduleNativeReminder(rid, 'Hora do Habito', h.name, trigger.getTime());
         });
     };
 
@@ -6023,19 +5394,13 @@ function clearLocalDB() {
     };
 
     function checkHabitAlarmsFixed() {
-        if (typeof notificationsEnabled === 'function' && !notificationsEnabled()) return;
         const now = new Date();
         const timeStr = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
         const td = todayISO();
-        const dow = now.getDay();
         const logs = LocalDB.get('habit_logs') || [];
         (LocalDB.get('habits') || []).filter(h => h.active === 1 && !h.is_deleted).forEach(habit => {
             const t = habit.alarm_time || habit.target_time;
             if (!t || t.substring(0, 5) !== timeStr) return;
-            let days = [0,1,2,3,4,5,6];
-            if (Array.isArray(habit.days_of_week)) days = habit.days_of_week;
-            else if (habit.days_of_week) { try { days = JSON.parse(habit.days_of_week); } catch (_) {} }
-            if (!days.includes(dow)) return;
             if (logs.some(l => String(l.habit_id) === String(habit.id) && l.date === td)) return;
             sendLocalNotification('Hora do Habito!', habit.name);
             playBeep(600, 300);
@@ -6105,12 +5470,6 @@ function clearLocalDB() {
         document.getElementById('goal-form-status').value = g ? (g.status || 'active') : 'active';
         document.getElementById('goal-form-delete-btn').style.display = g ? 'block' : 'none';
         document.getElementById('goal-form-modal').style.display = 'flex';
-    };
-
-    window.closeGoalForm = function() {
-        editingGoalId = null;
-        const modal = document.getElementById('goal-form-modal');
-        if (modal) modal.style.display = 'none';
     };
 
     window.saveGoalForm = function() {
@@ -6187,93 +5546,22 @@ function clearLocalDB() {
 
     window.openWorkoutBuilder = function() { openWorkoutForm(); };
 
-    window.closeWorkoutForm = function() {
-        document.getElementById('workout-form-modal').style.display = 'none';
-        editingWorkoutId = null;
-    };
-
-    let editingFinanceId = null;
-    window.openFinanceForm = function(txId) {
-        editingFinanceId = txId || null;
-        const txs = LocalDB.get('finance_transactions') || [];
-        const t = txId ? txs.find(x => String(x.id) === String(txId)) : null;
-        document.getElementById('finance-form-title').textContent = t ? 'Editar Transação' : 'Nova Transação';
-        document.getElementById('finance-form-desc').value = t ? (t.description || '') : '';
-        document.getElementById('finance-form-amount').value = t ? (t.amount || '') : '';
-        document.getElementById('finance-form-type').value = t ? (t.type || 'expense') : 'expense';
-        document.getElementById('finance-form-category').value = t ? (t.category || 'other') : 'other';
-        document.getElementById('finance-form-date').value = t
-            ? (t.occurred_at || t.created_at || '').split('T')[0]
-            : todayISO();
-        document.getElementById('finance-form-delete-btn').style.display = t ? 'block' : 'none';
-        document.getElementById('finance-form-modal').style.display = 'flex';
-    };
-
-    window.closeFinanceForm = function() {
-        document.getElementById('finance-form-modal').style.display = 'none';
-        editingFinanceId = null;
-    };
-
-    window.saveFinanceForm = function() {
-        const desc = document.getElementById('finance-form-desc')?.value?.trim();
-        const amount = parseFloat(document.getElementById('finance-form-amount')?.value || '0');
-        if (!desc || !amount) { showToast('Preencha descrição e valor.'); return; }
-        const payload = {
-            description: desc,
-            amount,
-            category: document.getElementById('finance-form-category')?.value || 'other',
-            type: document.getElementById('finance-form-type')?.value || 'expense',
-            occurred_at: (document.getElementById('finance-form-date')?.value || todayISO()) + 'T12:00:00'
-        };
-        if (editingFinanceId) {
-            const txs = LocalDB.get('finance_transactions');
-            const idx = txs.findIndex(x => String(x.id) === String(editingFinanceId));
-            if (idx !== -1) { txs[idx] = { ...txs[idx], ...payload }; LocalDB.set('finance_transactions', txs); }
-        } else {
-            LocalDB.upsert('finance_transactions', { id: Date.now(), ...payload, created_at: new Date().toISOString() });
-        }
-        closeFinanceForm();
-        loadFinances();
-        if (typeof backgroundSync === 'function') backgroundSync();
-    };
-
-    window.deleteFinanceForm = function() {
-        if (!editingFinanceId) return;
-        const txs = LocalDB.get('finance_transactions');
-        const idx = txs.findIndex(x => String(x.id) === String(editingFinanceId));
-        if (idx !== -1) { txs[idx].is_deleted = 1; LocalDB.set('finance_transactions', txs); }
-        closeFinanceForm();
-        loadFinances();
-    };
-
     function renderWorkoutExercises(exs) {
         const list = document.getElementById('workout-exercises-list');
         if (!list) return;
         window._workoutExercises = exs || [];
         list.innerHTML = window._workoutExercises.map((e, i) => `
-            <div style="background:rgba(255,255,255,0.04);padding:10px;border-radius:8px;margin-bottom:6px">
-                <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
-                    <span style="flex:1;font-size:0.85rem;font-weight:600">${escapeHtml(e.name || e)}</span>
-                    <button onclick="removeWorkoutExercise(${i})" style="background:none;border:none;color:var(--text-secondary)"><i class="fa-solid fa-xmark"></i></button>
-                </div>
-                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
-                    <input type="number" min="1" placeholder="Séries" value="${e.sets || ''}" onchange="updateWorkoutExercise(${i},'sets',this.value)" style="padding:6px;border-radius:6px;background:rgba(0,0,0,0.3);color:white;border:1px solid var(--border-glass);font-size:0.8rem">
-                    <input type="number" min="1" placeholder="Reps" value="${e.reps || ''}" onchange="updateWorkoutExercise(${i},'reps',this.value)" style="padding:6px;border-radius:6px;background:rgba(0,0,0,0.3);color:white;border:1px solid var(--border-glass);font-size:0.8rem">
-                    <input type="number" min="0" step="0.5" placeholder="Kg" value="${e.weight || ''}" onchange="updateWorkoutExercise(${i},'weight',this.value)" style="padding:6px;border-radius:6px;background:rgba(0,0,0,0.3);color:white;border:1px solid var(--border-glass);font-size:0.8rem">
-                </div>
+            <div style="display:flex;gap:8px;align-items:center;background:rgba(255,255,255,0.04);padding:8px;border-radius:8px">
+                <span style="flex:1;font-size:0.85rem">${escapeHtml(e.name || e)}</span>
+                <button onclick="removeWorkoutExercise(${i})" style="background:none;border:none;color:var(--text-secondary)"><i class="fa-solid fa-xmark"></i></button>
             </div>`).join('');
     }
-
-    window.updateWorkoutExercise = function(i, field, val) {
-        if (!window._workoutExercises || !window._workoutExercises[i]) return;
-        window._workoutExercises[i][field] = field === 'weight' ? parseFloat(val) : parseInt(val, 10);
-    };
 
     window.addWorkoutExercise = function() {
         const name = prompt('Nome do exercicio:');
         if (!name) return;
         window._workoutExercises = window._workoutExercises || [];
-        window._workoutExercises.push({ name: name.trim(), sets: 3, reps: 10, weight: 0 });
+        window._workoutExercises.push({ name: name.trim() });
         renderWorkoutExercises(window._workoutExercises);
     };
 
@@ -6320,8 +5608,7 @@ function clearLocalDB() {
     window.loadFitness = function() {
         const container = document.getElementById('fitness-list');
         if (!container) return;
-        if (typeof renderWorkoutTemplates === 'function') renderWorkoutTemplates();
-        if (typeof updateFitnessStats === 'function') updateFitnessStats();
+        updateFitnessStats();
         const data = (LocalDB.get('fitness_workouts') || []).filter(t => !t.is_deleted)
             .sort((a, b) => (b.date || b.created_at || '').localeCompare(a.date || a.created_at || ''));
         container.innerHTML = data.length ? data.slice(0, 15).map(t => `
@@ -6331,42 +5618,112 @@ function clearLocalDB() {
             </div>`).join('') : '<div style="text-align:center;color:var(--text-secondary);margin-top:20px;">Nenhum treino.</div>';
     };
 
-    // --- Studies: subjects grid — loadSubjectsGrid definido em nexus-studies.js ---
-    window.openNewNotebook = window.openSubjectForm;
+    // --- Studies: subjects grid ---
+    function loadSubjectsGrid() {
+        const grid = document.getElementById('subjects-grid');
+        if (!grid) return;
+        const notebooks = LocalDB.get('study_notebooks') || [];
+        const notes = (LocalDB.get('study_notes') || []).filter(n => !n.is_deleted);
+        if (!notebooks.length) {
+            grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--text-secondary);padding:20px">Sem materias. Crie a primeira!</div>';
+            return;
+        }
+        grid.innerHTML = notebooks.map(nb => {
+            const count = notes.filter(n => String(n.notebook_id) === String(nb.id)).length;
+            const coverStyle = nb.cover_image ? `background-image:url('${nb.cover_image}')` : 'background:linear-gradient(135deg,#6c5ce7,#a29bfe)';
+            return `<div class="subject-card" onclick="openSubjectDetail('${nb.id}')">
+                <div class="subject-card-cover" style="${coverStyle}"></div>
+                <div class="subject-card-body"><div class="subject-card-name">${nb.icon || ''} ${escapeHtml(nb.name)}</div>
+                <div class="subject-card-count">${count} nota${count !== 1 ? 's' : ''}</div></div>
+            </div>`;
+        }).join('');
+    }
 
-    window.openSubjectMenu = function(ev) {
-        if (!currentNotebookId) return;
-        openFolderMenu(ev, currentNotebookId);
+    window.openSubjectForm = function() {
+        document.getElementById('subject-form-modal').style.display = 'flex';
+        document.getElementById('subject-form-name').value = '';
+        document.getElementById('subject-form-icon').value = '📚';
+        document.getElementById('subject-form-cover').value = '';
     };
 
+    window.saveSubjectForm = function() {
+        const name = document.getElementById('subject-form-name')?.value?.trim();
+        if (!name) return;
+        const nb = {
+            id: Date.now().toString(),
+            name,
+            icon: document.getElementById('subject-form-icon')?.value || '📚',
+            cover_image: document.getElementById('subject-form-cover')?.value || null,
+            created_at: new Date().toISOString()
+        };
+        const notebooks = LocalDB.get('study_notebooks') || [];
+        notebooks.push(nb);
+        LocalDB.set('study_notebooks', notebooks);
+        document.getElementById('subject-form-modal').style.display = 'none';
+        loadStudies();
+    };
+
+    window.openNewNotebook = window.openSubjectForm;
+
+    window.openSubjectDetail = function(notebookId) {
+        currentNotebookId = notebookId;
+        const nb = (LocalDB.get('study_notebooks') || []).find(n => String(n.id) === String(notebookId));
+        const view = document.getElementById('subject-detail-view');
+        if (!view || !nb) return;
+        document.getElementById('subject-detail-title').textContent = (nb.icon || '') + ' ' + nb.name;
+        view.style.display = 'block';
+        const notes = (LocalDB.get('study_notes') || []).filter(n => !n.is_deleted && String(n.notebook_id) === String(notebookId));
+        const list = document.getElementById('subject-notes-list');
+        list.innerHTML = notes.length ? notes.map(n => renderNoteCard(n)).join('') : '<div style="text-align:center;padding:30px;color:var(--text-secondary)">Sem notas</div>';
+    };
+
+    window.closeSubjectDetail = function() {
+        document.getElementById('subject-detail-view').style.display = 'none';
+        currentNotebookId = null;
+    };
+
+    window.openSubjectMenu = function(ev) {
+        ev.stopPropagation();
+        const popup = document.getElementById('subject-menu-popup');
+        if (popup) {
+            popup.style.display = 'block';
+            popup.style.top = (ev.clientY + 10) + 'px';
+            popup.style.left = (ev.clientX - 120) + 'px';
+        }
+        setTimeout(() => document.addEventListener('click', closeSubjectMenu, { once: true }), 50);
+    };
+
+    function closeSubjectMenu() {
+        const popup = document.getElementById('subject-menu-popup');
+        if (popup) popup.style.display = 'none';
+    }
+
     window.changeSubjectCover = function() {
-        if (currentNotebookId) openStudyEditSheet('folder', currentNotebookId);
-        closeStudyContextMenus();
+        const url = prompt('URL da imagem de capa:');
+        if (!url || !currentNotebookId) return;
+        const notebooks = LocalDB.get('study_notebooks') || [];
+        const idx = notebooks.findIndex(n => String(n.id) === String(currentNotebookId));
+        if (idx !== -1) { notebooks[idx].cover_image = url; LocalDB.set('study_notebooks', notebooks); loadStudies(); openSubjectDetail(currentNotebookId); }
+        closeSubjectMenu();
     };
 
     window.renameSubject = function() {
-        if (currentNotebookId) openStudyEditSheet('folder', currentNotebookId);
-        closeStudyContextMenus();
+        const name = prompt('Novo nome:');
+        if (!name || !currentNotebookId) return;
+        const notebooks = LocalDB.get('study_notebooks') || [];
+        const idx = notebooks.findIndex(n => String(n.id) === String(currentNotebookId));
+        if (idx !== -1) { notebooks[idx].name = name.trim(); LocalDB.set('study_notebooks', notebooks); loadStudies(); openSubjectDetail(currentNotebookId); }
+        closeSubjectMenu();
     };
 
     window.deleteSubject = function() {
-        if (!currentNotebookId || !confirm('Excluir matéria? As notas ficam sem pasta.')) return;
-        const notebooks = (LocalDB.get('study_notebooks') || []).filter(n => String(n.id) !== String(currentNotebookId));
-        LocalDB.set('study_notebooks', notebooks);
+        if (!currentNotebookId || !confirm('Excluir materia e manter notas sem caderno?')) return;
+        const notebooks = LocalDB.get('study_notebooks') || [];
+        const filtered = notebooks.filter(n => String(n.id) !== String(currentNotebookId));
+        LocalDB.set('study_notebooks', filtered);
         closeSubjectDetail();
         loadStudies();
-        closeStudyContextMenus();
-    };
-
-    window.deleteStudyNote = function() {
-        const id = window._menuNoteId;
-        if (!id || !confirm('Excluir esta nota?')) return;
-        const notes = LocalDB.get('study_notes') || [];
-        const idx = notes.findIndex(n => String(n.id) === String(id));
-        if (idx !== -1) { notes[idx].is_deleted = 1; LocalDB.set('study_notes', notes); }
-        closeStudyContextMenus();
-        if (currentNotebookId) openSubjectDetail(currentNotebookId);
-        loadStudies();
+        closeSubjectMenu();
     };
 
     function extractNoteTitleFromEditor() {
@@ -6385,26 +5742,16 @@ function clearLocalDB() {
         const title = extractNoteTitleFromEditor();
         const content = hidden ? hidden.value : '';
         const tags = document.getElementById('note-tags')?.value || '';
-        let jarvisSubject = document.getElementById('note-subject')?.value?.trim() || '';
+        const subject = document.getElementById('note-subject')?.value || '';
         const notebookId = document.getElementById('note-notebook')?.value || currentNotebookId || '';
         if (!title && !content) { showInAppNotification('Escreva algo primeiro!', 'warn'); return; }
         const notes = LocalDB.get('study_notes') || [];
         const now = new Date().toISOString();
-        if (!jarvisSubject && notebookId && typeof inferJarvisNoteSubject === 'function') {
-            jarvisSubject = inferJarvisNoteSubject(title, content, notebookId, editingNoteId);
-        }
-        const description = stripHtmlText(content).substring(0, 160);
         if (editingNoteId) {
             const idx = notes.findIndex(n => String(n.id) === String(editingNoteId));
-            if (idx !== -1) notes[idx] = {
-                ...notes[idx], title, content, tags, subject: jarvisSubject, jarvis_subject: jarvisSubject,
-                description, notebook_id: notebookId, updated_at: now
-            };
+            if (idx !== -1) notes[idx] = { ...notes[idx], title, content, tags, subject, notebook_id: notebookId, updated_at: now };
         } else {
-            notes.push({
-                id: Date.now().toString(), title, content, tags, subject: jarvisSubject, jarvis_subject: jarvisSubject,
-                description, notebook_id: notebookId, created_at: now, updated_at: now
-            });
+            notes.push({ id: Date.now().toString(), title, content, tags, subject, notebook_id: notebookId, created_at: now, updated_at: now });
             awardXP(15, 'Nova nota');
         }
         LocalDB.set('study_notes', notes);
@@ -6422,16 +5769,26 @@ function clearLocalDB() {
     };
 
     window.insertYouTubeEmbed = function() {
-        const raw = document.getElementById('yt-url-input')?.value?.trim();
-        if (!raw) return;
-        const ids = extractAllYouTubeIds(raw);
-        if (!ids.length) {
-            const single = extractYouTubeId(raw);
-            if (single) ids.push(single);
-        }
-        if (!ids.length) { alert('URL invalida'); return; }
+        const url = document.getElementById('yt-url-input')?.value?.trim();
+        if (!url) return;
+        const videoId = extractYouTubeId(url);
+        if (!videoId) { alert('URL invalida'); return; }
         closeYouTubeModal();
-        insertYouTubeEmbedsAtCursor(ids);
+        const editor = document.getElementById('note-content-rich');
+        if (!editor) return;
+        editor.focus();
+        const embedSrc = getYouTubeEmbedSrc(videoId);
+        const embedHTML = `<div class="yt-embed-block" contenteditable="false">
+            <iframe
+                src="${embedSrc}"
+                title="YouTube video player"
+                loading="lazy"
+                referrerpolicy="strict-origin-when-cross-origin"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowfullscreen></iframe>
+        </div><p><br></p>`;
+        document.execCommand('insertHTML', false, embedHTML);
+        saveNoteDebounced();
     };
 
     window.filterNoteLinkList = function(query) {
@@ -6470,43 +5827,14 @@ function clearLocalDB() {
     const _loadStudiesOrig = window.loadStudies;
     window.loadStudies = function() {
         if (typeof _loadStudiesOrig === 'function') _loadStudiesOrig();
+        loadSubjectsGrid();
+        if (typeof loadNotebooksGrid === 'function') loadNotebooksGrid();
         if (typeof ensureChartJs === 'function') ensureChartJs().then(() => setTimeout(renderStudyCharts, 100));
     };
 
     window.openFinanceOverflow = function(ev) {
         ev.stopPropagation();
-        const popup = document.getElementById('finance-overflow-popup');
-        if (!popup) return;
-        popup.style.display = 'block';
-        popup.style.top = (ev.clientY + 8) + 'px';
-        popup.style.right = '16px';
-        popup.style.left = 'auto';
-        setTimeout(() => document.addEventListener('click', closeFinanceOverflowOnce, { once: true }), 0);
-    };
-    function closeFinanceOverflowOnce() { closeFinanceOverflow(); }
-
-    const WORKOUT_TEMPLATES = [
-        { name: 'Peito & Tríceps', muscle: 'Peito', exercises: [{ name: 'Supino reto', sets: 4, reps: 10, weight: 0 }, { name: 'Crucifixo', sets: 3, reps: 12, weight: 0 }, { name: 'Tríceps pulley', sets: 3, reps: 15, weight: 0 }] },
-        { name: 'Costas & Bíceps', muscle: 'Costas', exercises: [{ name: 'Puxada frontal', sets: 4, reps: 10, weight: 0 }, { name: 'Remada curvada', sets: 3, reps: 10, weight: 0 }, { name: 'Rosca direta', sets: 3, reps: 12, weight: 0 }] },
-        { name: 'Pernas', muscle: 'Pernas', exercises: [{ name: 'Agachamento', sets: 4, reps: 8, weight: 0 }, { name: 'Leg press', sets: 3, reps: 12, weight: 0 }, { name: 'Cadeira extensora', sets: 3, reps: 15, weight: 0 }] },
-        { name: 'Full Body', muscle: 'Corpo inteiro', exercises: [{ name: 'Burpee', sets: 3, reps: 10, weight: 0 }, { name: 'Flexão', sets: 3, reps: 15, weight: 0 }, { name: 'Prancha', sets: 3, reps: 60, weight: 0 }] }
-    ];
-
-    window.renderWorkoutTemplates = function() {
-        const row = document.getElementById('workout-templates-row');
-        if (!row) return;
-        row.innerHTML = WORKOUT_TEMPLATES.map((t, i) =>
-            `<button class="study-chip" onclick="startWorkoutFromTemplate(${i})" style="white-space:nowrap">${escapeHtml(t.name)}</button>`
-        ).join('');
-    };
-
-    window.startWorkoutFromTemplate = function(idx) {
-        const t = WORKOUT_TEMPLATES[idx];
-        if (!t) return;
-        openWorkoutForm();
-        document.getElementById('workout-form-name').value = t.name;
-        document.getElementById('workout-form-muscle').value = t.muscle;
-        renderWorkoutExercises(t.exercises.slice());
+        showToast('Mais acoes de financas em breve');
     };
 
     // Boot: sync reminders + load budget
@@ -6523,9 +5851,8 @@ function clearLocalDB() {
 
 })();
 
-
-/** Nexus Mobile — nexus-cleaner.js */
 // ================================================================
+
 // PHONE CLEANER MODULE — native bridge + local heuristics
 // ================================================================
 
@@ -6644,21 +5971,6 @@ function scanJsStorageCategories() {
                 deepOnly: true
             });
         }
-    }
-
-    if (window.AndroidNative && typeof AndroidNative.scanLargeDownloads === 'function') {
-        try {
-            const dl = parseNativeJson(AndroidNative.scanLargeDownloads());
-            if (dl && dl.totalBytes > 0) {
-                categories.push({
-                    id: 'large_downloads',
-                    name: 'Downloads grandes (5MB+)',
-                    bytes: dl.totalBytes,
-                    desc: (dl.files?.length || 0) + ' arquivos na pasta Downloads',
-                    cleanable: false
-                });
-            }
-        } catch (_) {}
     }
 
     return categories;
@@ -6915,7 +6227,6 @@ window.requestCleanerAiAdvice = async function() {
 };
 
 window.loadCleaner = function() {
-    renderCleanerTips([], null);
     scanPhoneStorage();
 };
 
@@ -6930,3 +6241,303 @@ document.addEventListener('DOMContentLoaded', () => {
         else updateStorageWarningBadge(getLocalStorageFootprint().total);
     }, 1500);
 });
+
+// ----------------------------------------------------
+// Compatibility exports & runtime contract guards
+// ----------------------------------------------------
+// Keep this module last. It makes legacy inline HTML handlers explicit on
+// window and provides small safe fallbacks for optional editor/native actions.
+
+window.refreshViewContent = window.refreshViewContent || function(viewId) {
+    switch (viewId) {
+        case 'view-home':
+            if (typeof loadTodayDashboard === 'function') loadTodayDashboard();
+            if (typeof loadUserStats === 'function') loadUserStats();
+            break;
+        case 'view-habits': if (window.loadHabits) window.loadHabits(); break;
+        case 'view-tasks': if (window.loadTasks) window.loadTasks(); break;
+        case 'view-finance':
+            if (window.loadFinance) window.loadFinance();
+            else if (window.loadFinances) window.loadFinances();
+            break;
+        case 'view-studies': if (window.loadStudies) window.loadStudies(); break;
+        case 'view-goals': if (window.loadGoals) window.loadGoals(); break;
+        case 'view-fitness': if (window.loadFitness) window.loadFitness(); break;
+        case 'view-journal': if (window.loadJournal) window.loadJournal(); break;
+        case 'view-routines': if (window.loadRoutines) window.loadRoutines(); break;
+        case 'view-videos': if (window.loadVideos) window.loadVideos(); break;
+        case 'view-shop': if (window.loadShop) window.loadShop(); break;
+        case 'view-iot': if (window.discoverIoT) window.discoverIoT(); break;
+        case 'view-settings': break;
+        case 'view-cleaner': if (window.loadCleaner) window.loadCleaner(); break;
+        default: break;
+    }
+};
+
+(function exposeLegacyHandlers() {
+    const names = [
+        'openYouTubeModal', 'closeYouTubeModal', 'insertYouTubeEmbed',
+        'openSlashMenu', 'closeSlashMenu', 'openJarvisPanel', 'closeJarvisPanel',
+        'richCmd', 'saveNote', 'openNoteEditor', 'closeNoteEditor',
+        'openQuiz', 'startQuiz', 'startJournalDictation', 'openWorkoutForm'
+    ];
+    names.forEach((name) => {
+        try {
+            if (typeof window[name] !== 'function' && typeof eval(name) === 'function') {
+                window[name] = eval(name);
+            }
+        } catch (_) {}
+    });
+})();
+
+window.acceptAiDiff = window.acceptAiDiff || function() {
+    const preview = document.getElementById('ai-diff-preview');
+    const editor = document.getElementById('rich-editor');
+    const panel = document.getElementById('ai-diff-panel');
+    if (preview && editor) editor.innerHTML = preview.innerHTML || preview.textContent || '';
+    if (panel) panel.style.display = 'none';
+    if (typeof showToast === 'function') showToast('Sugestão aplicada.');
+};
+
+window.rejectAiDiff = window.rejectAiDiff || function() {
+    const panel = document.getElementById('ai-diff-panel');
+    if (panel) panel.style.display = 'none';
+    if (typeof showToast === 'function') showToast('Sugestão descartada.');
+};
+
+window.handleOcrFileSelected = window.handleOcrFileSelected || function(event) {
+    const file = event && event.target && event.target.files && event.target.files[0];
+    if (!file) return;
+    if (window.AndroidNative && typeof window.AndroidNative.processOcrImage === 'function') {
+        window.AndroidNative.processOcrImage(file.name || 'ocr-image');
+    } else if (typeof showToast === 'function') {
+        showToast('OCR nativo indisponível neste ambiente.');
+    }
+};
+
+window.forceOTAUpdate = window.forceOTAUpdate || function() {
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then((regs) => regs.forEach((reg) => reg.update && reg.update()));
+    }
+    if (typeof showToast === 'function') showToast('Verificando atualização da interface...');
+    setTimeout(() => window.location.reload(), 500);
+};
+
+window.updateNativeApk = window.updateNativeApk || function() {
+    if (window.AndroidNative && typeof window.AndroidNative.updateNativeApk === 'function') {
+        window.AndroidNative.updateNativeApk();
+    } else if (typeof showToast === 'function') {
+        showToast('Atualização nativa indisponível neste ambiente.');
+    }
+};
+
+// Explicit aliases kept as literal window.* assignments so contract tests and
+// WebView inline handlers can detect these public entry points reliably.
+try { window.openYouTubeModal = window.openYouTubeModal || openYouTubeModal; } catch (_) {}
+try { window.closeYouTubeModal = window.closeYouTubeModal || closeYouTubeModal; } catch (_) {}
+try { window.insertYouTubeEmbed = window.insertYouTubeEmbed || insertYouTubeEmbed; } catch (_) {}
+try { window.openSlashMenu = window.openSlashMenu || openSlashMenu; } catch (_) {}
+try { window.closeSlashMenu = window.closeSlashMenu || closeSlashMenu; } catch (_) {}
+try { window.openJarvisPanel = window.openJarvisPanel || openJarvisPanel; } catch (_) {}
+try { window.openNoteEditor = window.openNoteEditor || openNoteEditor; } catch (_) {}
+try { window.saveNote = window.saveNote || saveNote; } catch (_) {}
+try { window.openQuiz = window.openQuiz || openQuiz; } catch (_) {}
+try { window.startQuiz = window.startQuiz || startQuiz; } catch (_) {}
+try { window.startJournalDictation = window.startJournalDictation || startJournalDictation; } catch (_) {}
+try { window.openWorkoutForm = window.openWorkoutForm || openWorkoutForm; } catch (_) {}
+
+// ----------------------------------------------------
+// Jarvis cloud bridge + browser speech fallback
+// ----------------------------------------------------
+// This module makes the restored mobile baseline honest about Jarvis:
+// 1) Gemini responses come from Supabase Edge Functions when available.
+// 2) TTS uses the jarvis-tts Edge Function when it returns audio.
+// 3) If cloud TTS is unavailable, browser speechSynthesis is used explicitly.
+
+async function getSupabaseAccessToken() {
+    if (!window.nexusSupabase?.auth?.getSession) return null;
+    try {
+        const { data } = await window.nexusSupabase.auth.getSession();
+        return data?.session?.access_token || null;
+    } catch (_) {
+        return null;
+    }
+}
+
+async function invokeJarvisFunction(name, payload) {
+    if (!window.nexusSupabase?.functions?.invoke) {
+        throw new Error('Supabase Functions indisponível.');
+    }
+    const { data, error } = await window.nexusSupabase.functions.invoke(name, {
+        body: payload,
+    });
+    if (error) throw error;
+    return data || {};
+}
+
+function buildJarvisContext() {
+    const today = new Date().toISOString().split('T')[0];
+    const habits = LocalDB.get('habits').filter(h => h.active === 1 && !h.is_deleted);
+    const habitLogs = LocalDB.get('habit_logs').filter(l => (l.date || l.completed_at || '').startsWith(today));
+    const tasks = LocalDB.get('tasks').filter(t => !t.done_at && !t.is_deleted);
+    const flashcards = LocalDB.get('flashcards').filter(c => !c.is_deleted);
+    const dueFlashcards = flashcards.filter(c => !c.next_review || c.next_review <= new Date().toISOString());
+    const user = LocalDB.getSingle('nexus_user', 1) || LocalDB.get('user_stats') || {};
+    return {
+        today,
+        user: {
+            level: user.level || 1,
+            xp: user.xp || 0,
+            points: user.points || 0,
+        },
+        stats: {
+            habits_total: habits.length,
+            habits_done_today: habitLogs.length,
+            tasks_pending: tasks.length,
+            flashcards_total: flashcards.length,
+            flashcards_due: dueFlashcards.length,
+        },
+        recent_tasks: tasks.slice(0, 8).map(t => ({ title: t.title || t.name || '', priority: t.priority || 'normal' })),
+        recent_habits: habits.slice(0, 8).map(h => ({ name: h.name || '', streak: h.current_streak || 0 })),
+    };
+}
+
+window.buildJarvisContext = window.buildJarvisContext || buildJarvisContext;
+
+window.callJarvisChat = window.callJarvisChat || async function(message, history) {
+    const data = await invokeJarvisFunction('jarvis-chat', {
+        message,
+        history: history || [],
+        source: 'mobile',
+        context: buildJarvisContext(),
+    });
+    if (data.error) throw new Error(data.error);
+    return data.reply || data.message || '';
+};
+
+window.speakJarvisText = window.speakJarvisText || async function(text) {
+    const clean = String(text || '').trim();
+    if (!clean) return false;
+
+    try {
+        const data = await invokeJarvisFunction('jarvis-tts', {
+            text: clean,
+            voice: localStorage.getItem('nexus_jarvis_voice') || 'Kore',
+        });
+        if (data?.audio_base64) {
+            const audio = new Audio(`data:${data.mime || 'audio/wav'};base64,${data.audio_base64}`);
+            await audio.play();
+            return true;
+        }
+    } catch (e) {
+        console.warn('Jarvis cloud TTS unavailable, using speechSynthesis fallback:', e);
+    }
+
+    if ('speechSynthesis' in window && 'SpeechSynthesisUtterance' in window) {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(clean);
+        utterance.lang = 'pt-BR';
+        utterance.rate = 1;
+        utterance.pitch = 1;
+        window.speechSynthesis.speak(utterance);
+        return true;
+    }
+    return false;
+};
+
+window.sendChatMessage = async function() {
+    const input = document.getElementById('chat-input');
+    const text = input?.value?.trim();
+    if (!text) return;
+    appendChatBubble('user', text);
+    input.value = '';
+    const pending = appendChatBubble('jarvis', 'Processando...', true);
+
+    const localReply = tryLocalJarvisCommand(text);
+    if (localReply) {
+        if (pending) pending.querySelector('p').innerHTML = escapeHtml(localReply);
+        return;
+    }
+
+    if (!isWifiConnected()) {
+        if (pending) pending.querySelector('p').textContent = 'Sem Wi-Fi. Comandos locais: "criar hábito X", "criar tarefa Y", "quantos cards", "briefing".';
+        return;
+    }
+
+    const history = [];
+    document.querySelectorAll('#chat-history .chat-message').forEach(el => {
+        const role = el.classList.contains('user-msg') ? 'user' : 'assistant';
+        const content = el.querySelector('p')?.textContent?.trim();
+        if (content && content !== 'Processando...') history.push({ role, content });
+    });
+
+    try {
+        const reply = await window.callJarvisChat(text, history.slice(-8));
+        if (reply) {
+            if (pending) pending.querySelector('p').textContent = reply;
+            await window.speakJarvisText(reply);
+            backgroundSync();
+            return;
+        }
+    } catch (e) {
+        console.warn('Jarvis Edge chat failed, falling back to desktop command queue:', e);
+    }
+
+    if (window.nexusSupabase && isNetworkOnline()) {
+        try {
+            const { data, error } = await window.nexusSupabase.from('nexus_commands').insert({
+                command: 'MOBILE_CHAT: ' + text,
+                source: 'mobile',
+                status: 'pending'
+            }).select('id').single();
+            if (!error && data?.id) {
+                const reply = await pollCommandResult(data.id, 25000);
+                if (reply) {
+                    if (pending) pending.querySelector('p').textContent = reply;
+                    await window.speakJarvisText(reply);
+                    backgroundSync();
+                    return;
+                }
+            }
+        } catch (e) {
+            console.warn('Chat queue error:', e);
+        }
+    }
+
+    if (pending) pending.querySelector('p').textContent = 'Jarvis indisponível. Verifique login Google, Wi-Fi, Supabase Functions e GEMINI_API_KEY.';
+};
+
+window.runJarvisAction = async function() {
+    const prompt = document.getElementById('jarvis-prompt')?.value?.trim();
+    if (!prompt) {
+        alert('Por favor, insira um texto ou URL.');
+        return;
+    }
+    if (!requireWifiForJarvis('IA nas notas')) return;
+
+    document.getElementById('jarvis-input-area').style.display = 'none';
+    document.getElementById('jarvis-loading').style.display = 'block';
+    document.getElementById('jarvis-result').style.display = 'none';
+
+    try {
+        const payload = { action: _jarvisMode, content: prompt };
+        if (_jarvisMode === 'summarize_video') payload.youtube_url = prompt;
+        const data = await invokeJarvisFunction('jarvis-note-action', payload);
+        const result = data.result || data.text || data.reply || JSON.stringify(data);
+        _jarvisLastResult = result;
+        _jarvisLastApiResponse = data;
+        document.getElementById('jarvis-result-text').innerHTML =
+            _jarvisMode === 'generate_image' && data?.image_url
+                ? `<img src="${data.image_url}" style="max-width:100%;border-radius:10px">`
+                : escapeHtmlLight(result).replace(/\n/g, '<br>');
+    } catch (e) {
+        _jarvisLastResult = '';
+        _jarvisLastApiResponse = null;
+        document.getElementById('jarvis-result-text').textContent =
+            'Jarvis indisponível. Confirme Supabase Functions, login e GEMINI_API_KEY. Erro: ' + (e.message || e);
+    } finally {
+        document.getElementById('jarvis-loading').style.display = 'none';
+        document.getElementById('jarvis-result').style.display = 'block';
+        document.getElementById('jarvis-input-area').style.display = 'block';
+    }
+};

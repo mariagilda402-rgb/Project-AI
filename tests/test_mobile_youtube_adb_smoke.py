@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 import time
@@ -38,7 +39,7 @@ def _adb(*args: str, timeout: int = 60) -> subprocess.CompletedProcess[str]:
 
 
 def _device_connected() -> bool:
-    if not ADB.exists():
+    if not ADB.exists() or not os.access(ADB, os.X_OK):
         return False
     result = _adb("devices")
     lines = [line for line in result.stdout.splitlines() if "\tdevice" in line]
