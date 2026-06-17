@@ -1,8 +1,26 @@
+/**
+ * AUTO-GENERATED bundle — edit mobile/js/*.js then run:
+ *   python scripts/split_mobile_app_js.py --bundle
+ */
+/** Nexus Mobile — nexus-core.js */
+window.NEXUS_WEB_VERSION = window.NEXUS_WEB_VERSION || '2026.06.16.2';
+
 window.onerror = function(msg, url, line) {
     console.error("JS Error:", msg, "at", url, "line", line);
     if (typeof showToast === 'function') showToast("Erro: " + msg);
     return true;
 };
+
+function todayISO() {
+    return new Date().toISOString().split('T')[0];
+}
+window.todayISO = todayISO;
+
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+window.escapeHtml = escapeHtml;
 
 // Supabase Configuration
 const supabaseUrl = 'https://oxwpwfhjyiiwdhcggtlt.supabase.co';
@@ -46,8 +64,12 @@ function isJarvisCloudReady() {
 }
 
 function requireWifiForJarvis(label) {
-    if (isNetworkOnline()) return true;
-    showToast('Sem internet para usar o Jarvis' + (label ? ' (' + label + ')' : '') + '.');
+    if (isWifiConnected()) return true;
+    if (!isNetworkOnline()) {
+        showToast('Sem internet para usar o Jarvis' + (label ? ' (' + label + ')' : '') + '.');
+    } else {
+        showToast('Jarvis requer Wi-Fi' + (label ? ' (' + label + ')' : '') + '. Conecte-se a uma rede Wi-Fi.');
+    }
     updateJarvisFabState();
     return false;
 }
@@ -127,7 +149,6 @@ function initAppPreferences() {
 }
 
 window.addEventListener('online', () => {
-    updateSyncIndicator('synced');
     updateJarvisFabState();
     updateNetworkSettingsUI();
     backgroundSync();
@@ -197,9 +218,74 @@ class LocalDB {
     }
 }
 
+function getUserStats() {
+    let stats = LocalDB.get('user_stats');
+    if (!stats || typeof stats !== 'object' || Array.isArray(stats)) {
+        stats = { xp: 0, points: 0, level: 1, xp_today: 0, last_xp_date: '' };
+    }
+    stats.xp = Number(stats.xp) || 0;
+    stats.points = Number(stats.points) || 0;
+    stats.level = Math.max(1, Number(stats.level) || 1);
+    stats.xp_today = Number(stats.xp_today) || 0;
+    return stats;
+}
+window.getUserStats = getUserStats;
+
+function ensureDefaultUserStats() {
+    const stats = getUserStats();
+    LocalDB.set('user_stats', stats);
+    return stats;
+}
+
+function ensureDefaultRewards() {
+    const rewards = LocalDB.get('nexus_rewards').filter(r => !r.is_deleted);
+    if (rewards.length > 0) return;
+    const now = new Date().toISOString();
+    LocalDB.set('nexus_rewards', [
+        { id: 1, name: 'Pausa Café', cost: 50, description: '15 min de descanso merecido', created_at: now, updated_at: now, sync_status: 'pending' },
+        { id: 2, name: 'Episódio Série', cost: 100, description: 'Assistir um episódio favorito', created_at: now, updated_at: now, sync_status: 'pending' },
+        { id: 3, name: 'Jantar Especial', cost: 200, description: 'Comida favorita no fim de semana', created_at: now, updated_at: now, sync_status: 'pending' }
+    ]);
+}
+window.ensureDefaultRewards = ensureDefaultRewards;
+
+const _origLocalDbGet = LocalDB.get;
+LocalDB.get = function(key) {
+    const objectDefaults = {
+        study_notebooks: [], pomo_sessions: [], journal_entries: [],
+        diet_meals: [], body_measures: [], xp_log: [],
+        user_stats: { xp: 0, points: 0, level: 1, xp_today: 0, last_xp_date: '' }
+    };
+    const val = _origLocalDbGet.call(this, key);
+    if (val === null || val === undefined || (Array.isArray(val) && val.length === 0 && objectDefaults[key] && !Array.isArray(objectDefaults[key]))) {
+        return objectDefaults[key] !== undefined ? JSON.parse(JSON.stringify(objectDefaults[key])) : val;
+    }
+    return val;
+};
+
+function bootNexusMobileCore() {
+    ensureDefaultUserStats();
+    ensureDefaultRewards();
+    if (typeof loadUserStats === 'function') loadUserStats();
+    else {
+        setTextIfPresent('user-level', 1);
+        if (typeof updateAppVersionDebug === 'function') updateAppVersionDebug();
+    }
+    updateSyncIndicator('offline');
+    updateJarvisFabState();
+    updateNetworkSettingsUI();
+}
+window.bootNexusMobileCore = bootNexusMobileCore;
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bootNexusMobileCore);
+} else {
+    bootNexusMobileCore();
+}
+
 function setTextIfPresent(id, value) {
     const el = document.getElementById(id);
-    if (el) el.innerText = value;
+    if (el && value != null && value !== '') el.textContent = String(value);
 }
 
 function showToast(message, duration = 2500) {
@@ -358,10 +444,29 @@ function mergeRemoteRow(table, remoteRow, localRows) {
     return localRows;
 }
 
+async function hasAuthenticatedSession() {
+    const supabaseClient = window.nexusSupabase;
+    if (!supabaseClient) return false;
+    try {
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        if (session?.user) {
+            if (typeof currentUser !== 'undefined') currentUser = session.user;
+            return true;
+        }
+    } catch (e) {
+        console.warn('Session check failed:', e);
+    }
+    return false;
+}
+
 async function syncData() {
     if (syncInProgress) return;
     const supabaseClient = window.nexusSupabase;
     if (!navigator.onLine || !supabaseClient) {
+        updateSyncIndicator('offline');
+        return;
+    }
+    if (!(await hasAuthenticatedSession())) {
         updateSyncIndicator('offline');
         return;
     }
@@ -437,6 +542,14 @@ async function syncData() {
 }
 
 async function backgroundSync() {
+    if (!navigator.onLine || !window.nexusSupabase) {
+        updateSyncIndicator('offline');
+        return;
+    }
+    if (!(await hasAuthenticatedSession())) {
+        updateSyncIndicator('offline');
+        return;
+    }
     return syncData();
 }
 
@@ -448,72 +561,76 @@ window.backgroundSync = backgroundSync;
 // ----------------------------------------------------
 window.refreshViewContent = function(viewId) {
     if (!viewId) return;
-    try {
-        switch (viewId) {
+    const run = (label, fn) => {
+        if (typeof fn !== 'function') {
+            console.warn('[refreshViewContent] missing loader:', viewId, label);
+            return;
+        }
+        try { fn(); } catch (err) { console.error('[refreshViewContent]', viewId, label, err); }
+    };
+    switch (viewId) {
             case 'view-home':
-                if (typeof loadTodayDashboard === 'function') loadTodayDashboard();
+                run('loadTodayDashboard', loadTodayDashboard);
                 break;
             case 'view-habits':
-                if (typeof loadHabits === 'function') loadHabits();
+                run('loadHabits', window.loadHabits);
                 break;
             case 'view-finance':
-                if (typeof loadFinances === 'function') loadFinances();
+                run('loadFinances', window.loadFinances);
                 break;
             case 'view-tasks':
-                if (typeof loadTasks === 'function') loadTasks();
+                run('loadTasks', window.loadTasks);
                 break;
             case 'view-videos':
-                if (typeof loadVideos === 'function') loadVideos();
+                run('loadVideos', window.loadVideos);
                 break;
             case 'view-shop':
-                if (typeof loadShop === 'function') loadShop();
+                run('loadShop', window.loadShop);
                 break;
             case 'view-studies':
-                if (typeof loadStudies === 'function') loadStudies();
+                run('loadStudies', window.loadStudies);
                 break;
             case 'view-goals':
-                if (typeof loadGoals === 'function') loadGoals();
+                run('loadGoals', window.loadGoals);
                 break;
             case 'view-fitness':
                 if (typeof switchFitnessTab === 'function') {
-                    const treinosBtn = document.querySelector('#view-fitness .fitness-tab');
-                    switchFitnessTab('treinos', treinosBtn);
-                } else if (typeof loadFitness === 'function') {
-                    loadFitness();
+                    try {
+                        const treinosBtn = document.querySelector('#view-fitness .fitness-tab');
+                        switchFitnessTab('treinos', treinosBtn);
+                    } catch (err) { console.error('[refreshViewContent]', viewId, 'switchFitnessTab', err); }
+                } else {
+                    run('loadFitness', window.loadFitness);
                 }
                 break;
             case 'view-routines':
-                if (typeof loadRoutines === 'function') loadRoutines();
+                run('loadRoutines', window.loadRoutines);
                 break;
             case 'view-journal':
-                if (typeof loadJournal === 'function') loadJournal();
+                run('loadJournal', window.loadJournal);
                 break;
             case 'view-alarms':
-                if (typeof loadAlarms === 'function') loadAlarms();
+                run('loadAlarms', window.loadAlarms);
                 break;
             case 'view-iot':
-                if (typeof discoverIoT === 'function') discoverIoT();
+                run('discoverIoT', window.discoverIoT);
                 break;
             case 'view-cleaner':
-                if (typeof loadCleaner === 'function') loadCleaner();
+                run('loadCleaner', window.loadCleaner);
                 break;
             case 'view-jarvis-history':
-                if (typeof loadJarvisPersistentHistory === 'function') loadJarvisPersistentHistory();
+                run('loadJarvisPersistentHistory', window.loadJarvisPersistentHistory);
                 break;
             case 'view-jarvis-calls':
-                if (typeof loadJarvisCallHistory === 'function') loadJarvisCallHistory();
+                run('loadJarvisCallHistory', window.loadJarvisCallHistory);
                 break;
             case 'view-settings':
-                if (typeof initAppPreferences === 'function') initAppPreferences();
-                if (typeof updateSettingsUI === 'function') updateSettingsUI();
+                run('initAppPreferences', initAppPreferences);
+                run('updateSettingsUI', updateSettingsUI);
                 break;
             default:
                 break;
         }
-    } catch (err) {
-        console.error('[refreshViewContent]', viewId, err);
-        if (typeof showToast === 'function') showToast('Erro ao carregar conteúdo da tela');
-    }
 };
 
 const MODULE_NAV_KEYS = ['habits', 'finance', 'routines', 'tasks', 'videos', 'shop', 'studies', 'goals', 'fitness', 'iot', 'journal', 'alarms', 'cleaner'];
@@ -606,17 +723,17 @@ function sendLocalNotification(title, body) {
 // ----------------------------------------------------
 
 function syncUserStatsToNexusUser() {
-    const stats = LocalDB.get('user_stats') || { xp: 0, points: 0, level: 1 };
+    const stats = getUserStats();
     const user = LocalDB.getSingle('nexus_user', 1) || { id: 1, name: 'Comandante' };
-    user.xp = stats.xp || 0;
-    user.points = stats.points || 0;
-    user.level = stats.level || 1;
+    user.xp = stats.xp;
+    user.points = stats.points;
+    user.level = stats.level;
     LocalDB.upsert('nexus_user', user);
 }
 
 function loadUserStats() {
+    const stats = ensureDefaultUserStats();
     syncUserStatsToNexusUser();
-    const stats = LocalDB.get('user_stats') || { xp: 0, level: 1, points: 0 };
     const user = LocalDB.getSingle('nexus_user', 1) || { name: 'Comandante' };
     setTextIfPresent('user-level', stats.level);
     setTextIfPresent('user-name', user.name || 'Comandante');
@@ -628,33 +745,39 @@ function loadUserStats() {
 window.updateAppVersionDebug = function() {
     const el = document.getElementById('app-version-debug');
     if (!el) return;
-    let webVer = '—';
+    let webVer = window.NEXUS_WEB_VERSION || '—';
     try {
         const raw = localStorage.getItem('nexus_web_version');
         if (raw) webVer = JSON.parse(raw).version || raw;
     } catch (_) {}
-    if (webVer === '—') {
-        fetch('version.json').then(r => r.json()).then(j => {
-            webVer = j.version || '—';
-            localStorage.setItem('nexus_web_version', JSON.stringify(j));
-            el.textContent = 'web ' + webVer + ' · apk ' + (window.__nexusApkVersion || '—');
-        }).catch(() => {});
+    const applyLabel = (wv, av) => {
+        el.textContent = 'web ' + (wv || '—') + ' · apk ' + (av || '—');
+    };
+    applyLabel(webVer, window.__nexusApkVersion || '—');
+    if (webVer === '—' || !window.__nexusApkVersion) {
+        fetch('version.json').then(r => r.ok ? r.json() : null).then(j => {
+            if (j && j.version) {
+                webVer = j.version;
+                window.NEXUS_WEB_VERSION = j.version;
+                localStorage.setItem('nexus_web_version', JSON.stringify(j));
+            }
+            let apkVer = window.__nexusApkVersion || '—';
+            if (window.AndroidNative && typeof window.AndroidNative.getAppInfo === 'function') {
+                try {
+                    const info = JSON.parse(window.AndroidNative.getAppInfo());
+                    apkVer = info.versionName || info.version || apkVer;
+                    window.__nexusApkVersion = apkVer;
+                } catch (_) {}
+            } else if (window.AndroidNative && typeof window.AndroidNative.getShellInfo === 'function') {
+                try {
+                    const info = JSON.parse(window.AndroidNative.getShellInfo());
+                    apkVer = info.versionName || info.version || apkVer;
+                    window.__nexusApkVersion = apkVer;
+                } catch (_) {}
+            }
+            applyLabel(webVer, apkVer);
+        }).catch(() => applyLabel(webVer, window.__nexusApkVersion || '—'));
     }
-    let apkVer = window.__nexusApkVersion || '—';
-    if (window.AndroidNative && typeof window.AndroidNative.getAppInfo === 'function') {
-        try {
-            const info = JSON.parse(window.AndroidNative.getAppInfo());
-            apkVer = info.versionName || info.version || apkVer;
-            window.__nexusApkVersion = apkVer;
-        } catch (_) {}
-    } else if (window.AndroidNative && typeof window.AndroidNative.getShellInfo === 'function') {
-        try {
-            const info = JSON.parse(window.AndroidNative.getShellInfo());
-            apkVer = info.versionName || info.version || apkVer;
-            window.__nexusApkVersion = apkVer;
-        } catch (_) {}
-    }
-    el.textContent = 'web ' + webVer + ' · apk ' + apkVer;
 };
 
 function loadVideos() {
@@ -920,11 +1043,20 @@ function loadShop() {
                     <span class="item-title">${item.name}</span>
                     <span class="item-subtitle">${item.description || ''}</span>
                 </div>
-                <button class="item-action" style="font-size:12px; width:auto; padding: 0 10px;" onclick="buyItem(${item.id}, '${item.name}', ${item.cost})">
+                <button class="item-action" style="font-size:12px; width:auto; padding: 0 10px;" data-reward-id="${item.id}" data-reward-name="${escapeHtml(item.name)}" data-reward-cost="${item.cost}">
                     ${item.cost} pts
                 </button>
             `;
             container.appendChild(el);
+        });
+        container.querySelectorAll('[data-reward-id]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                buyItem(
+                    parseInt(btn.getAttribute('data-reward-id'), 10),
+                    btn.getAttribute('data-reward-name') || '',
+                    parseInt(btn.getAttribute('data-reward-cost'), 10) || 0
+                );
+            });
         });
     } else {
         container.innerHTML = '<div style="text-align:center; color:var(--text-secondary); margin-top:20px; padding:20px;"><i class="fa-solid fa-store" style="font-size:2rem;opacity:0.4;margin-bottom:10px;display:block"></i>Nenhuma recompensa ainda.<br><button onclick="ensureDefaultRewards();loadShop()" style="margin-top:12px;background:var(--accent-primary);border:none;color:white;padding:10px 18px;border-radius:8px;cursor:pointer;font-family:inherit">Carregar recompensas padrão</button></div>';
@@ -955,19 +1087,6 @@ window.buyItem = function(id, name, cost) {
         backgroundSync();
     }
 };
-
-function loadStudies() {
-    const container = document.getElementById('studies-list');
-    if(!container) return;
-    const data = LocalDB.get('study_notes').filter(t => !t.is_deleted);
-    container.innerHTML = data.length ? '' : '<div style="text-align:center; color:var(--text-secondary); margin-top:20px;">Nenhuma nota de estudo.</div>';
-    data.forEach(t => {
-        const el = document.createElement('div');
-        el.className = 'list-item glass';
-        el.innerHTML = `<div class="item-main"><span class="item-title">${t.title}</span><span class="item-subtitle">${t.subject || 'Geral'}</span></div>`;
-        container.appendChild(el);
-    });
-}
 
 function loadGoals() {
     const container = document.getElementById('goals-list');
@@ -1061,23 +1180,60 @@ window.loadTasks = window.loadTasks || loadTasks;
 window.loadFinances = window.loadFinances || loadFinances;
 window.loadFinance = window.loadFinance || loadFinances;
 window.loadShop = window.loadShop || loadShop;
-window.loadStudies = window.loadStudies || loadStudies;
 window.loadGoals = window.loadGoals || loadGoals;
 window.loadFitness = window.loadFitness || loadFitness;
-window.loadJournal = window.loadJournal || loadJournal;
-window.loadRoutines = window.loadRoutines || loadRoutines;
-window.loadCleaner = window.loadCleaner || loadCleaner;
+window.updateFitnessStats = window.updateFitnessStats || updateFitnessStats;
 
-window.ensureDefaultRewards = function() {
-    const rewards = LocalDB.get('nexus_rewards').filter(r => !r.is_deleted);
-    if (rewards.length > 0) return;
-    const now = new Date().toISOString();
-    LocalDB.set('nexus_rewards', [
-        { id: 1, name: 'Pausa Café', cost: 50, description: '15 min de descanso merecido', created_at: now, updated_at: now, sync_status: 'pending' },
-        { id: 2, name: 'Episódio Série', cost: 100, description: 'Assistir um episódio favorito', created_at: now, updated_at: now, sync_status: 'pending' },
-        { id: 3, name: 'Jantar Especial', cost: 200, description: 'Comida favorita no fim de semana', created_at: now, updated_at: now, sync_status: 'pending' }
-    ]);
+window.loadRoutines = window.loadRoutines || function() {
+    const list = document.getElementById('routines-list');
+    if (!list) return;
+    const routines = LocalDB.get('routines') || [];
+    if (!routines.length) {
+        list.innerHTML = '<div style="text-align:center;color:var(--text-secondary);padding:30px">Voce nao tem rotinas criadas.<br><br><button onclick="createDefaultRoutines()" style="background:var(--accent-primary);color:white;border:none;padding:10px 20px;border-radius:10px;font-weight:700">Criar Rotinas Padrao</button></div>';
+        return;
+    }
+    list.innerHTML = routines.map(r => `
+        <div class="list-item glass" style="cursor:pointer" onclick="openRoutineRunner('${r.id}')">
+            <div class="item-main"><div class="item-title">${escapeHtml(r.name)}</div>
+            <div class="item-subtitle"><i class="fa-regular fa-clock"></i> ${r.time || 'Sem horario'} · ${(r.steps || []).length} passos</div></div>
+            <button class="icon-btn" style="background:var(--accent-primary);color:white;width:40px;height:40px"><i class="fa-solid fa-play"></i></button>
+        </div>`).join('');
 };
+
+window.loadJournal = window.loadJournal || function() {
+    const list = document.getElementById('journal-list');
+    if (list) {
+        const entries = (LocalDB.get('journal_entries') || [])
+            .filter(e => e.content || e.best || e.challenge || e.gratitude)
+            .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+        list.innerHTML = entries.length ? entries.map(e => `
+            <div class="list-item glass" onclick="openJournalEntry('${e.date}')" style="cursor:pointer">
+                <div class="item-main"><span class="item-title">${escapeHtml(e.date)}</span>
+                <span class="item-subtitle">${escapeHtml((e.content || '').slice(0, 80))}</span></div>
+            </div>`).join('') : '<div style="text-align:center;color:var(--text-secondary);padding:24px">Registre seu humor e toque + para escrever.</div>';
+    }
+};
+
+window.loadAlarms = window.loadAlarms || function() {
+    const list = document.getElementById('alarms-list');
+    if (!list) return;
+    const alarms = (LocalDB.get('nexus_alarms') || []).filter(a => !a.is_deleted);
+    list.innerHTML = alarms.length ? alarms.map(a => `
+        <div class="list-item glass" style="padding:14px;margin-bottom:10px">
+            <div class="item-main"><div class="item-title">${escapeHtml(a.title || 'Alarme')}</div>
+            <div style="font-size:0.8rem;color:var(--text-secondary)">${escapeHtml(a.alarm_time || '')}</div></div>
+        </div>`).join('') : '<div style="text-align:center;color:var(--text-secondary);padding:24px">Nenhum alarme agendado. Toque + para criar.</div>';
+};
+
+window.loadCleaner = window.loadCleaner || function() {
+    if (typeof scanPhoneStorage === 'function') scanPhoneStorage();
+    else {
+        const el = document.getElementById('cleaner-scan-results');
+        if (el) el.innerHTML = '<div style="color:var(--text-secondary);padding:16px">Toque em escanear para analisar o armazenamento.</div>';
+    }
+};
+
+// loadStudies — no módulo nexus-studies.js
 
 window.discoverIoT = async function() {
     const container = document.getElementById('iot-list');
@@ -1325,7 +1481,7 @@ function loadTodayDashboard() {
         dateLabel.textContent = now.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'short' });
     }
 
-    const habits = LocalDB.get('habits').filter(h => h.active === 1 && !h.is_deleted);
+    const habits = LocalDB.get('habits').filter(h => h.active !== 0 && !h.is_deleted);
     const logs = LocalDB.get('habit_logs');
     const doneToday = logs.filter(l => l.date === today).length;
     const tasks = LocalDB.get('tasks').filter(t => !t.done_at && !t.is_deleted);
@@ -1388,9 +1544,29 @@ function setupRealtime() {
     .subscribe();
 }
 
-// App Initialization
+// Form handler stubs (real implementations in nexus-forms.js)
+function deferToFormHandler(name, args) {
+    const real = window[name];
+    if (typeof real === 'function' && real !== window['__stub_' + name]) {
+        return real.apply(window, args);
+    }
+    showToast('Carregando formulários...');
+    setTimeout(() => {
+        const fn = window[name];
+        if (typeof fn === 'function' && fn !== window['__stub_' + name]) fn.apply(window, args);
+        else showToast('Formulário indisponível — atualize o bundle web (Configurações → OTA).');
+    }, 400);
+}
+
+window.__stub_openFinanceForm = function(txId) { deferToFormHandler('openFinanceForm', [txId]); };
+window.__stub_openHabitForm = function(habitId) { deferToFormHandler('openHabitForm', [habitId]); };
+window.__stub_openSubjectForm = function() { deferToFormHandler('openSubjectForm', []); };
+window.openFinanceForm = window.openFinanceForm || window.__stub_openFinanceForm;
+window.openHabitForm = window.openHabitForm || window.__stub_openHabitForm;
+window.openSubjectForm = window.openSubjectForm || window.__stub_openSubjectForm;
 
 
+/** Nexus Mobile — nexus-studies.js */
 // ================================================================
 // STUDIES MODULE — Enhanced
 // ================================================================
@@ -1406,9 +1582,11 @@ const MOOD_COLORS = ['', '#ef4444', '#f97316', '#6b7280', '#10b981', '#8b5cf6'];
 
 function loadStudies() {
     loadStudyStats();
-    loadNotebooksGrid();
-    renderStudyNotesList('all', null);
+    loadSubjectsGrid();
+    const list = document.getElementById('studies-list');
+    if (list) renderStudyNotesList('all', null);
 }
+window.loadStudies = loadStudies;
 
 function loadStudyStats() {
     const notes = LocalDB.get('study_notes').filter(n => !n.is_deleted);
@@ -1595,6 +1773,7 @@ window.saveSubjectForm = function() {
     notebooks.push(nb);
     LocalDB.set('study_notebooks', notebooks);
     closeSubjectForm();
+    loadSubjectsGrid();
     if (typeof loadStudies === 'function') loadStudies();
     showToast('Matéria criada!');
 };
@@ -1825,13 +2004,14 @@ window.closeSubjectDetail = function() {
 function loadSubjectsGrid() {
     const grid = document.getElementById('subjects-grid');
     if (!grid) return;
-    const notebooks = LocalDB.get('study_notebooks') || [];
+    const notebooks = (LocalDB.get('study_notebooks') || []).filter(n => !n.is_deleted);
     if (!notebooks.length) {
         grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--text-secondary);padding:20px">Sem matérias. Toque em + para criar.</div>';
         return;
     }
     grid.innerHTML = notebooks.map(nb => renderSubjectFolderCard(nb)).join('');
 }
+window.loadSubjectsGrid = loadSubjectsGrid;
 
 window.assignNoteToNotebookByJarvis = function(notePayload, notebookId) {
     const notes = LocalDB.get('study_notes') || [];
@@ -2101,12 +2281,14 @@ const _patchedPomoEnd = function() {
     loadStudyStats();
 };
 
+
+/** Nexus Mobile — nexus-gamification.js */
 // ================================================================
 // XP & GAMIFICATION SYSTEM
 // ================================================================
 
 function awardXP(amount, reason) {
-    const stats = LocalDB.get('user_stats') || { xp: 0, points: 0, level: 1, xp_today: 0, last_xp_date: '' };
+    const stats = (typeof getUserStats === 'function' ? getUserStats() : null) || { xp: 0, points: 0, level: 1, xp_today: 0, last_xp_date: '' };
     const todayStr = new Date().toDateString();
     if (stats.last_xp_date !== todayStr) {
         stats.xp_today = 0;
@@ -2143,7 +2325,9 @@ function awardXP(amount, reason) {
 }
 
 function loadXPPanel() {
-    const stats = LocalDB.get('user_stats') || { xp: 0, points: 0, level: 1, xp_today: 0 };
+    const stats = (typeof getUserStats === 'function' ? getUserStats() : null) || { xp: 0, points: 0, level: 1, xp_today: 0 };
+    const xpVal = Number(stats.xp) || 0;
+    const ptsVal = Number(stats.points) || 0;
     const xpForCurrentLevel = (stats.level - 1) * 500;
     const xpProgress = stats.xp - xpForCurrentLevel;
     const xpForNextLevel = 500;
@@ -2155,8 +2339,8 @@ function loadXPPanel() {
     const lvlEl = document.getElementById('xp-level-label');
     const streakBadge = document.getElementById('xp-streak-badge');
     
-    if (xpEl) xpEl.textContent = stats.xp.toLocaleString('pt-BR');
-    if (ptsEl) ptsEl.textContent = (stats.points || 0).toLocaleString('pt-BR');
+    if (xpEl) xpEl.textContent = xpVal.toLocaleString('pt-BR');
+    if (ptsEl) ptsEl.textContent = ptsVal.toLocaleString('pt-BR');
     if (barEl) barEl.style.width = pct + '%';
     if (lvlEl) lvlEl.textContent = 'Nivel ' + (stats.level||1) + ' \u2022 ' + pct + '% para nivel ' + ((stats.level||1)+1);
     
@@ -2199,223 +2383,11 @@ window.loadUserStats = function() {
     loadXPPanel();
 };
 
+
+/** Nexus Mobile — nexus-journal.js */
 // ================================================================
 // JOURNAL / MOOD MODULE
-// ================================================================
-
-let selectedEditorMood = 0;
-let editingJournalId = null;
-
-window.startJournalDictation = function() {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    const status = document.getElementById('journal-mic-status');
-    const textarea = document.getElementById('journal-content');
-    if (!textarea) return;
-    if (!SpeechRecognition) {
-        if (status) status.textContent = 'Ditado indisponível neste dispositivo';
-        showToast('Ditado não suportado no WebView');
-        return;
-    }
-    const rec = new SpeechRecognition();
-    rec.lang = 'pt-BR';
-    rec.interimResults = false;
-    rec.maxAlternatives = 1;
-    if (status) status.textContent = 'Ouvindo... fale agora';
-    rec.onresult = (e) => {
-        const text = e.results[0][0].transcript;
-        textarea.value = (textarea.value ? textarea.value + ' ' : '') + text;
-        if (status) status.textContent = 'Texto adicionado!';
-    };
-    rec.onerror = () => {
-        if (status) status.textContent = 'Erro no ditado — tente novamente';
-        showToast('Erro no reconhecimento de voz');
-    };
-    rec.onend = () => {
-        if (status && status.textContent === 'Ouvindo... fale agora') {
-            status.textContent = 'Pressione para ditar';
-        }
-    };
-    try { rec.start(); } catch (e) {
-        if (status) status.textContent = 'Microfone indisponível';
-        showToast('Permissão de microfone necessária');
-    }
-};
-
-window.loadJournal = function() {
-    loadMoodCalendarStrip();
-    loadJournalList();
-    loadTodayMood();
-};
-
-function loadTodayMood() {
-    const todayStr = new Date().toISOString().split('T')[0];
-    const entries = LocalDB.get('journal_entries');
-    const today = entries.find(e => e.date === todayStr);
-    if (today && today.mood) {
-        document.querySelectorAll('.mood-btn').forEach(b => {
-            b.classList.toggle('selected', parseInt(b.dataset.mood) === today.mood);
-        });
-        const label = document.getElementById('mood-selected-label');
-        if (label) label.textContent = MOOD_EMOJIS[today.mood] + ' ' + MOOD_LABELS[today.mood];
-    }
-}
-
-window.setTodayMood = function(mood) {
-    const todayStr = new Date().toISOString().split('T')[0];
-    const entries = LocalDB.get('journal_entries');
-    let entry = entries.find(e => e.date === todayStr);
-    if (entry) {
-        entry.mood = mood;
-    } else {
-        entries.push({ id: Date.now().toString(), date: todayStr, mood, created_at: new Date().toISOString() });
-        awardXP(5, 'Registro de humor');
-    }
-    LocalDB.set('journal_entries', entries);
-    document.querySelectorAll('.mood-btn').forEach(b => b.classList.toggle('selected', parseInt(b.dataset.mood) === mood));
-    const label = document.getElementById('mood-selected-label');
-    if (label) label.textContent = MOOD_EMOJIS[mood] + ' ' + MOOD_LABELS[mood];
-    loadMoodCalendarStrip();
-    showInAppNotification('Humor registrado: ' + MOOD_LABELS[mood], 'info');
-    console.info('[Journal] Mood set to ' + mood + ' (' + MOOD_LABELS[mood] + ')');
-};
-
-function loadMoodCalendarStrip() {
-    const strip = document.getElementById('mood-calendar-strip');
-    if (!strip) return;
-    const entries = LocalDB.get('journal_entries');
-    const avgEl = document.getElementById('mood-avg-label');
-    
-    let html = '';
-    const moods = [];
-    const days = ['D','S','T','Q','Q','S','S'];
-    
-    for (let i = 13; i >= 0; i--) {
-        const d = new Date();
-        d.setDate(d.getDate() - i);
-        const ds = d.toISOString().split('T')[0];
-        const entry = entries.find(e => e.date === ds);
-        const mood = entry ? entry.mood : 0;
-        if (mood) moods.push(mood);
-        const color = mood ? MOOD_COLORS[mood] : 'rgba(255,255,255,0.05)';
-        const emoji = mood ? MOOD_EMOJIS[mood] : '\u00b7';
-        const dayLabel = days[d.getDay()];
-        html += `<div class="mood-day-dot" style="background:${color}20;border:1px solid ${color}40" title="${ds}" onclick="openJournalEntry('${ds}')">
-            <span class="mood-day-emoji">${emoji}</span>
-            <span class="mood-day-label">${dayLabel}</span>
-        </div>`;
-    }
-    strip.innerHTML = html;
-    
-    if (moods.length > 0 && avgEl) {
-        const avg = (moods.reduce((a,b) => a+b, 0) / moods.length).toFixed(1);
-        avgEl.textContent = 'Media: ' + avg + '/5';
-    }
-}
-
-function loadJournalList() {
-    const list = document.getElementById('journal-list');
-    if (!list) return;
-    const entries = LocalDB.get('journal_entries')
-        .filter(e => e.content || e.best || e.challenge || e.gratitude)
-        .sort((a,b) => b.date.localeCompare(a.date))
-        .slice(0, 30);
-    
-    if (!entries.length) {
-        list.innerHTML = '<div style="text-align:center;color:var(--text-secondary);padding:30px">Nenhuma entrada ainda. Comece seu diario!</div>';
-        return;
-    }
-    list.innerHTML = entries.map(e => {
-        const mood = e.mood || 0;
-        const preview = (e.best || e.content || e.challenge || '').substring(0, 80);
-        const dateStr = new Date(e.date + 'T12:00:00').toLocaleDateString('pt-BR', {weekday:'short', day:'2-digit', month:'short'});
-        return `<div class="journal-entry-card" onclick="openJournalEntry('${e.date}')">
-            <div class="journal-entry-emoji">${mood ? MOOD_EMOJIS[mood] : '\u{1F4D3}'}</div>
-            <div style="flex:1;min-width:0">
-                <div class="journal-entry-meta">${dateStr}</div>
-                <div class="journal-entry-preview">${escapeHtml(preview)}${preview.length >= 80 ? '...' : ''}</div>
-            </div>
-        </div>`;
-    }).join('');
-}
-
-window.openJournalEntry = function(dateStr) {
-    const date = dateStr || new Date().toISOString().split('T')[0];
-    const editor = document.getElementById('journal-entry-editor');
-    if (!editor) return;
-    editor.style.display = 'block';
-    
-    const dateEl = document.getElementById('journal-entry-date');
-    if (dateEl) dateEl.textContent = new Date(date + 'T12:00:00').toLocaleDateString('pt-BR', {weekday:'long', day:'2-digit', month:'long', year:'numeric'});
-    
-    const entries = LocalDB.get('journal_entries');
-    const existing = entries.find(e => e.date === date);
-    editingJournalId = date;
-    selectedEditorMood = existing ? (existing.mood || 0) : 0;
-    
-    ['journal-best','journal-challenge','journal-gratitude','journal-content'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.value = '';
-    });
-    
-    document.querySelectorAll('.mood-btn-sm').forEach(b => b.classList.remove('selected'));
-    
-    if (existing) {
-        if (document.getElementById('journal-best')) document.getElementById('journal-best').value = existing.best || '';
-        if (document.getElementById('journal-challenge')) document.getElementById('journal-challenge').value = existing.challenge || '';
-        if (document.getElementById('journal-gratitude')) document.getElementById('journal-gratitude').value = existing.gratitude || '';
-        if (document.getElementById('journal-content')) document.getElementById('journal-content').value = existing.content || '';
-        if (existing.mood) {
-            document.querySelectorAll('.mood-btn-sm').forEach(b => b.classList.toggle('selected', parseInt(b.dataset.mood) === existing.mood));
-        }
-    }
-};
-
-window.closeJournalEntry = function() {
-    const editor = document.getElementById('journal-entry-editor');
-    if (editor) editor.style.display = 'none';
-    editingJournalId = null;
-};
-
-window.selectEditorMood = function(mood) {
-    selectedEditorMood = mood;
-    document.querySelectorAll('.mood-btn-sm').forEach(b => b.classList.toggle('selected', parseInt(b.dataset.mood) === mood));
-};
-
-window.saveJournalEntry = function() {
-    const date = editingJournalId || new Date().toISOString().split('T')[0];
-    const best = document.getElementById('journal-best')?.value || '';
-    const challenge = document.getElementById('journal-challenge')?.value || '';
-    const gratitude = document.getElementById('journal-gratitude')?.value || '';
-    const content = document.getElementById('journal-content')?.value || '';
-    
-    if (!best && !challenge && !gratitude && !content && !selectedEditorMood) {
-        showInAppNotification('Escreva algo antes de salvar!', 'warn');
-        return;
-    }
-    
-    const entries = LocalDB.get('journal_entries');
-    const idx = entries.findIndex(e => e.date === date);
-    const entry = { id: Date.now().toString(), date, mood: selectedEditorMood, best, challenge, gratitude, content, updated_at: new Date().toISOString() };
-    
-    if (idx !== -1) {
-        entries[idx] = { ...entries[idx], ...entry };
-    } else {
-        entry.created_at = entry.updated_at;
-        entries.push(entry);
-        awardXP(10, 'Entrada de diario');
-    }
-    LocalDB.set('journal_entries', entries);
-    
-    // Sync mood with today card if editing today
-    const todayStr = new Date().toISOString().split('T')[0];
-    if (date === todayStr && selectedEditorMood) setTodayMood(selectedEditorMood);
-    
-    closeJournalEntry();
-    loadJournal();
-    showInAppNotification('Diario salvo!', 'success');
-    console.info('[Journal] Entry saved for ' + date);
-};
-
+/** Nexus Mobile — nexus-fitness.js */
 // ================================================================
 // FITNESS MODULE — Enhanced
 // ================================================================
@@ -2532,199 +2504,15 @@ function loadMeasures() {
     }
 }
 
-// ================================================================
-// INIT — update DOMContentLoaded
-// ================================================================
 
-function escapeHtml(str) {
-    if (!str) return '';
-    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
+/** Nexus Mobile — nexus-habits.js */
+// Heatmap + loadHabits delegando para nexus-forms.js (filterHabits / toggleHabitDirect)
 
-// Ensure LocalDB has new keys
-const _origLocalDB_get = LocalDB.get.bind(LocalDB);
-const _newDefaults = {
-    study_notebooks: [], pomo_sessions: [], journal_entries: [], 
-    diet_meals: [], body_measures: [], xp_log: [],
-    user_stats: { xp: 0, points: 0, level: 1, xp_today: 0, last_xp_date: '' }
-};
-const _origGet = LocalDB.get;
-LocalDB.get = function(key) {
-    const val = _origGet.call(this, key);
-    if (val === null || val === undefined || (Array.isArray(val) && val.length === 0 && _newDefaults[key] && !Array.isArray(_newDefaults[key]))) {
-        return _newDefaults[key] !== undefined ? JSON.parse(JSON.stringify(_newDefaults[key])) : val;
-    }
-    return val;
-};
-
-
-
-// ================================================================
-// HABITS MODULE — Enhanced (Phase 3)
-// ================================================================
-
-let currentHabitId = null;
-
-function filterHabits(filter, btn) {
-    document.querySelectorAll('#view-habits .study-chip').forEach(b => b.classList.remove('active'));
-    if (btn) btn.classList.add('active');
-    
-    const container = document.getElementById('habits-list');
-    if(!container) return;
-    
-    let habits = LocalDB.get('habits').filter(h => h.active === 1 && !h.is_deleted);
-    if (filter === 'morning') habits = habits.filter(h => h.period === 'morning');
-    else if (filter === 'afternoon') habits = habits.filter(h => h.period === 'afternoon');
-    else if (filter === 'night') habits = habits.filter(h => h.period === 'night');
-    
-    const logs = LocalDB.get('habit_logs');
-    const today = new Date().toISOString().split('T')[0];
-    
-    if (habits.length === 0) {
-        container.innerHTML = '<div style="text-align:center;color:var(--text-secondary);margin-top:20px;">Nenhum habito nesta categoria.</div>';
-        return;
-    }
-    
-    container.innerHTML = habits.map(h => {
-        const isDone = logs.some(l => l.habit_id === h.id && l.date === today);
-        let streak = 0;
-        const now = new Date();
-        for (let i = 0; i < 60; i++) {
-            const d = new Date(now); d.setDate(d.getDate() - i);
-            const ds = d.toISOString().split('T')[0];
-            if (logs.some(l => l.habit_id === h.id && l.date === ds)) streak++;
-            else if (i > 0) break;
-        }
-        
-        return `
-        <div class="list-item glass ${isDone ? 'done' : ''}" style="cursor:pointer" onclick="openHabitDetail('${h.id}')">
-            <div class="item-main">
-                <div class="item-title">${escapeHtml(h.name)}</div>
-                <div class="item-subtitle">${h.period === 'morning' ? '\u2600 Manha' : h.period === 'afternoon' ? '\u26C5 Tarde' : h.period === 'night' ? '\uD83C\uDF19 Noite' : 'Qualquer horario'}</div>
-            </div>
-            <div style="display:flex;align-items:center;gap:12px">
-                ${streak > 0 ? `<span style="font-size:0.75rem;font-weight:700;color:#f97316;background:rgba(249,115,22,0.15);padding:3px 8px;border-radius:10px">\uD83D\uDD25 ${streak}</span>` : ''}
-                <button class="icon-btn ${isDone ? 'done' : ''}" style="background:var(--accent-primary);color:white;width:32px;height:32px;font-size:0.9rem" onclick="event.stopPropagation(); toggleHabitDirect('${h.id}')">
-                    <i class="fa-solid ${isDone ? 'fa-check' : 'fa-plus'}"></i>
-                </button>
-            </div>
-        </div>`;
-    }).join('');
-}
-
-window.openHabitDetail = function(habitId) {
-    currentHabitId = habitId;
-    const habits = LocalDB.get('habits');
-    const logs = LocalDB.get('habit_logs');
-    const h = habits.find(x => x.id === habitId);
-    if (!h) return;
-    
-    const today = new Date().toISOString().split('T')[0];
-    const isDone = logs.some(l => l.habit_id === h.id && l.date === today);
-    
-    let streak = 0;
-    const now = new Date();
-    for (let i = 0; i < 60; i++) {
-        const d = new Date(now); d.setDate(d.getDate() - i);
-        const ds = d.toISOString().split('T')[0];
-        if (logs.some(l => l.habit_id === h.id && l.date === ds)) streak++;
-        else if (i > 0) break;
-    }
-    const total = logs.filter(l => l.habit_id === h.id).length;
-    
-    const modal = document.getElementById('habit-detail-modal');
-    if (document.getElementById('habit-detail-name')) document.getElementById('habit-detail-name').textContent = h.name;
-    if (document.getElementById('habit-detail-streak')) document.getElementById('habit-detail-streak').textContent = streak;
-    if (document.getElementById('habit-detail-total')) document.getElementById('habit-detail-total').textContent = total;
-    if (document.getElementById('habit-alarm-time')) document.getElementById('habit-alarm-time').value = h.alarm_time || '';
-    
-    const btn = document.getElementById('habit-detail-complete-btn');
-    if (btn) {
-        btn.innerHTML = isDone ? '<i class="fa-solid fa-xmark"></i> Desmarcar Hoje' : '<i class="fa-solid fa-check"></i> Feito Hoje';
-        btn.style.background = isDone ? 'rgba(255,255,255,0.1)' : 'var(--accent-primary)';
-    }
-    
-    if (modal) modal.style.display = 'flex';
-};
-
-window.closeHabitDetail = function() {
-    const modal = document.getElementById('habit-detail-modal');
-    if (modal) modal.style.display = 'none';
-    currentHabitId = null;
-};
-
-window.toggleHabitDirect = function(habitId) {
-    const logs = LocalDB.getAll('habit_logs');
-    const today = new Date().toISOString().split('T')[0];
-    const idx = logs.findIndex(l => String(l.habit_id) === String(habitId) && l.date === today && !l.is_deleted);
-    if (idx !== -1) {
-        logs.splice(idx, 1);
-        LocalDB.set('habit_logs', logs);
-    } else {
-        const entry = {
-            id: Date.now(),
-            habit_id: habitId,
-            date: today,
-            completed_date: today
-        };
-        LocalDB.upsert('habit_logs', entry);
-        logs.push(entry);
-        LocalDB.set('habit_logs', logs);
-        awardXP(5, 'Habito concluido');
-    }
-    filterHabits(document.querySelector('#view-habits .study-chip.active')?.dataset?.filter || 'all');
-    loadXPPanel();
-    backgroundSync();
-};
-
-window.completeCurrentHabit = function() {
-    if (currentHabitId) {
-        toggleHabitDirect(currentHabitId);
-        closeHabitDetail();
-    }
-};
-
-window.saveHabitAlarm = function() {
-    if (!currentHabitId) return;
-    const time = document.getElementById('habit-alarm-time')?.value;
-    const habits = LocalDB.get('habits');
-    const idx = habits.findIndex(h => String(h.id) === String(currentHabitId));
-    if (idx !== -1) {
-        habits[idx].alarm_time = time;
-        habits[idx].target_time = time;
-        LocalDB.set('habits', habits);
-        syncHabitReminders();
-        showInAppNotification(time ? 'Alarme configurado para ' + time : 'Alarme removido', 'success');
-        
-        // Request notification permission if enabling alarm
-        if (time && "Notification" in window && Notification.permission !== "granted") {
-            Notification.requestPermission();
-        }
-    }
-};
-
-window.deleteCurrentHabit = function() {
-    if (!currentHabitId) return;
-    if (!confirm('Deseja realmente excluir este habito? O historico sera perdido.')) return;
-    const habits = LocalDB.get('habits');
-    const idx = habits.findIndex(h => String(h.id) === String(currentHabitId));
-    if (idx !== -1) {
-        habits[idx].is_deleted = true;
-        LocalDB.set('habits', habits);
-        syncHabitReminders();
-        closeHabitDetail();
-        filterHabits('all');
-        showInAppNotification('Habito excluido.', 'info');
-    }
-};
-
-// Override original loadHabits to use our new filtered view
 window.loadHabits = function() {
-    // Also build the heatmap
     const heatmapContainer = document.getElementById('habit-heatmap-container');
-    const habits = LocalDB.get('habits').filter(h => h.active === 1 && !h.is_deleted);
-    const logs = LocalDB.get('habit_logs');
-    
+    const habits = LocalDB.get('habits').filter(h => h.active !== 0 && !h.is_deleted);
+    const logs = LocalDB.get('habit_logs') || [];
+
     if (heatmapContainer) {
         heatmapContainer.innerHTML = '';
         const now = new Date();
@@ -2734,26 +2522,34 @@ window.loadHabits = function() {
             const dateStr = d.toISOString().split('T')[0];
             const completedCount = logs.filter(l => l.date === dateStr && habits.some(h => String(h.id) === String(l.habit_id))).length;
             const level = completedCount === 0 ? 0 : completedCount < 3 ? 1 : completedCount < 5 ? 2 : 3;
-            
             const box = document.createElement('div');
             box.className = 'heatmap-box level-' + level;
             box.title = dateStr + ': ' + completedCount + ' habitos';
             heatmapContainer.appendChild(box);
         }
     }
-    filterHabits('all', document.querySelector('#view-habits .study-chip[data-filter="all"]'));
+
+    if (typeof window.filterHabits === 'function') {
+        const chip = document.querySelector('#view-habits .study-chip.active') || document.querySelector('#view-habits .study-chip[data-filter="all"]');
+        window.filterHabits(chip?.dataset?.filter || 'all', chip || null);
+    }
+};
+
+window.closeHabitDetail = window.closeHabitDetail || function() {
+    const modal = document.getElementById('habit-detail-modal');
+    if (modal) modal.style.display = 'none';
 };
 
 
-// ================================================================
-// TASKS MODULE — Enhanced (Phase 4)
-// ================================================================
+/** Nexus Mobile — nexus-tasks.js */
+// Kanban helpers — CRUD principal em nexus-forms.js
 
-let currentTaskId = null;
 let taskKanbanMode = false;
+window.taskKanbanMode = false;
 
 window.toggleTaskKanban = function() {
     taskKanbanMode = !taskKanbanMode;
+    window.taskKanbanMode = taskKanbanMode;
     const list = document.getElementById('tasks-list-view');
     const kanban = document.getElementById('tasks-kanban-view');
     const filters = document.querySelector('#view-tasks .habit-filters-scroll');
@@ -2761,215 +2557,46 @@ window.toggleTaskKanban = function() {
     if (kanban) kanban.style.display = taskKanbanMode ? 'flex' : 'none';
     if (filters) filters.style.display = taskKanbanMode ? 'none' : 'flex';
     if (taskKanbanMode) renderTaskKanban();
-    else filterTasks(document.querySelector('#view-tasks .study-chip.active')?.dataset?.filter || 'all');
+    else if (typeof window.filterTasks === 'function') {
+        window.filterTasks(document.querySelector('#view-tasks .study-chip.active')?.dataset?.filter || 'all');
+    }
 };
-
-window.filterTasks = function(filter, btn) {
-    if (btn) {
-        document.querySelectorAll('#view-tasks .study-chip').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-    }
-    
-    if (taskKanbanMode) { renderTaskKanban(); return; }
-    
-    const container = document.getElementById('tasks-list-view');
-    if(!container) return;
-    
-    let tasks = LocalDB.get('tasks').filter(t => !t.is_deleted);
-    const today = new Date().toISOString().split('T')[0];
-    
-    if (filter === 'done') tasks = tasks.filter(t => t.done_at);
-    else tasks = tasks.filter(t => !t.done_at);
-    
-    if (filter === 'today') tasks = tasks.filter(t => t.due_date === today);
-    if (filter === 'high') tasks = tasks.filter(t => t.priority === 'high');
-    
-    tasks.sort((a,b) => {
-        if (a.priority === 'high' && b.priority !== 'high') return -1;
-        if (a.priority !== 'high' && b.priority === 'high') return 1;
-        return (a.due_date||'9999').localeCompare(b.due_date||'9999');
-    });
-    
-    if (tasks.length === 0) {
-        container.innerHTML = '<div style="text-align:center;color:var(--text-secondary);margin-top:20px;">Nenhuma tarefa encontrada.</div>';
-        return;
-    }
-    
-    container.innerHTML = tasks.map(t => {
-        const isDone = !!t.done_at;
-        const dueText = t.due_date ? '<i class="fa-regular fa-clock"></i> ' + new Date(t.due_date).toLocaleDateString('pt-BR') : '';
-        const prioText = t.priority === 'high' ? '<span style="color:var(--accent-pink);font-weight:700;font-size:0.7rem">\uD83D\uDD25 ALTA</span>' : '';
-        const subs = (t.subtasks || []).length;
-        const subsDone = (t.subtasks || []).filter(s => s.done).length;
-        const subText = subs > 0 ? `<span style="font-size:0.75rem;color:var(--text-secondary)"><i class="fa-solid fa-list-check"></i> ${subsDone}/${subs}</span>` : '';
-        
-        return `
-        <div class="list-item glass ${isDone ? 'done' : ''}" style="cursor:pointer;opacity:${isDone?0.6:1}" onclick="openTaskDetail('${t.id}')">
-            <div class="item-main">
-                <div class="item-title" style="text-decoration:${isDone?'line-through':'none'}">${escapeHtml(t.name)}</div>
-                <div class="item-subtitle" style="display:flex;gap:8px;align-items:center">
-                    ${prioText}
-                    ${subText}
-                    ${dueText}
-                </div>
-            </div>
-            <button class="icon-btn ${isDone ? 'done' : ''}" style="width:32px;height:32px;border:1px solid ${isDone?'var(--accent-green)':'var(--border-glass)'};color:${isDone?'var(--accent-green)':'white'}" onclick="event.stopPropagation(); toggleTaskDirect('${t.id}')">
-                <i class="fa-solid ${isDone ? 'fa-check' : 'fa-minus'}"></i>
-            </button>
-        </div>`;
-    }).join('');
-}
 
 function renderTaskKanban() {
     const tasks = LocalDB.get('tasks').filter(t => !t.is_deleted);
     const todo = tasks.filter(t => !t.done_at && t.status !== 'doing');
     const doing = tasks.filter(t => !t.done_at && t.status === 'doing');
     const done = tasks.filter(t => t.done_at);
-    
+
     const renderCard = (t) => {
         const prioColor = t.priority === 'high' ? 'var(--accent-pink)' : t.priority === 'medium' ? '#f59e0b' : 'var(--text-secondary)';
         return `
         <div class="glass" style="padding:12px;border-radius:12px;cursor:pointer;border-left:3px solid ${prioColor}" onclick="openTaskDetail('${t.id}')">
-            <div style="font-size:0.9rem;font-weight:600;margin-bottom:6px">${escapeHtml(t.name)}</div>
+            <div style="font-size:0.9rem;font-weight:600;margin-bottom:6px">${escapeHtml(t.name || t.title || 'Tarefa')}</div>
             ${t.due_date ? `<div style="font-size:0.7rem;color:var(--text-secondary)"><i class="fa-regular fa-clock"></i> ${new Date(t.due_date).toLocaleDateString('pt-BR')}</div>` : ''}
         </div>`;
     };
-    
+
     const elTodo = document.getElementById('kanban-todo');
     const elDoing = document.getElementById('kanban-doing');
     const elDone = document.getElementById('kanban-done');
-    
+
     if (elTodo) elTodo.innerHTML = todo.map(renderCard).join('') || '<div style="color:var(--text-secondary);font-size:0.8rem;text-align:center;padding:20px;border:1px dashed var(--border-glass);border-radius:8px">Vazio</div>';
-    if (elDoing) elDoing.innerHTML = doing.map(renderCard).join('') || '<div style="color:var(--text-secondary);font-size:0.8rem;text-align:center;padding:20px;border:1px dashed var(--border-glass);border-radius:8px">Arraste tarefas para ca</div>';
+    if (elDoing) elDoing.innerHTML = doing.map(renderCard).join('') || '<div style="color:var(--text-secondary);font-size:0.8rem;text-align:center;padding:20px;border:1px dashed var(--border-glass);border-radius:8px">Arraste tarefas para cá</div>';
     if (elDone) elDone.innerHTML = done.map(renderCard).join('') || '<div style="color:var(--text-secondary);font-size:0.8rem;text-align:center;padding:20px;border:1px dashed var(--border-glass);border-radius:8px">Vazio</div>';
 }
 
-window.openTaskDetail = function(taskId) {
-    currentTaskId = taskId;
-    const tasks = LocalDB.get('tasks');
-    const t = tasks.find(x => x.id === taskId);
-    if (!t) return;
-    
-    const modal = document.getElementById('task-detail-modal');
-    if (document.getElementById('task-detail-name')) document.getElementById('task-detail-name').value = t.name || '';
-    if (document.getElementById('task-detail-priority')) document.getElementById('task-detail-priority').value = t.priority || 'medium';
-    if (document.getElementById('task-detail-due')) document.getElementById('task-detail-due').value = t.due_date || '';
-    
-    renderSubtasks(t.subtasks || []);
-    
-    if (modal) modal.style.display = 'flex';
-};
+window.renderTaskKanban = renderTaskKanban;
 
-window.closeTaskDetail = function() {
-    const modal = document.getElementById('task-detail-modal');
-    if (modal) modal.style.display = 'none';
-    currentTaskId = null;
-    if (taskKanbanMode) renderTaskKanban();
-    else filterTasks(document.querySelector('#view-tasks .study-chip.active')?.dataset?.filter || 'all');
-};
-
-function renderSubtasks(subs) {
-    const list = document.getElementById('task-subtasks-list');
-    if (!list) return;
-    list.innerHTML = subs.map((s, i) => `
-        <div style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.04);padding:8px;border-radius:8px">
-            <input type="checkbox" ${s.done ? 'checked' : ''} onchange="toggleSubtask(${i})" style="accent-color:var(--accent-primary)">
-            <span style="flex:1;font-size:0.9rem;text-decoration:${s.done ? 'line-through' : 'none'};color:${s.done ? 'var(--text-secondary)' : 'white'}">${escapeHtml(s.name)}</span>
-            <button onclick="removeSubtask(${i})" style="background:none;border:none;color:var(--text-secondary)"><i class="fa-solid fa-xmark"></i></button>
-        </div>
-    `).join('');
-}
-
-window.addSubtask = function() {
-    const name = prompt('Nome da subtarefa:');
-    if (!name || !currentTaskId) return;
-    const tasks = LocalDB.get('tasks');
-    const t = tasks.find(x => x.id === currentTaskId);
-    if (t) {
-        if (!t.subtasks) t.subtasks = [];
-        t.subtasks.push({ name, done: false });
-        LocalDB.set('tasks', tasks);
-        renderSubtasks(t.subtasks);
-    }
-};
-
-window.toggleSubtask = function(idx) {
-    if (!currentTaskId) return;
-    const tasks = LocalDB.get('tasks');
-    const t = tasks.find(x => x.id === currentTaskId);
-    if (t && t.subtasks && t.subtasks[idx]) {
-        t.subtasks[idx].done = !t.subtasks[idx].done;
-        LocalDB.set('tasks', tasks);
-        renderSubtasks(t.subtasks);
-    }
-};
-
-window.removeSubtask = function(idx) {
-    if (!currentTaskId) return;
-    const tasks = LocalDB.get('tasks');
-    const t = tasks.find(x => x.id === currentTaskId);
-    if (t && t.subtasks) {
-        t.subtasks.splice(idx, 1);
-        LocalDB.set('tasks', tasks);
-        renderSubtasks(t.subtasks);
-    }
-};
-
-window.saveTaskDetail = function() {
-    if (!currentTaskId) return;
-    const name = document.getElementById('task-detail-name')?.value;
-    const prio = document.getElementById('task-detail-priority')?.value;
-    const due = document.getElementById('task-detail-due')?.value;
-    
-    const tasks = LocalDB.get('tasks');
-    const t = tasks.find(x => x.id === currentTaskId);
-    if (t) {
-        t.name = name;
-        t.priority = prio;
-        t.due_date = due;
-        LocalDB.set('tasks', tasks);
-    }
-};
-
-window.toggleTaskDirect = function(taskId) {
-    const tasks = LocalDB.get('tasks');
-    const t = tasks.find(x => x.id === taskId);
-    if (t) {
-        if (t.done_at) t.done_at = null;
-        else {
-            t.done_at = new Date().toISOString();
-            awardXP(10, 'Tarefa concluida');
-        }
-        LocalDB.set('tasks', tasks);
-        if (taskKanbanMode) renderTaskKanban();
-        else filterTasks(document.querySelector('#view-tasks .study-chip.active')?.dataset?.filter || 'all');
-        loadXPPanel();
-    }
-};
-
-window.deleteCurrentTask = function() {
-    if (!currentTaskId) return;
-    if (!confirm('Excluir esta tarefa?')) return;
-    const tasks = LocalDB.get('tasks');
-    const t = tasks.find(x => String(x.id) === String(currentTaskId));
-    if (t) {
-        t.is_deleted = 1;
-        LocalDB.set('tasks', tasks);
-        if (typeof syncTaskReminders === 'function') syncTaskReminders();
-        if (typeof backgroundSync === 'function') backgroundSync();
-        closeTaskDetail();
-        loadTasks();
-        loadXPPanel();
-    }
-};
-
-// Override original loadTasks to use our new view
 window.loadTasks = function() {
     if (taskKanbanMode) renderTaskKanban();
-    else filterTasks('all', document.querySelector('#view-tasks .study-chip[data-filter="all"]'));
+    else if (typeof window.filterTasks === 'function') {
+        window.filterTasks('all', document.querySelector('#view-tasks .study-chip[data-filter="all"]'));
+    }
 };
 
 
+/** Nexus Mobile — nexus-routines.js */
 // ================================================================
 // ROUTINES MODULE (Phase 7)
 // ================================================================
@@ -3107,6 +2734,8 @@ window.finishRoutine = function() {
     closeRoutineRunner();
 };
 
+
+/** Nexus Mobile — nexus-theme.js */
 // ================================================================
 // AMOLED THEME (Phase 8)
 // ================================================================
@@ -3137,7 +2766,7 @@ window.initTheme = function() {
 
 
 document.addEventListener('DOMContentLoaded', () => {
-    ensureDefaultRewards();
+    if (typeof ensureDefaultRewards === 'function') ensureDefaultRewards();
     initAppPreferences();
     loadUserStats();
     loadHabits();
@@ -3147,7 +2776,7 @@ document.addEventListener('DOMContentLoaded', () => {
     bindMobileNavItems();
     updateJarvisFabState();
     updateNetworkSettingsUI();
-    updateSyncIndicator(isNetworkOnline() && window.nexusSupabase ? 'synced' : 'offline');
+    updateSyncIndicator('offline');
     if (window.NexusAudio && typeof window.NexusAudio.initSettingsUI === 'function') window.NexusAudio.initSettingsUI();
 
     setTimeout(requestNotificationPermission, 2000);
@@ -3166,17 +2795,41 @@ document.addEventListener('DOMContentLoaded', () => {
 // ----------------------------------------------------
 window.openSettingsView = function() {
     if (typeof closeSettingsModal === 'function') closeSettingsModal();
-    document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
-    document.querySelectorAll('.view').forEach(view => view.classList.remove('active-view'));
-    const view = document.getElementById('view-settings');
-    if (view) view.classList.add('active-view');
+    if (typeof activateMobileView === 'function') {
+        activateMobileView('view-settings', null);
+    } else {
+        document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
+        document.querySelectorAll('.view').forEach(view => view.classList.remove('active-view'));
+        const view = document.getElementById('view-settings');
+        if (view) view.classList.add('active-view');
+    }
     updateNetworkSettingsUI();
     initAppPreferences();
     if (typeof updateSettingsUI === 'function') updateSettingsUI();
-    const stats = typeof getNativeStorageStatsSync === 'function' ? getNativeStorageStatsSync() : null;
-    if (stats && stats.cacheBytes != null && typeof updateStorageWarningBadge === 'function') {
-        updateStorageWarningBadge(stats.cacheBytes);
+    const authEl = document.getElementById('btn-login-google');
+    if (authEl) authEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+};
+
+window.openSettingsAccount = function(ev) {
+    if (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
     }
+    if (typeof closeSettingsModal === 'function') closeSettingsModal();
+    requestAnimationFrame(() => {
+        if (typeof activateMobileView === 'function') {
+            activateMobileView('view-settings', null);
+        } else {
+            openSettingsView();
+            return;
+        }
+        const main = document.getElementById('main-content');
+        if (main) main.scrollTop = 0;
+        setTimeout(() => {
+            const authEl = document.getElementById('btn-login-google');
+            if (authEl) authEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 120);
+    });
 };
 
 window.openSettingsModal = () => {
@@ -3218,7 +2871,7 @@ function applyUiPrefs() {
 // Call applyUiPrefs on boot
 
 
-
+/** Nexus Mobile — nexus-editor.js */
 // ================================================================
 // RICH TEXT EDITOR — Notion-Style v2
 // ================================================================
@@ -3824,6 +3477,89 @@ function copyJarvisResult() {
     });
 }
 
+let _pendingAiDiffHtml = null;
+let _selectedYtEmbedBlock = null;
+
+window.acceptAiDiff = function() {
+    const panel = document.getElementById('ai-diff-panel');
+    const editor = document.getElementById('note-content-rich');
+    if (editor && _pendingAiDiffHtml) {
+        editor.innerHTML = _pendingAiDiffHtml;
+        saveNoteDebounced();
+        if (typeof window.saveNote === 'function') window.saveNote();
+    }
+    _pendingAiDiffHtml = null;
+    if (panel) panel.style.display = 'none';
+};
+
+window.rejectAiDiff = function() {
+    _pendingAiDiffHtml = null;
+    const panel = document.getElementById('ai-diff-panel');
+    if (panel) panel.style.display = 'none';
+};
+
+function closeYtEmbedMenu() {
+    const pop = document.getElementById('yt-embed-menu-popup');
+    if (pop) pop.style.display = 'none';
+}
+
+window.editYouTubeEmbedLink = function() {
+    closeYtEmbedMenu();
+    if (!_selectedYtEmbedBlock) return;
+    const iframe = _selectedYtEmbedBlock.querySelector('iframe');
+    const src = iframe?.src || '';
+    const m = src.match(/embed\/([a-zA-Z0-9_-]{11})/) || src.match(/video=([a-zA-Z0-9_-]{11})/);
+    const current = m ? m[1] : '';
+    const url = prompt('Nova URL ou ID do YouTube:', current ? 'https://youtu.be/' + current : '');
+    if (!url) return;
+    const ids = extractAllYouTubeIds(url);
+    const id = ids[0] || extractYouTubeId(url);
+    if (!id) { alert('URL inválida'); return; }
+    _selectedYtEmbedBlock.outerHTML = buildYouTubeEmbedHtml(id);
+    _selectedYtEmbedBlock = null;
+    saveNoteDebounced();
+};
+
+window.openYouTubeEmbedExternal = function() {
+    closeYtEmbedMenu();
+    if (!_selectedYtEmbedBlock) return;
+    const iframe = _selectedYtEmbedBlock.querySelector('iframe');
+    const src = iframe?.src || '';
+    const m = src.match(/embed\/([a-zA-Z0-9_-]{11})/) || src.match(/video=([a-zA-Z0-9_-]{11})/);
+    if (m) window.open('https://www.youtube.com/watch?v=' + m[1], '_blank');
+};
+
+window.removeYouTubeEmbed = function() {
+    closeYtEmbedMenu();
+    if (_selectedYtEmbedBlock) {
+        _selectedYtEmbedBlock.remove();
+        _selectedYtEmbedBlock = null;
+        saveNoteDebounced();
+    }
+};
+
+function initYouTubeEmbedMenus() {
+    const editor = document.getElementById('note-content-rich');
+    if (!editor) return;
+    editor.addEventListener('click', (e) => {
+        const block = e.target.closest('.yt-embed-block');
+        if (!block) return;
+        e.preventDefault();
+        _selectedYtEmbedBlock = block;
+        const pop = document.getElementById('yt-embed-menu-popup');
+        if (pop) {
+            pop.style.display = 'block';
+            pop.style.left = Math.min(e.clientX || 20, window.innerWidth - 200) + 'px';
+            pop.style.top = Math.min(e.clientY || 20, window.innerHeight - 120) + 'px';
+        }
+    });
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('#yt-embed-menu-popup') && !e.target.closest('.yt-embed-block')) {
+            closeYtEmbedMenu();
+        }
+    });
+}
+
 let _jarvisLastApiResponse = null;
 
 // ─── Save & Load (Rich Editor) ───────────────────────────────────
@@ -3929,6 +3665,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (noteLinkModal) noteLinkModal.addEventListener('click', function(e) {
         if (e.target === noteLinkModal) closeNoteLinkModal();
     });
+
+    initYouTubeEmbedMenus();
 
     // Init if editor view is open
     const editorView = document.getElementById('note-editor-view');
@@ -4103,8 +3841,7 @@ setInterval(function () {
 }, 30000);
 
 
-
-
+/** Nexus Mobile — nexus-study-tools.js */
 // ================================================================
 // FLASHCARDS (SRS - Anki Style) & POMODORO TIMER
 // ================================================================
@@ -4441,6 +4178,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 
+/** Nexus Mobile — nexus-studies-graph.js */
 // ================================================================
 // STUDIES 3.0: NOTION COVERS & OBSIDIAN GRAPH VIEW
 // ================================================================
@@ -4525,43 +4263,41 @@ function changeNoteIcon() {
 
 // Hook into openNoteEditor to load covers and icons
 const _origOpenNoteEditorForCover = window.openNoteEditor;
-window.openNoteEditor = function(note, notebookId) {
-    if (typeof _origOpenNoteEditorForCover === 'function') _origOpenNoteEditorForCover(note, notebookId);
-    
-    // Clear temp variables
+window.openNoteEditor = function(noteOrId, notebookId) {
+    if (typeof _origOpenNoteEditorForCover === 'function') _origOpenNoteEditorForCover(noteOrId, notebookId);
+
     window._tempCoverImage = null;
     window._tempIcon = null;
-    
+
     setTimeout(() => {
-        const titleEl = document.getElementById('note-title');
-        if (titleEl) {
-            titleEl.dataset.noteId = note ? note.id : '';
+        let note = null;
+        if (noteOrId && typeof noteOrId === 'object') note = noteOrId;
+        else if (noteOrId) {
+            const notes = LocalDB.get('study_notes') || [];
+            note = notes.find(n => String(n.id) === String(noteOrId)) || null;
         }
-        
-        // Render Cover
+
+        const titleEl = document.getElementById('note-title');
+        if (titleEl) titleEl.dataset.noteId = note ? note.id : '';
+
         const coverContainer = document.getElementById('note-cover-container');
         const addBtn = document.getElementById('add-cover-btn');
-        if (note && note.coverImage) {
-            coverContainer.style.display = 'block';
-            coverContainer.style.backgroundImage = `url(${note.coverImage})`;
-            addBtn.style.display = 'none';
-        } else {
-            coverContainer.style.display = 'none';
-            coverContainer.style.backgroundImage = 'none';
-            addBtn.style.display = 'inline-block';
+        if (coverContainer) {
+            if (note && note.coverImage) {
+                coverContainer.style.display = 'block';
+                coverContainer.style.backgroundImage = 'url(' + note.coverImage + ')';
+                if (addBtn) addBtn.style.display = 'none';
+            } else {
+                coverContainer.style.display = 'none';
+                coverContainer.style.backgroundImage = 'none';
+                if (addBtn) addBtn.style.display = 'inline-block';
+            }
         }
-        
-        // Render Icon
+
         const iconDisplay = document.getElementById('note-icon-display');
-        if (note && note.icon) {
-            iconDisplay.textContent = note.icon;
-        } else {
-            iconDisplay.textContent = '📄';
-        }
-        
-        // Scan for backlinks
+        if (iconDisplay) iconDisplay.textContent = (note && note.icon) ? note.icon : '📄';
+
         renderBacklinks(note ? note.id : null);
-        
     }, 100);
 };
 
@@ -4881,6 +4617,7 @@ function centerGraph() {
 }
 
 
+/** Nexus Mobile — nexus-analytics.js */
 // ================================================================
 // ANALYTICS & CHARTS DASHBOARD (Chart.js)
 // ================================================================
@@ -5160,6 +4897,7 @@ window.loadStudies = function() {
 };
 
 
+/** Nexus Mobile — nexus-auth.js */
 // ================================================================
 // MULTI-USER AUTH & SETTINGS
 // ================================================================
@@ -5591,6 +5329,8 @@ function clearLocalDB() {
     }
 }
 
+
+/** Nexus Mobile — nexus-forms.js */
 // ================================================================
 // SPRINT 4 — NexusCalendar, CRUD forms, reminders, studies redesign
 // ================================================================
@@ -5796,7 +5536,8 @@ function clearLocalDB() {
         }
         if (typeof filterHabits === 'function') filterHabits(document.querySelector('#view-habits .study-chip.active')?.dataset?.filter || 'all');
         loadXPPanel();
-        backgroundSync();
+        if (typeof loadTodayDashboard === 'function') loadTodayDashboard();
+        if (typeof backgroundSync === 'function') backgroundSync();
     };
 
     window.openHabitForm = function(habitId) {
@@ -5820,6 +5561,40 @@ function clearLocalDB() {
     };
 
     window.openHabitDetail = function(habitId) { openHabitForm(habitId); };
+
+    window.closeHabitDetail = function() {
+        const modal = document.getElementById('habit-detail-modal');
+        if (modal) modal.style.display = 'none';
+        currentHabitId = null;
+    };
+
+    window.archiveCurrentHabit = function() {
+        if (!currentHabitId) return;
+        const habits = LocalDB.get('habits') || [];
+        const idx = habits.findIndex(h => String(h.id) === String(currentHabitId));
+        if (idx === -1) return;
+        habits[idx].active = 0;
+        LocalDB.set('habits', habits);
+        closeHabitDetail();
+        if (typeof loadHabits === 'function') loadHabits();
+        showToast('Hábito arquivado.');
+    };
+
+    window.deleteCurrentHabit = function() {
+        if (!currentHabitId) return;
+        if (!confirm('Deseja realmente excluir este hábito?')) return;
+        const habits = LocalDB.get('habits') || [];
+        const idx = habits.findIndex(h => String(h.id) === String(currentHabitId));
+        if (idx !== -1) {
+            habits[idx].is_deleted = 1;
+            habits[idx].active = 0;
+            LocalDB.set('habits', habits);
+            if (typeof syncHabitReminders === 'function') syncHabitReminders();
+            closeHabitDetail();
+            if (typeof loadHabits === 'function') loadHabits();
+            showToast('Hábito excluído.');
+        }
+    };
 
     function openHabitDetailStats(h) {
         const logs = LocalDB.get('habit_logs') || [];
@@ -5986,9 +5761,44 @@ function clearLocalDB() {
         openTaskDetail(t.id);
     };
 
+    window.toggleTaskDirect = function(taskId) {
+        const tasks = LocalDB.get('tasks') || [];
+        const t = tasks.find(x => String(x.id) === String(taskId));
+        if (!t) return;
+        if (t.done_at) {
+            t.done_at = null;
+            t.status = 'todo';
+        } else {
+            t.done_at = new Date().toISOString();
+            t.status = 'done';
+            if (typeof awardXP === 'function') awardXP(10, 'Tarefa concluida');
+        }
+        LocalDB.set('tasks', tasks);
+        if (typeof filterTasks === 'function') filterTasks(document.querySelector('#view-tasks .study-chip.active')?.dataset?.filter || 'all');
+        if (typeof loadXPPanel === 'function') loadXPPanel();
+        if (typeof loadTodayDashboard === 'function') loadTodayDashboard();
+    };
+
+    window.deleteCurrentTask = window.deleteCurrentTask || function() {
+        if (!currentTaskId) return;
+        if (!confirm('Excluir esta tarefa?')) return;
+        const tasks = LocalDB.get('tasks') || [];
+        const t = tasks.find(x => String(x.id) === String(currentTaskId));
+        if (t) {
+            t.is_deleted = 1;
+            LocalDB.set('tasks', tasks);
+            if (typeof syncTaskReminders === 'function') syncTaskReminders();
+            closeTaskDetail();
+            if (typeof loadTasks === 'function') loadTasks();
+            if (typeof loadTodayDashboard === 'function') loadTodayDashboard();
+            showToast('Tarefa excluída.');
+        }
+    };
+
     window.completeCurrentTask = function() {
         if (!currentTaskId) return;
         toggleTaskDirect(currentTaskId);
+        if (typeof loadTodayDashboard === 'function') loadTodayDashboard();
         closeTaskDetail();
     };
 
@@ -6014,6 +5824,34 @@ function clearLocalDB() {
 
     window.addSubtask = window.addSubtaskInline;
 
+    function renderSubtasks(subtasks) {
+        const list = document.getElementById('task-subtasks-list');
+        if (!list) return;
+        const items = Array.isArray(subtasks) ? subtasks : [];
+        if (!items.length) {
+            list.innerHTML = '<div style="color:var(--text-secondary);font-size:0.85rem;padding:4px 0">Nenhuma subtarefa.</div>';
+            return;
+        }
+        list.innerHTML = items.map((s, i) => `
+            <div style="display:flex;align-items:center;gap:10px;padding:8px;background:rgba(255,255,255,0.05);border-radius:8px">
+                <input type="checkbox" ${s.done ? 'checked' : ''} onchange="toggleSubtask(${i})">
+                <span style="flex:1;${s.done ? 'text-decoration:line-through;opacity:0.6' : ''}">${escapeHtml(s.name || '')}</span>
+            </div>`).join('');
+    }
+    window.renderSubtasks = renderSubtasks;
+
+    window.toggleSubtask = function(idx) {
+        if (!currentTaskId) return;
+        const tasks = LocalDB.get('tasks') || [];
+        const t = tasks.find(x => String(x.id) === String(currentTaskId));
+        if (t && t.subtasks && t.subtasks[idx]) {
+            t.subtasks[idx].done = !t.subtasks[idx].done;
+            t.subtasks_json = t.subtasks;
+            LocalDB.set('tasks', tasks);
+            renderSubtasks(t.subtasks);
+        }
+    };
+
     const _saveTaskDetailOrig = window.saveTaskDetail;
     window.saveTaskDetail = function() {
         if (!currentTaskId) return;
@@ -6033,6 +5871,9 @@ function clearLocalDB() {
         LocalDB.set('tasks', tasks);
         syncTaskReminders();
         if (typeof _saveTaskDetailOrig === 'function') _saveTaskDetailOrig();
+        if (typeof loadTasks === 'function') loadTasks();
+        if (typeof loadTodayDashboard === 'function') loadTodayDashboard();
+        showToast('Tarefa salva.');
     };
 
     const _openTaskDetailOrig = window.openTaskDetail;
@@ -6058,12 +5899,19 @@ function clearLocalDB() {
         if (modal) modal.style.display = 'flex';
     };
 
+    window.closeTaskDetail = function() {
+        const modal = document.getElementById('task-detail-modal');
+        if (modal) modal.style.display = 'none';
+        currentTaskId = null;
+        if (typeof loadTasks === 'function') loadTasks();
+    };
+
     window.filterTasks = function(filter, btn) {
         if (btn) {
             document.querySelectorAll('#view-tasks .study-chip').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
         }
-        if (taskKanbanMode) { renderTaskKanban(); return; }
+        if (window.taskKanbanMode && typeof renderTaskKanban === 'function') { renderTaskKanban(); return; }
         const container = document.getElementById('tasks-list-view');
         if (!container) return;
         let tasks = (LocalDB.get('tasks') || []).filter(t => !t.is_deleted);
@@ -6473,7 +6321,7 @@ function clearLocalDB() {
         const container = document.getElementById('fitness-list');
         if (!container) return;
         if (typeof renderWorkoutTemplates === 'function') renderWorkoutTemplates();
-        updateFitnessStats();
+        if (typeof updateFitnessStats === 'function') updateFitnessStats();
         const data = (LocalDB.get('fitness_workouts') || []).filter(t => !t.is_deleted)
             .sort((a, b) => (b.date || b.created_at || '').localeCompare(a.date || a.created_at || ''));
         container.innerHTML = data.length ? data.slice(0, 15).map(t => `
@@ -6483,9 +6331,7 @@ function clearLocalDB() {
             </div>`).join('') : '<div style="text-align:center;color:var(--text-secondary);margin-top:20px;">Nenhum treino.</div>';
     };
 
-    // --- Studies: subjects grid (usa funções globais renderSubjectFolderCard / openSubjectDetail) ---
-    window.loadSubjectsGrid = loadSubjectsGrid;
-
+    // --- Studies: subjects grid — loadSubjectsGrid definido em nexus-studies.js ---
     window.openNewNotebook = window.openSubjectForm;
 
     window.openSubjectMenu = function(ev) {
@@ -6624,8 +6470,6 @@ function clearLocalDB() {
     const _loadStudiesOrig = window.loadStudies;
     window.loadStudies = function() {
         if (typeof _loadStudiesOrig === 'function') _loadStudiesOrig();
-        loadSubjectsGrid();
-        if (typeof loadNotebooksGrid === 'function') loadNotebooksGrid();
         if (typeof ensureChartJs === 'function') ensureChartJs().then(() => setTimeout(renderStudyCharts, 100));
     };
 
@@ -6679,6 +6523,8 @@ function clearLocalDB() {
 
 })();
 
+
+/** Nexus Mobile — nexus-cleaner.js */
 // ================================================================
 // PHONE CLEANER MODULE — native bridge + local heuristics
 // ================================================================

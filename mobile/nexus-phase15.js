@@ -252,6 +252,22 @@
         if (botEl && bottom != null) botEl.textContent = bottom;
     }
 
+    function setJarvisUserCaption(text) {
+        const el = document.getElementById('jarvis-call-user-caption');
+        if (!el) return;
+        const t = String(text || '').trim();
+        el.textContent = t ? 'Você: ' + t : '';
+        el.style.display = t ? 'block' : 'none';
+    }
+
+    function setJarvisAssistantCaption(text) {
+        const el = document.getElementById('jarvis-call-assistant-caption');
+        if (!el) return;
+        const t = String(text || '').trim();
+        el.textContent = t ? 'Jarvis: ' + t : '';
+        el.style.display = t ? 'block' : 'none';
+    }
+
     window.toggleJarvisCallDebug = function () {
         jarvisCallDebugVisible = !jarvisCallDebugVisible;
         const topEl = document.getElementById('jarvis-call-debug-top');
@@ -356,37 +372,89 @@
         if (!clean) { if (onEnd) onEnd(); return; }
         setJarvisCallState('speaking');
         setJarvisCallDebug('TTS: iniciando', clean.slice(0, 120));
+        setJarvisAssistantCaption(clean);
         if (!jarvisCallOverlayMinimized) startJarvisVizLoop('speaking');
 
-        if (getJarvisTtsProvider() === 'gemini' && window.nexusSupabase && isWifiConnected()) {
+        const tryEdgeTts = async () => {
+            if (!window.nexusSupabase || !isNetworkOnline()) return false;
             try {
                 const { data, error } = await window.nexusSupabase.functions.invoke('jarvis-tts', {
                     body: { text: clean.slice(0, 4000) }
                 });
                 if (!error && data && data.audio_base64 && !data.fallback) {
-                    setJarvisCallDebug('TTS: Gemini OK', clean.slice(0, 120));
+                    setJarvisCallDebug('TTS: nuvem OK', clean.slice(0, 120));
                     jarvisTtsAudio = new Audio('data:' + (data.mime || 'audio/wav') + ';base64,' + data.audio_base64);
                     jarvisTtsAudio.onended = () => { jarvisTtsAudio = null; if (onEnd) onEnd(); };
-                    jarvisTtsAudio.onerror = () => { setJarvisCallDebug('TTS: Gemini falhou', 'Fallback voz sistema'); speakJarvisWeb(clean, onEnd); };
+                    jarvisTtsAudio.onerror = () => { jarvisTtsAudio = null; if (onEnd) onEnd(); };
                     await jarvisTtsAudio.play();
-                    return;
+                    return true;
                 }
-                setJarvisCallDebug('TTS: Gemini indisponível', error?.message || 'fallback');
+                setJarvisCallDebug('TTS: nuvem indisponível', error?.message || 'fallback');
             } catch (e) {
                 console.warn('jarvis-tts:', e);
-                setJarvisCallDebug('TTS: erro Gemini', String(e.message || e));
+                setJarvisCallDebug('TTS: erro nuvem', String(e.message || e));
             }
+            return false;
+        };
+
+        const tryNativeTts = () => new Promise((resolve) => {
+            if (!window.AndroidNative || typeof AndroidNative.speakText !== 'function') {
+                resolve(false);
+                return;
+            }
+            let done = false;
+            const finish = (ok) => {
+                if (done) return;
+                done = true;
+                window.__onJarvisTtsEnd = null;
+                resolve(ok);
+            };
+            window.__onJarvisTtsEnd = () => finish(true);
+            try {
+                const rate = getJarvisTtsRate();
+                if (typeof AndroidNative.speakTextWithRate === 'function') {
+                    AndroidNative.speakTextWithRate(clean, rate);
+                } else {
+                    AndroidNative.speakText(clean);
+                }
+                setJarvisCallDebug('TTS: Android nativo', clean.slice(0, 120));
+                setTimeout(() => finish(true), Math.min(45000, Math.max(3000, clean.length * 90)));
+            } catch (e) {
+                console.warn('native TTS:', e);
+                setJarvisCallDebug('TTS: erro nativo', String(e.message || e));
+                finish(false);
+            }
+        });
+
+        const useGeminiSetting = getJarvisTtsProvider() === 'gemini';
+        const webViewNeedsCloud = window.AndroidNative || !('speechSynthesis' in window);
+        if (useGeminiSetting || webViewNeedsCloud) {
+            const ok = await tryEdgeTts();
+            if (ok) return;
+        }
+        if (window.AndroidNative && typeof AndroidNative.speakText === 'function') {
+            const nativeOk = await tryNativeTts();
+            if (nativeOk) { if (onEnd) onEnd(); return; }
         }
         speakJarvisWeb(clean, onEnd);
     }
 
     function speakJarvisWeb(text, onEnd) {
+        // AndroidNative TTS fallback for WebView (no speechSynthesis)
         if (!('speechSynthesis' in window)) {
+            try {
+                if (window.AndroidNative && typeof AndroidNative.speakText === 'function') {
+                    setJarvisCallDebug('TTS: Android native TTS', text.slice(0, 120));
+                    AndroidNative.speakText(text, 'pt-BR');
+                    setTimeout(() => { if (onEnd) onEnd(); }, Math.max(1500, text.length * 55));
+                    return;
+                }
+            } catch(e) {}
             setJarvisCallDebug('TTS: sem speechSynthesis', text.slice(0, 120));
             if (onEnd) onEnd();
             return;
         }
-        speechSynthesis.cancel();
+        try { speechSynthesis.cancel(); } catch(e) {}
         const u = new SpeechSynthesisUtterance(text);
         u.lang = 'pt-BR';
         u.rate = getJarvisTtsRate();
@@ -465,6 +533,8 @@
             jarvisProcessingVoice = true;
             setJarvisCallState('thinking');
             setJarvisCallDebug('STT: ' + text, 'Chamando Jarvis...');
+            setJarvisUserCaption(text);
+            setJarvisAssistantCaption('');
             stopJarvisMicAnalyser();
             if (!jarvisCallOverlayMinimized) startJarvisVizLoop('thinking');
             saveCallTurn('user', text);
@@ -473,6 +543,7 @@
             const reply = await callJarvisChat(text, history);
             const finalReply = reply || 'Não consegui processar agora. Verifique Wi-Fi e login Google.';
             setJarvisCallDebug('Resposta recebida', finalReply.slice(0, 160));
+            setJarvisAssistantCaption(finalReply);
             saveCallTurn('assistant', finalReply);
 
             speakJarvis(finalReply, () => {
@@ -578,6 +649,8 @@
         if (banner) banner.style.display = 'none';
         if (fab) fab.classList.remove('active');
         if (timer) timer.textContent = '00:00';
+        setJarvisUserCaption('');
+        setJarvisAssistantCaption('');
 
         if (window.AndroidNative && typeof window.AndroidNative.stopJarvisCall === 'function') {
             window.AndroidNative.stopJarvisCall();
