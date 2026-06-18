@@ -1,0 +1,46 @@
+name: Mobile Integrity
+
+on:
+  pull_request:
+    paths:
+      - 'mobile/**'
+      - 'scripts/bundle_mobile_js.py'
+      - 'scripts/check_mobile_integrity.py'
+      - 'tests/test_mobile_runtime_contract.py'
+      - 'tests/test_mobile_workflows.py'
+      - 'tests/test_mobile_youtube_adb_smoke.py'
+      - '.github/workflows/mobile-integrity.yml'
+  push:
+    branches: [ main ]
+    paths:
+      - 'mobile/**'
+      - 'scripts/bundle_mobile_js.py'
+      - 'scripts/check_mobile_integrity.py'
+      - '.github/workflows/mobile-integrity.yml'
+  workflow_dispatch:
+
+jobs:
+  mobile-integrity:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run mobile integrity guardrails
+        run: python scripts/check_mobile_integrity.py
+
+      - name: Validate generated bundle
+        run: python scripts/bundle_mobile_js.py && git diff --exit-code -- mobile/app.js
+
+      - name: Run focused mobile contract tests
+        run: pytest -q tests/test_mobile_runtime_contract.py tests/test_mobile_youtube_adb_smoke.py

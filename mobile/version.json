@@ -4,14 +4,11 @@
     "index.html",
     "style.css",
     "app.js",
+    "youtube-player.html",
     "manifest.json",
     "sw.js"
   ]
 }
-
-    "nexus-phase15.js",
-    "youtube-player.html",
-    "manifest.json",
     "sw.js"
   ]
 }
