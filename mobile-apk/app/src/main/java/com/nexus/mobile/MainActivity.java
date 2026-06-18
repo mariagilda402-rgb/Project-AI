@@ -581,6 +581,16 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface
+        public String getShellInfo() {
+            return new NexusAndroidBridge().getShellInfo();
+        }
+
+        @JavascriptInterface
+        public String getAppInfo() {
+            return getShellInfo();
+        }
+
+        @JavascriptInterface
         public boolean isNetworkOnline() {
             try {
                 ConnectivityManager cm = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
