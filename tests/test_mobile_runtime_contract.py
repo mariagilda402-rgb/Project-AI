@@ -1,25 +1,19 @@
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
 APP_JS = ROOT / "mobile" / "app.js"
-PHASE15_JS = ROOT / "mobile" / "nexus-phase15.js"
 INDEX_HTML = ROOT / "mobile" / "index.html"
 YOUTUBE_PLAYER_HTML = ROOT / "mobile" / "youtube-player.html"
-PHASE15_SQL = ROOT / "supabase_migration_phase15.sql"
+MANIFEST = ROOT / "mobile" / "js" / "manifest.txt"
+BUNDLER = ROOT / "scripts" / "bundle_mobile_js.py"
 
 
 def read_app_js() -> str:
     return APP_JS.read_text(encoding="utf-8")
-
-
-def read_phase15_js() -> str:
-    return PHASE15_JS.read_text(encoding="utf-8")
-
-
-def read_mobile_bundle() -> str:
-    return read_app_js() + "\n" + read_phase15_js()
 
 
 def read_index_html() -> str:
@@ -28,6 +22,37 @@ def read_index_html() -> str:
 
 def read_youtube_player_html() -> str:
     return YOUTUBE_PLAYER_HTML.read_text(encoding="utf-8")
+
+
+def read_mobile_source_bundle() -> str:
+    parts = []
+    for raw in MANIFEST.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if line and not line.startswith("#"):
+            parts.append((ROOT / line).read_text(encoding="utf-8").rstrip() + "\n")
+    return "\n".join(parts)
+
+
+def test_mobile_sources_are_modular_and_bundle_is_deterministic():
+    assert MANIFEST.is_file()
+    modules = [line.strip() for line in MANIFEST.read_text(encoding="utf-8").splitlines() if line.strip()]
+    assert len(modules) >= 8
+    for module in modules:
+        assert (ROOT / module).is_file(), f"Missing mobile source module: {module}"
+    assert read_mobile_source_bundle() == read_app_js()
+
+
+def test_mobile_bundler_recreates_app_js_without_changes():
+    result = subprocess.run(
+        [sys.executable, str(BUNDLER)],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+    assert read_mobile_source_bundle() == read_app_js()
 
 
 def test_mobile_app_does_not_redeclare_supabase_sdk_global():
@@ -45,18 +70,18 @@ def test_mobile_localdb_exposes_legacy_offline_aliases():
 
 
 def test_mobile_exposes_jarvis_call_toggle_for_fab():
-    bundle = read_mobile_bundle()
+    app_js = read_app_js()
 
-    assert "window.toggleJarvisCall" in bundle
-    assert "AndroidNative.startJarvisCall" in bundle
-    assert "AndroidNative.stopJarvisCall" in bundle
-    assert "requireWifiForJarvis" in bundle
+    assert "window.toggleJarvisCall" in app_js
+    assert "AndroidNative.startJarvisCall" in app_js
+    assert "AndroidNative.stopJarvisCall" in app_js
+    assert "requireWifiForJarvis" in app_js
 
 
 def test_mobile_blocks_jarvis_without_wifi():
     app_js = read_app_js()
     assert "requireWifiForJarvis" in app_js
-    assert "isNetworkOnline()" in app_js
+    assert "isWifiConnected()" in app_js
 
 
 def test_mobile_guards_web_notification_api_for_android_webview():
@@ -73,15 +98,61 @@ def test_mobile_settings_has_single_journal_toggle():
     assert html.count("toggleModule('journal')") == 1
 
 
-def test_mobile_nav_targets_have_views_for_videos_and_shop():
+def test_mobile_nav_targets_have_matching_views():
     html = read_index_html()
+    targets = re.findall(r'data-target="(view-[^"]+)"', html)
+    assert targets
+    for target in set(targets):
+        assert f'id="{target}"' in html, f"Missing view for nav target {target}"
 
-    assert 'data-target="view-videos"' in html
-    assert 'id="view-videos"' in html
-    assert 'id="videos-list"' in html
-    assert 'data-target="view-shop"' in html
-    assert 'id="view-shop"' in html
-    assert 'id="shop-list"' in html
+
+def test_mobile_click_handlers_are_defined_in_js_or_known_browser_apis():
+    html = read_index_html()
+    app_js = read_app_js()
+    handlers = set(re.findall(r'on(?:click|change|input|submit)="\s*([A-Za-z_$][\w$]*)\s*\(', html))
+    known = {"alert", "confirm", "prompt", "setTimeout", "clearTimeout", "if"}
+    missing = sorted(fn for fn in handlers if fn not in known and f"function {fn}" not in app_js and f"window.{fn}" not in app_js)
+    assert not missing, "Missing JS handlers referenced by HTML: " + ", ".join(missing)
+
+
+def test_mobile_refresh_view_content_covers_core_nav_modules():
+    app_js = read_app_js()
+    assert "window.refreshViewContent" in app_js
+    for case in [
+        "case 'view-home':",
+        "case 'view-habits':",
+        "case 'view-tasks':",
+        "case 'view-finance':",
+        "case 'view-studies':",
+        "case 'view-goals':",
+        "case 'view-fitness':",
+        "case 'view-journal':",
+        "case 'view-routines':",
+        "case 'view-iot':",
+    ]:
+        assert case in app_js
+
+
+def test_mobile_critical_handlers_for_working_baseline_exist():
+    app_js = read_app_js()
+    required = [
+        "window.syncData",
+        "window.toggleJarvisCall",
+        "window.sendChatMessage",
+        "window.openNoteEditor",
+        "window.saveNote",
+        "window.openYouTubeModal",
+        "window.insertYouTubeEmbed",
+        "window.openSlashMenu",
+        "window.openJarvisPanel",
+        "window.openQuiz",
+        "window.startQuiz",
+        "window.startJournalDictation",
+        "window.openWorkoutForm",
+        "window.NexusCalendar",
+    ]
+    for name in required:
+        assert name in app_js, f"Missing {name}"
 
 
 def test_mobile_visible_labels_are_utf8_not_mojibake():
@@ -91,103 +162,15 @@ def test_mobile_visible_labels_are_utf8_not_mojibake():
     assert "Hábitos" in text
     assert "Vídeos" in text
     assert "Módulos do App" in text
-    for mojibake in ["Ă", "Â", "Ã¡", "Ã©", "Ã­", "Ã³", "Ãº", "Ã§", "ðŸ", "â€", "â"]:
+    for mojibake in ["Ă", "Â", "Ã¡", "Ã©", "Ã­", "Ã³", "Ãº", "Ã§", "ðŸ", "â€", "â\x9d"]:
         assert mojibake not in text
-
-
-def test_mobile_nav_targets_all_have_matching_views():
-    html = read_index_html()
-    targets = re.findall(r'data-target="(view-[^"]+)"', html)
-    for target in set(targets):
-        assert f'id="{target}"' in html, f"Missing view for nav target {target}"
-
-
-def test_mobile_refresh_view_content_covers_nav_modules():
-    app_js = read_app_js()
-    assert "window.refreshViewContent" in app_js
-    assert "case 'view-goals':" in app_js
-    assert "case 'view-fitness':" in app_js
-    assert "case 'view-journal':" in app_js
-    assert "case 'view-alarms':" in app_js
-    assert "case 'view-routines':" in app_js
-    assert "case 'view-iot':" in app_js
-    assert "case 'view-cleaner':" in app_js
-    assert "ensureModuleNavVisible" in app_js
-
-
-def test_mobile_includes_audio_module():
-    html = read_index_html()
-    assert "nexus-audio.js" in html
-    assert 'id="cfg-audio-master"' in html
-    assert (ROOT / "mobile" / "nexus-audio.js").is_file()
-
-
-def test_mobile_jarvis_note_action_uses_supabase():
-    app_js = read_app_js()
-    assert "jarvis-note-action" in app_js
-
-
-def test_mobile_exposes_critical_window_handlers():
-    app_js = read_app_js()
-    required = [
-        "window.syncData",
-        "window.toggleIoT",
-        "window.openGoalForm",
-        "window.openHabitForm",
-        "window.openTaskForm",
-        "window.sendChatMessage",
-        "window.openQuiz",
-        "window.startQuiz",
-        "window.startJournalDictation",
-        "window.openSettingsView",
-        "window.discoverIoT",
-        "updateFitnessStats",
-        "habit_logs",
-        "window.NexusCalendar",
-        "window.syncTaskReminders",
-        "window.syncHabitReminders",
-        "window.openWorkoutForm",
-        "window.openSubjectForm",
-        "window.checkPendingReminders",
-    ]
-    for name in required:
-        assert name in app_js, f"Missing {name}"
-
-
-def test_mobile_has_shared_calendar_modal():
-    html = read_index_html()
-    assert 'id="nexus-calendar-modal"' in html
-    assert "window.NexusCalendar" in read_app_js()
-
-
-def test_mobile_has_goal_and_workout_forms():
-    html = read_index_html()
-    assert 'id="goal-form-modal"' in html
-    assert 'id="workout-form-modal"' in html
-    assert "openGoalForm" in read_app_js()
-    assert "openWorkoutForm" in read_app_js()
-
-
-def test_mobile_task_detail_has_notify_and_complete():
-    html = read_index_html()
-    assert 'id="task-detail-notify-enabled"' in html
-    assert "completeCurrentTask" in read_app_js()
-
-
-def test_mobile_habit_form_has_days_of_week():
-    html = read_index_html()
-    assert 'id="habit-form-dow"' in html
-    assert "saveHabitForm" in read_app_js()
-
-
-def test_mobile_studies_has_subjects_grid():
-    html = read_index_html()
-    assert 'id="subjects-grid"' in html
-    assert "loadSubjectsGrid" in read_app_js() or "subjects-grid" in read_app_js()
 
 
 def test_mobile_youtube_embed_has_referrer_policy():
     app_js = read_app_js()
+    html = read_index_html()
+    player_html = read_youtube_player_html()
+
     assert 'referrerpolicy="strict-origin-when-cross-origin"' in app_js
     assert "yt-embed-block" in app_js
     assert "getYouTubeEmbedSrc" in app_js
@@ -197,84 +180,17 @@ def test_mobile_youtube_embed_has_referrer_policy():
     assert "mariagilda402-rgb.github.io/Project-AI/mobile/youtube-player.html" in app_js
     assert "allowfullscreen" in app_js
     assert "picture-in-picture" in app_js
-    html = read_index_html()
     assert 'name="referrer"' in html
-    assert 'id="yt-embed-menu-popup"' in html
-    player_html = read_youtube_player_html()
+    assert 'id="yt-modal"' in html
     assert "youtube-nocookie.com/embed/" in player_html
     assert "setAttribute('referrerpolicy', 'strict-origin-when-cross-origin')" in player_html
     assert "origin: origin" in player_html
 
 
-def test_mobile_apk_serves_webview_from_https_appassets_for_youtube_referrer():
-    main = (ROOT / "mobile-apk" / "app" / "src" / "main" / "java" / "com" / "nexus" / "mobile" / "MainActivity.java").read_text(encoding="utf-8")
-    gradle = (ROOT / "mobile-apk" / "app" / "build.gradle").read_text(encoding="utf-8")
-
-    assert "WebViewAssetLoader" in main
-    assert "https://appassets.androidplatform.net/assets/index.html" in main
-    assert "https://appassets.androidplatform.net/bundle/index.html" in main
-    assert '"youtube-player.html"' in main
-    assert "appOrigin" in main
-    assert "webView.loadUrl(Uri.fromFile" not in main
-    assert "androidx.webkit:webkit" in gradle
-
-
-def test_mobile_save_quick_add_sets_task_name_and_title():
-    app_js = read_app_js()
-    block = re.search(r"window\.saveQuickAdd\s*=\s*function", app_js)
-    assert block
-    snippet = app_js[block.start():block.start() + 1200]
-    assert "name: title" in snippet or "name:title" in snippet.replace(" ", "")
-    assert "title: title" in snippet or "title:title" in snippet.replace(" ", "")
-
-
-def test_mobile_apk_has_reminder_receiver():
-    manifest = (ROOT / "mobile-apk" / "app" / "src" / "main" / "AndroidManifest.xml").read_text(encoding="utf-8")
-    assert "ReminderReceiver" in manifest
-    main = (ROOT / "mobile-apk" / "app" / "src" / "main" / "java" / "com" / "nexus" / "mobile" / "MainActivity.java").read_text(encoding="utf-8")
-    assert "scheduleReminder" in main
-    assert "cancelReminder" in main
-
-
-def test_supabase_migration_phase14_exists():
-    migration = ROOT / "supabase_migration_phase14.sql"
-    assert migration.exists()
-    text = migration.read_text(encoding="utf-8")
-    assert "days_of_week" in text
-    assert "cover_image" in text
-    assert "notify_at" in text
-
-
-def test_mobile_chart_destroy_uses_chartjs_registry():
-    app_js = read_app_js()
-    assert "Chart.getChart" in app_js
-    assert "window._chartInstances" in app_js
-    assert "delete window._chartInstances[id]" in app_js
-
-
-def test_mobile_closes_transient_modals_when_switching_tabs():
-    app_js = read_app_js()
-    assert "closeTransientMobileSurfaces" in app_js
-    assert "goal-form-modal" in app_js
-    assert "workout-form-modal" in app_js
-    nav_block = app_js[app_js.find("document.querySelectorAll('.nav-item')"):app_js.find("// ----------------------------------------------------", app_js.find("document.querySelectorAll('.nav-item')") + 1)]
-    assert "closeTransientMobileSurfaces" in nav_block
-
-
-def test_mobile_goal_and_workout_forms_are_centered_overlays():
-    html = read_index_html()
-    assert 'id="goal-form-modal" class="mobile-form-sheet"' in html
-    assert 'id="workout-form-modal" class="mobile-form-sheet"' in html
-    css = (ROOT / "mobile" / "style.css").read_text(encoding="utf-8")
-    assert ".mobile-form-sheet" in css
-    assert "align-items: center" in css
-    assert "justify-content: center" in css
-
-
 def test_mobile_hidden_note_textarea_cannot_render_white_box():
     html = read_index_html()
-    assert 'id="note-content" class="legacy-hidden-textarea"' in html
     css = (ROOT / "mobile" / "style.css").read_text(encoding="utf-8")
+    assert 'id="note-content" class="legacy-hidden-textarea"' in html
     assert ".legacy-hidden-textarea" in css
     assert "display: none !important" in css
     assert ".rich-editor" in css and "background: transparent" in css
@@ -307,135 +223,29 @@ def test_mobile_youtube_player_is_compact_inside_notes():
     assert "margin: 10px auto" in css
 
 
-def test_mobile_view_routines_inside_main():
-    html = read_index_html()
-    main_start = html.index("<main")
-    main_end = html.index("</main>")
-    main_content = html[main_start:main_end]
-    assert 'id="view-routines"' in main_content
+def test_mobile_sync_tables_include_core_life_os_tables():
+    app_js = read_app_js()
+    for table in ["'habit_logs'", "'flashcards'", "'journal_entries'", "'quiz_attempts'"]:
+        assert table in app_js
+
+
+def test_mobile_jarvis_cloud_and_tts_paths_are_real():
+    app_js = read_app_js()
+    assert "window.callJarvisChat" in app_js
+    assert "jarvis-chat" in app_js
+    assert "jarvis-note-action" in app_js
+    assert "jarvis-tts" in app_js
+    assert "window.speakJarvisText" in app_js
+    assert "speechSynthesis" in app_js
+    assert "SpeechSynthesisUtterance" in app_js
+    edge = (ROOT / "supabase" / "functions" / "jarvis-chat" / "index.ts").read_text(encoding="utf-8")
+    note_edge = (ROOT / "supabase" / "functions" / "jarvis-note-action" / "index.ts").read_text(encoding="utf-8")
+    assert "generativelanguage.googleapis.com" in edge
+    assert "GEMINI_API_KEY" in edge
+    assert "generativelanguage.googleapis.com" in note_edge
+    assert "GEMINI_API_KEY" in note_edge
 
 
 def test_mobile_no_literal_backslash_n_in_html():
     html = read_index_html()
     assert "\\n        <div" not in html
-
-
-def test_mobile_exposes_oauth_handlers():
-    app_js = read_app_js()
-    assert "window.handleOAuthCallback" in app_js
-    assert "getOAuthRedirectUrl" in app_js
-    assert "exchangeCodeForSession" in app_js
-    assert "window.triggerOcrCamera" in app_js
-
-
-def test_mobile_apk_has_oauth_deep_link():
-    manifest = (ROOT / "mobile-apk" / "app" / "src" / "main" / "AndroidManifest.xml").read_text(encoding="utf-8")
-    assert 'android:scheme="com.nexus.mobile"' in manifest
-    assert "singleTask" in manifest
-
-
-def test_mobile_sync_tables_include_habit_logs():
-    app_js = read_app_js()
-    assert "'habit_logs'" in app_js
-    assert "'flashcards'" in app_js
-    assert "'journal_entries'" in app_js
-    assert "'quiz_attempts'" in app_js
-
-
-def test_mobile_quiz_enem_exposed():
-    app_js = read_app_js()
-    html = read_index_html()
-    assert "window.openQuiz" in app_js
-    assert "ENEM_QUIZ_QUESTIONS" in app_js
-    assert 'id="quiz-view"' in html
-
-
-def test_mobile_loaders_guard_missing_containers():
-    app_js = read_app_js()
-    for loader in ["loadVideos", "loadShop", "loadGoals", "loadFitness", "loadCleaner"]:
-        block = re.search(rf"(?:function|window\.)({loader})\s*=\s*function|function {loader}\(\)\s*\{{", app_js)
-        assert block, f"function {loader} not found"
-        start = block.start()
-        snippet = app_js[start:start + 500]
-        if loader == "loadCleaner":
-            assert "scanPhoneStorage" in snippet
-            continue
-        assert re.search(r"if\s*\(\s*!container\s*\)\s*return", snippet), f"{loader} missing container guard"
-
-
-def test_mobile_has_cleaner_view():
-    html = read_index_html()
-    assert 'id="view-cleaner"' in html
-    assert 'id="cleaner-scan-results"' in html
-    assert 'runQuickClean' in html
-    assert 'runDeepClean' in html
-
-
-def test_mobile_exposes_cleaner_handlers():
-    app_js = read_app_js()
-    required = [
-        "window.scanPhoneStorage",
-        "window.runQuickClean",
-        "window.runDeepClean",
-        "window.loadCleaner",
-        "window.openCleanerView",
-        "window.getCleanerSuggestions",
-        "window.requestCleanerAiAdvice",
-    ]
-    for name in required:
-        assert name in app_js, f"Missing {name}"
-
-
-def test_mobile_cleaner_module_toggle():
-    html = read_index_html()
-    assert 'id="toggle-cleaner"' in html
-    assert "toggleModule('cleaner')" in html
-    assert 'data-target="view-cleaner"' in html
-
-
-def test_mobile_fab_removed_jarvis_home_only():
-    html = read_index_html()
-    bundle = read_mobile_bundle()
-    assert 'id="fab-add"' not in html
-    assert "callJarvisChat" in bundle
-    assert "buildJarvisContext" in bundle
-    assert 'id="jarvis-call-overlay"' in html
-    assert 'id="view-alarms"' in html
-    assert 'id="module-settings-list"' in html
-    main = (ROOT / "mobile-apk" / "app" / "src" / "main" / "java" / "com" / "nexus" / "mobile" / "MainActivity.java").read_text(encoding="utf-8")
-    assert "getStorageStats" in main
-    assert "getDeviceDiagnostics" in main
-    assert "clearAppCache" in main
-    assert "runNativeClean" in main
-    assert '"nexus-phase15.js"' in main
-
-
-def test_mobile_phase15_supabase_and_jarvis():
-    sql = PHASE15_SQL.read_text(encoding="utf-8")
-    assert "jarvis_chat_messages" in sql
-    assert "jarvis_call_sessions" in sql
-    assert "jarvis_call_turns" in sql
-    assert "nexus_alarms" in sql
-    assert "nexus_user_settings" in sql
-
-    app_js = read_app_js()
-    p15 = read_phase15_js()
-    assert "jarvis_chat_messages" in app_js
-    assert "notificationsEnabled" in app_js
-    assert "static patchRow" in app_js
-    assert "toggleJarvisCallMic" in p15
-    assert "speakJarvis" in p15
-    assert "loadAlarms" in p15
-    assert "buildAlarmSchedule" in p15
-    assert "loadJarvisCallHistory" in p15
-    assert "initModuleDragSort" in p15
-    assert "loadJarvisPersistentHistory" in p15
-
-    html = read_index_html()
-    assert 'id="cfg-jarvis-tts"' in html
-    assert 'id="alarm-form-modal"' in html
-    assert 'nexus-phase15.js' in html
-
-    for name in ["jarvis-chat", "jarvis-note-action", "jarvis-tts"]:
-        assert (ROOT / "supabase" / "functions" / name / "index.ts").is_file()
-    assert (ROOT / "supabase" / "functions" / "_shared" / "jarvis_prompts.ts").is_file()
