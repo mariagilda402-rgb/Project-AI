@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Nexus · Operacoes</title>
+  <style>
+    #nx-app-wrapper .nx-chrome-inner > header { padding: 14px 24px !important; }
+    #nx-app-wrapper .nx-chrome-inner > main { padding: 20px 24px 40px !important; }
+    .ops-grid { display:grid; grid-template-columns: minmax(0, 1.6fr) minmax(280px, 0.9fr); gap:14px; }
+    .ops-panel { border:1px solid var(--border); background:var(--bg-panel); border-radius:8px; padding:14px; }
+    .ops-panel h2 { margin:0 0 10px; font-size:14px; color:var(--text); }
+    .ops-deck { display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:10px; }
+    .ops-card { border:1px solid rgba(255,255,255,0.07); background:rgba(255,255,255,0.03); border-radius:8px; padding:12px; }
+    .ops-card strong { display:block; color:var(--text); font-size:13px; margin-bottom:6px; }
+    .ops-value { font-size:22px; font-weight:850; color:#a78bfa; }
+    .ops-meta { font-size:11px; color:var(--text-dim); margin-top:4px; }
+    .ops-rec { padding:10px 0; border-bottom:1px solid rgba(255,255,255,0.06); color:var(--text); font-size:13px; }
+    .ops-rec:last-child { border-bottom:none; }
+    .ops-form { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px; }
+    .ops-form input { min-height:34px; border:1px solid var(--border); border-radius:6px; background:rgba(0,0,0,0.18); color:var(--text); padding:0 10px; }
+    .ops-form button, .ops-actions button { min-height:34px; border:1px solid rgba(139,92,246,0.35); border-radius:6px; background:rgba(139,92,246,0.12); color:#c4b5fd; cursor:pointer; font-weight:800; }
+    .ops-actions { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+    .ops-narrative { color:var(--text-dim); font-size:13px; line-height:1.55; }
+    .ops-signal { margin-bottom:12px; padding:10px 12px; border-radius:8px; border:1px solid rgba(34,197,94,0.24); background:rgba(34,197,94,0.08); color:#86efac; font-size:12px; }
+    .ops-signal[hidden] { display:none !important; }
+    @media (max-width: 900px) { .ops-grid { grid-template-columns:1fr; } .ops-form { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Operacoes</h1>
+      <span>Business cockpit · metricas, sinais e proximas decisoes</span>
+    </div>
+    <div class="ops-actions">
+      <button type="button" data-ops-action="refresh" onclick="refreshOps()">Atualizar</button>
+      <button type="button" data-ops-action="overview" onclick="pywebview.api.jump('overview','{}')">Visao geral</button>
+    </div>
+  </header>
+  <main>
+    <div class="ops-signal" id="opsSignalReceipt" hidden></div>
+    <div class="ops-grid">
+      <section class="ops-panel">
+        <h2>Metricas</h2>
+        <div class="ops-deck" id="opsDeck"></div>
+        <div class="ops-form">
+          <input id="opsMetricKey" placeholder="chave: mrr" />
+          <input id="opsMetricValue" placeholder="valor: 15000" />
+          <input id="opsMetricLabel" placeholder="label: MRR" />
+          <input id="opsMetricTarget" placeholder="meta: 20000" />
+          <button type="button" data-ops-action="metric-set" onclick="saveOpsMetric()">Salvar metrica</button>
+        </div>
+      </section>
+      <aside class="ops-panel">
+        <h2>Narrativa</h2>
+        <div class="ops-narrative" id="opsNarrative">Carregando painel...</div>
+        <h2 style="margin-top:18px;">Recomendacoes</h2>
+        <div id="opsRecommendations"></div>
+      </aside>
+    </div>
+  </main>
+  <script src="nexus_boot.js"></script>
+  <script>
+    function esc(value) {
+      return String(value ?? '').replace(/[&<>"']/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":"&#39;" }[ch]));
+    }
+
+    function renderMetric(metric) {
+      return '<article class="ops-card">' +
+        '<strong>' + esc(metric.label || metric.key || 'Metrica') + '</strong>' +
+        '<div class="ops-value">' + esc(metric.value_label || metric.value || 0) + '</div>' +
+        '<div class="ops-meta">Meta: ' + esc(metric.target_label || '-') + ' · ' + esc(metric.period || 'atual') + '</div>' +
+      '</article>';
+    }
+
+    function renderOps(data) {
+      const metrics = data.metrics || [];
+      document.getElementById('opsDeck').innerHTML = metrics.length ? metrics.map(renderMetric).join('') : '<div class="ops-meta">Sem metricas ainda.</div>';
+      document.getElementById('opsRecommendations').innerHTML = (data.recommendations || []).map(r =>
+        '<div class="ops-rec">' + esc(r.title || r.message || r) + '<div class="ops-meta">' + esc(r.detail || '') + '</div></div>'
+      ).join('') || '<div class="ops-meta">Sem recomendacoes por enquanto.</div>';
+      document.getElementById('opsNarrative').textContent = data.narrative || 'Atualize metricas para gerar uma leitura operacional.';
+    }
+
+    async function refreshOps() {
+      const r = await nxBridge('ops_dashboard', { open_window: false });
+      if (r.ok) renderOps(r.data || {});
+    }
+
+    async function saveOpsMetric() {
+      const payload = {
+        key: document.getElementById('opsMetricKey').value.trim(),
+        value: document.getElementById('opsMetricValue').value.trim(),
+        label: document.getElementById('opsMetricLabel').value.trim(),
+        target: document.getElementById('opsMetricTarget').value.trim()
+      };
+      if (!payload.key || !payload.value) return;
+      const r = await nxBridge('ops_metric_set', payload);
+      const receipt = document.getElementById('opsSignalReceipt');
+      receipt.hidden = false;
+      receipt.textContent = r.ok ? 'Metrica salva e painel atualizado.' : 'Falha ao salvar metrica.';
+      await refreshOps();
+    }
+
+    refreshOps();
+  </script>
+</body>
+</html>

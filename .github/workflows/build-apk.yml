@@ -1,0 +1,70 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ "main", "codex/nexus-command-orchestrator" ]
+    paths:
+      - 'mobile/**'
+      - 'mobile-apk/**'
+      - '.github/workflows/build-apk.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+
+    - name: Set up Android SDK
+      uses: android-actions/setup-android@v3
+
+    - name: Install Android platform and build tools
+      run: sdkmanager "platforms;android-34" "build-tools;34.0.0"
+
+    - name: Set up Gradle 8.6
+      uses: gradle/actions/setup-gradle@v4
+      with:
+        gradle-version: '8.6'
+
+    - name: Copy web assets to Android
+      run: |
+        mkdir -p mobile-apk/app/src/main/assets
+        cp -r mobile/* mobile-apk/app/src/main/assets/
+
+    - name: Build APK
+      run: gradle :app:assembleDebug --no-daemon --stacktrace --console=plain
+      working-directory: mobile-apk
+
+    - name: Upload APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: NexusMobile-APK
+        path: mobile-apk/app/build/outputs/apk/debug/app-debug.apk
+
+    - name: Delete existing latest tag (if exists)
+      run: |
+        git tag -d latest || true
+        git push origin :refs/tags/latest || true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Create or Update Latest Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: latest
+        name: "Latest Nexus Build"
+        body: "APK atualizado automaticamente. Baixe o arquivo abaixo para instalar no seu celular."
+        files: mobile-apk/app/build/outputs/apk/debug/app-debug.apk
+        prerelease: false
+        make_latest: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

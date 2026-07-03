@@ -1,0 +1,29 @@
+{
+  "version": "2026.06.16.3",
+  "files": [
+    "index.html",
+    "style.css",
+    "app.js",
+    "nexus-audio.js",
+    "nexus-phase15.js",
+    "youtube-player.html",
+    "manifest.json",
+    "sw.js",
+    "js/nexus-core.js",
+    "js/nexus-studies.js",
+    "js/nexus-gamification.js",
+    "js/nexus-journal.js",
+    "js/nexus-fitness.js",
+    "js/nexus-habits.js",
+    "js/nexus-tasks.js",
+    "js/nexus-routines.js",
+    "js/nexus-theme.js",
+    "js/nexus-editor.js",
+    "js/nexus-study-tools.js",
+    "js/nexus-studies-graph.js",
+    "js/nexus-analytics.js",
+    "js/nexus-auth.js",
+    "js/nexus-cleaner.js",
+    "js/nexus-forms.js"
+  ]
+}

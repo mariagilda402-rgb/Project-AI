@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Nexus · Workflows</title>
+  <link rel="stylesheet" href="workflows.css?v=2" />
+  <link rel="stylesheet" href="nexus_theme.css?v=2" />
+</head>
+<body>
+  <header>
+    <div><h1>⚡ Workflows</h1><span>Capture e execute contextos de trabalho instantaneamente</span></div>
+    <div style="display:flex; gap:8px; align-items:center;">
+      <button type="button" class="btn btn-ghost" onclick="pywebview.api.jump('overview','{}')">Visão geral</button>
+    </div>
+  </header>
+  <main>
+    <div id="list"></div>
+    <button class="fab-btn" id="fabBtn" title="Gravar novo Workflow">+</button>
+
+    <div class="modal-backdrop" id="wfModalBackdrop">
+      <div class="wf-modal" onclick="event.stopPropagation()">
+        <h3>Gravar Novo Workflow</h3>
+        <p class="sub">A Inteligência Artificial irá capturar suas janelas ativas e criar um modo para ser executado mais tarde.</p>
+        <div class="form-field">
+          <label>Nome do Modo (ex: Modo Estudo)</label>
+          <input id="wn" type="text" placeholder="Modo..." />
+        </div>
+        <div class="form-field">
+          <label>Descrição</label>
+          <input id="wd" type="text" placeholder="Para que serve este modo?" />
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-cancel" id="btnCancel">Cancelar</button>
+          <button type="button" class="btn-save" id="btnSave">Gravar</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="nexus_boot.js"></script>
+  <script>
+    const boot = readBoot();
+
+    async function loadWorkflows() {
+      const list = document.getElementById('list');
+      const r = await nxBridge('workflows_list', {});
+      if (!r.ok) { list.innerHTML = '<div class="empty-state">' + (r.error||'Erro ao carregar workflows') + '</div>'; return; }
+      
+      const wfs = r.data || [];
+      if (!wfs.length) {
+        list.innerHTML = `
+          <div class="empty-state">
+            <div style="font-size:32px; margin-bottom:12px;">💻</div>
+            <div style="font-weight:600; font-size:15px; color:var(--text); margin-bottom:8px;">Nenhum Workflow salvo</div>
+            Você pode gravar seu ambiente atual (janelas, sites) como um Workflow e pedir para a IA restaurar tudo com um clique depois.
+          </div>
+        `;
+        return;
+      }
+
+      list.innerHTML = wfs.map(w => {
+        let appsCount = 0;
+        try {
+          appsCount = JSON.parse(w.steps_json).length;
+        } catch(e) {}
+        
+        const lastExec = w.last_executed ? new Date(w.last_executed).toLocaleString('pt-BR') : 'Nunca';
+        
+        return `
+          <div class="wf-item" data-id="${w.id}">
+            <div class="wf-info">
+              <div class="wf-title">${w.name} <span class="wf-badge">${appsCount} passos</span></div>
+              <div class="wf-meta">${w.description || 'Sem descrição'} <br/> Última execução: ${lastExec}</div>
+            </div>
+            <div class="wf-actions">
+              <button class="btn-run" onclick="runWorkflow('${w.name}')">▶ Rodar</button>
+              <button class="btn-del" onclick="deleteWorkflow(${w.id})">✕</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function runWorkflow(name) {
+      if(window.pywebview && window.pywebview.api) {
+          // Pede para o agente rodar o workflow pelo nome
+          window.pywebview.api.agent_chat('run|' + name);
+          // Opcional: mostrar um toast
+      }
+    }
+
+    async function deleteWorkflow(id) {
+      if(!confirm('Tem certeza que deseja remover este Workflow?')) return;
+      await nxBridge('workflow_delete', { workflow_id: id });
+      loadWorkflows();
+    }
+
+    // Modal
+    const backdrop = document.getElementById('wfModalBackdrop');
+    document.getElementById('fabBtn').onclick = () => {
+      backdrop.classList.add('active');
+      document.getElementById('wn').focus();
+    };
+    
+    function closeModal() {
+      backdrop.classList.remove('active');
+    }
+    
+    document.getElementById('btnCancel').onclick = closeModal;
+    backdrop.onclick = closeModal;
+
+    document.getElementById('btnSave').onclick = async () => {
+      const name = document.getElementById('wn').value.trim();
+      const desc = document.getElementById('wd').value.trim();
+      if (!name) return;
+      
+      // Enviamos a instrução para o Jarvis, e ele cuida de capturar as janelas e salvar.
+      if(window.pywebview && window.pywebview.api) {
+          window.pywebview.api.agent_chat('save|' + name + '|' + desc);
+      }
+      
+      closeModal();
+      document.getElementById('wn').value = '';
+      document.getElementById('wd').value = '';
+      
+      // Opcional: reload visual
+      setTimeout(loadWorkflows, 2000); // Dá um tempinho pro sqlite salvar via agent
+    };
+
+    loadWorkflows();
+    window.addEventListener('message', (e) => {
+      if (e.data === 'nexus-tab-focus') {
+        loadWorkflows();
+      }
+    });
+  </script>
+</body>
+</html>

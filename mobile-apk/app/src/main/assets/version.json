@@ -1,0 +1,10 @@
+{
+  "version": "2026.06.20.9",
+  "files": [
+    "index.html",
+    "style.css",
+    "app.js",
+    "manifest.json",
+    "sw.js"
+  ]
+}

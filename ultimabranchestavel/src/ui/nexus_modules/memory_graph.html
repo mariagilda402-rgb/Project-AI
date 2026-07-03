@@ -1,0 +1,893 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Nexus - Grafo neural</title>
+  <style>
+    @keyframes graphIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes graphPulse { 0%, 100% { opacity: 0.44; } 50% { opacity: 0.9; } }
+
+    #nx-app-wrapper .nx-chrome-inner > header {
+      padding: 14px 22px !important;
+      background:
+        radial-gradient(circle at 22% 50%, rgba(56, 189, 248, 0.20), transparent 30%),
+        linear-gradient(90deg, rgba(124, 58, 237, 0.17), rgba(16, 185, 129, 0.08)),
+        var(--bg-panel) !important;
+    }
+
+    #nx-app-wrapper .nx-chrome-inner > header h1 {
+      font-size: 18px !important;
+      font-weight: 900 !important;
+      letter-spacing: 0 !important;
+    }
+
+    #nx-app-wrapper .nx-chrome-inner > header span {
+      color: var(--text-dim) !important;
+      font-size: 11px !important;
+    }
+
+    #nx-app-wrapper .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: min(460px, 48vw);
+    }
+
+    #nx-app-wrapper .graph-search {
+      width: 100%;
+      min-width: 160px;
+      height: 34px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: rgba(2, 6, 23, 0.42);
+      color: var(--text);
+      font-size: 12px;
+      outline: none;
+      padding: 0 11px;
+    }
+
+    #nx-app-wrapper .graph-search:focus {
+      border-color: var(--border-accent);
+      box-shadow: 0 0 0 3px var(--accent-subtle);
+    }
+
+    #nx-app-wrapper .mini-command {
+      min-height: 34px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 800;
+      padding: 8px 10px;
+      text-transform: uppercase;
+      white-space: nowrap;
+      transition: 0.18s ease;
+    }
+
+    #nx-app-wrapper .mini-command:hover {
+      border-color: var(--border-accent);
+      background: var(--accent-subtle);
+    }
+
+    #nx-app-wrapper .memory-shell {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 310px;
+      gap: 14px;
+      height: 100%;
+      min-height: 0;
+      padding: 16px !important;
+      background:
+        radial-gradient(circle at 44% 38%, rgba(56, 189, 248, 0.10), transparent 34%),
+        radial-gradient(circle at 72% 68%, rgba(16, 185, 129, 0.08), transparent 30%),
+        var(--bg) !important;
+    }
+
+    #nx-app-wrapper .graph-stage,
+    #nx-app-wrapper .graph-side {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.012)),
+        var(--bg-panel);
+      box-shadow: var(--shadow);
+      animation: graphIn 0.26s ease both;
+      min-width: 0;
+    }
+
+    #nx-app-wrapper .graph-stage {
+      display: grid;
+      grid-template-rows: auto auto auto minmax(360px, 1fr);
+      overflow: hidden;
+    }
+
+    #nx-app-wrapper .graph-topline {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    #nx-app-wrapper .graph-status strong {
+      display: block;
+      color: var(--text);
+      font-size: 13px;
+    }
+
+    #nx-app-wrapper .graph-status span {
+      display: block;
+      color: var(--text-dim);
+      font-size: 11px;
+      margin-top: 3px;
+    }
+
+    #nx-app-wrapper .graph-stats {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 7px;
+    }
+
+    #nx-app-wrapper .stat-chip,
+    #nx-app-wrapper .type-filter {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.035);
+      color: var(--text-dim);
+      font-size: 10px;
+      font-weight: 800;
+      line-height: 1;
+      padding: 7px 8px;
+      text-transform: uppercase;
+    }
+
+    #nx-app-wrapper .graph-filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    #nx-app-wrapper .graph-spotlight {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    #nx-app-wrapper .spotlight-node {
+      min-width: 170px;
+      max-width: 230px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: rgba(2, 6, 23, 0.36);
+      color: var(--text);
+      cursor: pointer;
+      padding: 9px;
+      text-align: left;
+      transition: 0.18s ease;
+    }
+
+    #nx-app-wrapper .spotlight-node:hover {
+      border-color: var(--border-accent);
+      background: var(--accent-subtle);
+      transform: translateY(-1px);
+    }
+
+    #nx-app-wrapper .spotlight-node strong {
+      display: block;
+      overflow: hidden;
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 900;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    #nx-app-wrapper .spotlight-node span {
+      display: block;
+      overflow: hidden;
+      color: var(--text-dim);
+      font-size: 10px;
+      margin-top: 4px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    #nx-app-wrapper .type-filter {
+      cursor: pointer;
+      transition: 0.18s ease;
+    }
+
+    #nx-app-wrapper .type-filter.active {
+      border-color: var(--border-accent);
+      color: var(--text);
+      background: var(--accent-subtle);
+    }
+
+    #nx-app-wrapper .canvas-shell {
+      position: relative;
+      min-height: 360px;
+      overflow: hidden;
+      background:
+        linear-gradient(rgba(56, 189, 248, 0.08) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(56, 189, 248, 0.08) 1px, transparent 1px);
+      background-size: 34px 34px;
+    }
+
+    #nx-app-wrapper .canvas-shell::after {
+      content: "";
+      position: absolute;
+      inset: 18%;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(56, 189, 248, 0.12), transparent 64%);
+      filter: blur(8px);
+      pointer-events: none;
+      animation: graphPulse 4s ease-in-out infinite;
+    }
+
+    #nx-app-wrapper #memoryGraphCanvas {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    #nx-app-wrapper .graph-empty {
+      position: absolute;
+      inset: auto 20px 20px 20px;
+      z-index: 2;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: rgba(2, 6, 23, 0.76);
+      color: var(--text-dim);
+      display: none;
+      font-size: 12px;
+      padding: 12px;
+    }
+
+    #nx-app-wrapper .graph-side {
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr) auto;
+      overflow: hidden;
+    }
+
+    #nx-app-wrapper .side-head {
+      padding: 14px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    #nx-app-wrapper .side-head span {
+      display: block;
+      color: var(--text-dim);
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    #nx-app-wrapper .side-head strong {
+      display: block;
+      color: var(--text);
+      font-size: 15px;
+      margin-top: 5px;
+    }
+
+    #nx-app-wrapper .node-details {
+      overflow: auto;
+      padding: 14px;
+      color: var(--text-dim);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    #nx-app-wrapper .semantic-stats,
+    #nx-app-wrapper .obsidian-panel {
+      border-top: 1px solid var(--border);
+      padding: 12px;
+    }
+
+    #nx-app-wrapper .semantic-stats {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      color: var(--text-dim);
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    #nx-app-wrapper .semantic-stats span,
+    #nx-app-wrapper .semantic-topic {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      padding: 6px 8px;
+      color: var(--text);
+    }
+
+    #nx-app-wrapper .obsidian-panel {
+      display: grid;
+      gap: 8px;
+      background: rgba(2, 6, 23, 0.18);
+    }
+
+    #nx-app-wrapper .obsidian-panel label {
+      color: var(--text-muted);
+      font-size: 10px;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+
+    #nx-app-wrapper .obsidian-path {
+      width: 100%;
+      height: 34px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: rgba(2, 6, 23, 0.42);
+      color: var(--text);
+      font-size: 12px;
+      padding: 0 10px;
+    }
+
+    #nx-app-wrapper .obsidian-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    #nx-app-wrapper .obsidian-status {
+      min-height: 18px;
+      color: var(--text-dim);
+      font-size: 11px;
+    }
+
+    #nx-app-wrapper .node-details h2 {
+      color: var(--text);
+      font-size: 19px;
+      line-height: 1.15;
+      margin: 0 0 6px;
+    }
+
+    #nx-app-wrapper .node-details p {
+      margin: 0 0 12px;
+    }
+
+    #nx-app-wrapper .detail-meta {
+      display: grid;
+      gap: 7px;
+      margin: 12px 0;
+    }
+
+    #nx-app-wrapper .detail-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 7px;
+    }
+
+    #nx-app-wrapper .detail-row span:first-child {
+      color: var(--text-muted);
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    #nx-app-wrapper .detail-row span:last-child {
+      color: var(--text);
+      text-align: right;
+    }
+
+    #nx-app-wrapper .side-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      padding: 12px;
+      border-top: 1px solid var(--border);
+    }
+
+    #nx-app-wrapper .side-actions .mini-command {
+      width: 100%;
+    }
+
+    @media (max-width: 860px) {
+      #nx-app-wrapper .header-actions { min-width: 0; width: 100%; }
+      #nx-app-wrapper .memory-shell { grid-template-columns: 1fr; }
+      #nx-app-wrapper .graph-side { min-height: 300px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Grafo neural</h1>
+      <span>MindPalace, memoria, rotina e objetivos em uma rede local.</span>
+    </div>
+    <div class="header-actions">
+      <input id="memoryGraphSearch" class="graph-search" type="search" placeholder="Buscar nota, tag, habito, meta..." />
+      <button class="mini-command" type="button" onclick="loadMemoryGraph()">Atualizar</button>
+    </div>
+  </header>
+  <main class="memory-shell">
+    <section class="graph-stage">
+      <div class="graph-topline">
+        <div class="graph-status">
+          <strong id="memoryGraphTitle">Rede local</strong>
+          <span id="memoryGraphSubtitle">Carregando memoria do Nexus...</span>
+        </div>
+        <div class="graph-stats" id="memoryGraphStats"></div>
+      </div>
+      <div class="graph-filters" id="memoryGraphFilters"></div>
+      <div class="graph-spotlight" id="memoryGraphSpotlight"></div>
+      <div class="canvas-shell">
+        <canvas id="memoryGraphCanvas" aria-label="Visualizador do grafo neural"></canvas>
+        <div class="graph-empty" id="memoryGraphEmpty">Nenhum no encontrado para o filtro atual.</div>
+      </div>
+    </section>
+    <aside class="graph-side">
+      <div class="side-head">
+        <span>No selecionado</span>
+        <strong id="memorySelectedLabel">Nexus Life OS</strong>
+      </div>
+      <div class="node-details" id="memoryNodeDetails">
+        <h2>Mapa de contexto</h2>
+        <p>Selecione qualquer ponto da rede para ver a origem, detalhes e a janela Nexus relacionada.</p>
+      </div>
+      <div class="semantic-stats" id="memoryGraphSemanticStats">
+        <span>Semantica local aguardando grafo</span>
+      </div>
+      <div class="obsidian-panel">
+        <label for="memoryGraphObsidianPath">Pasta Obsidian / Markdown</label>
+        <input id="memoryGraphObsidianPath" class="obsidian-path" type="text" placeholder="C:\\Caminho\\Vault" />
+        <div class="obsidian-actions">
+          <button class="mini-command" type="button" onclick="exportMemoryGraphObsidian()">Exportar</button>
+          <button class="mini-command" type="button" onclick="importMemoryGraphObsidian()">Importar</button>
+        </div>
+        <div class="obsidian-status" id="memoryGraphObsidianStatus"></div>
+      </div>
+      <div class="side-actions">
+        <button class="mini-command" type="button" id="btnMemoryOpenModule" onclick="openSelectedNodeModule()">Abrir origem</button>
+        <button class="mini-command" type="button" onclick="jumpToModule('notes')">Notas</button>
+        <button class="mini-command" type="button" onclick="jumpToModule('study')">SRS</button>
+        <button class="mini-command" type="button" onclick="jumpToModule('overview')">Dashboard</button>
+      </div>
+    </aside>
+  </main>
+
+  <script src="nexus_boot.js"></script>
+  <script>
+    const TYPE_COLORS = {
+      core: '#f8fafc',
+      subject: '#38bdf8',
+      note: '#8b5cf6',
+      flashcard: '#22c55e',
+      habit: '#f59e0b',
+      task: '#f97316',
+      goal: '#ec4899',
+      reward: '#eab308',
+      memory: '#14b8a6',
+      memory_category: '#2dd4bf',
+      markdown: '#60a5fa',
+      tag: '#a78bfa'
+    };
+    const TYPE_LABELS = {
+      core: 'Core',
+      subject: 'Materia',
+      note: 'Nota',
+      flashcard: 'SRS',
+      habit: 'Habito',
+      task: 'Tarefa',
+      goal: 'Meta',
+      reward: 'Loja',
+      memory: 'Memoria',
+      memory_category: 'Memoria',
+      markdown: 'Markdown',
+      tag: 'Tag'
+    };
+    const memoryGraphState = {
+      graph: { nodes: [], edges: [], stats: { nodes: 0, edges: 0, types: {} } },
+      layout: new Map(),
+      selectedId: 'nexus:core',
+      hoverId: '',
+      activeTypes: new Set(),
+      search: '',
+      frame: 0
+    };
+
+    function escapeHtml(value) {
+      return String(value || '').replace(/[&<>"']/g, (ch) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+      }[ch]));
+    }
+
+    function setText(id, value) {
+      const el = document.getElementById(id);
+      if (el) el.textContent = value;
+    }
+
+    function visibleTypesFromGraph(graph) {
+      return Object.keys((graph && graph.stats && graph.stats.types) || {}).sort();
+    }
+
+    function renderStats(graph) {
+      const stats = graph.stats || {};
+      const el = document.getElementById('memoryGraphStats');
+      if (!el) return;
+      el.innerHTML = [
+        ['Nos', stats.nodes || 0],
+        ['Ligacoes', stats.edges || 0],
+        ['Semanticas', stats.semantic_edges || 0],
+        ['Clusters', Object.keys(stats.clusters || {}).length]
+      ].map(([label, value]) => '<span class="stat-chip">' + label + ': ' + value + '</span>').join('');
+      const semantic = document.getElementById('memoryGraphSemanticStats');
+      if (semantic) {
+        semantic.innerHTML =
+          '<span>modo ' + escapeHtml(stats.semantic_mode || 'local') + '</span>' +
+          '<span>semantic_edges ' + Number(stats.semantic_edges || 0) + '</span>' +
+          '<span>keyword_edges ' + Number(stats.smart_edges || 0) + '</span>';
+      }
+    }
+
+    function renderFilters(graph) {
+      const el = document.getElementById('memoryGraphFilters');
+      if (!el) return;
+      const types = visibleTypesFromGraph(graph);
+      if (!memoryGraphState.activeTypes.size) {
+        types.forEach((type) => memoryGraphState.activeTypes.add(type));
+      }
+      el.innerHTML = types.map((type) => {
+        const active = memoryGraphState.activeTypes.has(type) ? ' active' : '';
+        const label = TYPE_LABELS[type] || type;
+        return '<button class="type-filter' + active + '" type="button" data-type="' + escapeHtml(type) + '">' + escapeHtml(label) + '</button>';
+      }).join('');
+      el.querySelectorAll('[data-type]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const type = btn.getAttribute('data-type');
+          if (memoryGraphState.activeTypes.has(type)) memoryGraphState.activeTypes.delete(type);
+          else memoryGraphState.activeTypes.add(type);
+          renderFilters(memoryGraphState.graph);
+          renderMemoryGraphCanvas();
+        });
+      });
+    }
+
+    function renderMemoryGraphSpotlight(graph) {
+      const el = document.getElementById('memoryGraphSpotlight');
+      if (!el) return;
+      const matches = (graph && graph.ranked_matches) || [];
+      if (!matches.length) {
+        el.innerHTML = '<button class="spotlight-node" type="button" onclick="selectMemoryNode(\'nexus:core\')"><strong>Visao geral</strong><span>Digite uma busca para destacar relacoes</span></button>';
+        return;
+      }
+      el.innerHTML = matches.slice(0, 8).map((node) => {
+        const label = escapeHtml(node.label || node.id || 'No');
+        const type = escapeHtml(TYPE_LABELS[node.type] || node.type || 'Item');
+        const score = Number(node.relevance || 0).toFixed(1);
+        const keywords = (node.keywords || []).slice(0, 3).join(', ');
+        return '<button class="spotlight-node" type="button" data-node-id="' + escapeHtml(node.id) + '">' +
+          '<strong>' + label + '</strong>' +
+          '<span>' + type + ' - relevancia ' + score + '</span>' +
+          '<span>' + escapeHtml(keywords || node.subtitle || '') + '</span>' +
+          '</button>';
+      }).join('');
+      el.querySelectorAll('[data-node-id]').forEach((btn) => {
+        btn.addEventListener('click', () => selectMemoryNode(btn.getAttribute('data-node-id')));
+      });
+    }
+
+    function nodeMatchesSearch(node) {
+      const q = memoryGraphState.search.trim().toLowerCase();
+      if (!q) return true;
+      return [node.label, node.subtitle, node.details, node.type, node.cluster]
+        .join(' ')
+        .toLowerCase()
+        .includes(q);
+    }
+
+    function visibleGraph() {
+      const nodes = (memoryGraphState.graph.nodes || []).filter((node) => {
+        return memoryGraphState.activeTypes.has(node.type) && nodeMatchesSearch(node);
+      });
+      const ids = new Set(nodes.map((node) => node.id));
+      const edges = (memoryGraphState.graph.edges || []).filter((edge) => ids.has(edge.source) && ids.has(edge.target));
+      return { nodes, edges, ids };
+    }
+
+    function prepareCanvas(canvas) {
+      const rect = canvas.getBoundingClientRect();
+      const width = Math.max(420, Math.round(rect.width || canvas.parentElement.clientWidth || 720));
+      const height = Math.max(360, Math.round(rect.height || canvas.parentElement.clientHeight || 520));
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(height * dpr);
+      canvas.style.width = width + 'px';
+      canvas.style.height = height + 'px';
+      const ctx = canvas.getContext('2d');
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      return { ctx, width, height };
+    }
+
+    function layoutNodes(nodes, width, height) {
+      const centerX = width * 0.5;
+      const centerY = height * 0.5;
+      const grouped = nodes.reduce((acc, node) => {
+        const key = node.cluster || node.type || 'nexus';
+        (acc[key] = acc[key] || []).push(node);
+        return acc;
+      }, {});
+      const clusters = Object.keys(grouped).sort();
+      const clusterRadius = Math.min(width, height) * 0.31;
+      clusters.forEach((cluster, clusterIndex) => {
+        const angle = (clusterIndex / Math.max(1, clusters.length)) * Math.PI * 2 - Math.PI / 2;
+        const clusterX = centerX + Math.cos(angle) * clusterRadius;
+        const clusterY = centerY + Math.sin(angle) * clusterRadius;
+        const items = grouped[cluster];
+        const localRadius = Math.min(120, 38 + items.length * 8);
+        items.forEach((node, index) => {
+          if (node.type === 'core') {
+            memoryGraphState.layout.set(node.id, { x: centerX, y: centerY, vx: 0, vy: 0 });
+            return;
+          }
+          const localAngle = (index / Math.max(1, items.length)) * Math.PI * 2 + angle * 0.35;
+          const wobble = Math.sin((memoryGraphState.frame * 0.012) + index) * 5;
+          memoryGraphState.layout.set(node.id, {
+            x: clusterX + Math.cos(localAngle) * (localRadius + wobble),
+            y: clusterY + Math.sin(localAngle) * (localRadius + wobble),
+            vx: 0,
+            vy: 0
+          });
+        });
+      });
+    }
+
+    function drawBackground(ctx, width, height) {
+      const pulse = 0.35 + Math.sin(memoryGraphState.frame * 0.025) * 0.08;
+      const grad = ctx.createRadialGradient(width / 2, height / 2, 20, width / 2, height / 2, Math.min(width, height) * 0.48);
+      grad.addColorStop(0, 'rgba(56,189,248,' + pulse + ')');
+      grad.addColorStop(0.45, 'rgba(139,92,246,0.08)');
+      grad.addColorStop(1, 'rgba(2,6,23,0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, width, height);
+    }
+
+    function renderMemoryGraphCanvas() {
+      const canvas = document.getElementById('memoryGraphCanvas');
+      if (!canvas) return;
+      const setup = prepareCanvas(canvas);
+      const ctx = setup.ctx;
+      const width = setup.width;
+      const height = setup.height;
+      const vg = visibleGraph();
+      const empty = document.getElementById('memoryGraphEmpty');
+      if (empty) empty.style.display = vg.nodes.length ? 'none' : 'block';
+      ctx.clearRect(0, 0, width, height);
+      drawBackground(ctx, width, height);
+      layoutNodes(vg.nodes, width, height);
+
+      vg.edges.forEach((edge) => {
+        const a = memoryGraphState.layout.get(edge.source);
+        const b = memoryGraphState.layout.get(edge.target);
+        if (!a || !b) return;
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.strokeStyle = edge.source === memoryGraphState.selectedId || edge.target === memoryGraphState.selectedId
+          ? 'rgba(125,211,252,0.72)'
+          : 'rgba(148,163,184,0.18)';
+        ctx.lineWidth = Math.max(1, Number(edge.weight || 1));
+        ctx.stroke();
+      });
+
+      vg.nodes.forEach((node) => {
+        const p = memoryGraphState.layout.get(node.id);
+        if (!p) return;
+        const color = TYPE_COLORS[node.type] || '#94a3b8';
+        const selected = node.id === memoryGraphState.selectedId;
+        const hover = node.id === memoryGraphState.hoverId;
+        const radius = Math.min(24, 7 + Number(node.weight || 1) * 4) + (selected ? 5 : hover ? 3 : 0);
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, radius + 9, 0, Math.PI * 2);
+        ctx.fillStyle = selected ? 'rgba(125,211,252,0.18)' : 'rgba(15,23,42,0.42)';
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+        ctx.fillStyle = color;
+        ctx.shadowColor = color;
+        ctx.shadowBlur = selected ? 24 : 12;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.lineWidth = selected ? 2.5 : 1;
+        ctx.strokeStyle = selected ? '#f8fafc' : 'rgba(255,255,255,0.42)';
+        ctx.stroke();
+        if (selected || hover || node.type === 'core') {
+          ctx.font = '800 11px system-ui, -apple-system, Segoe UI, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillStyle = '#f8fafc';
+          ctx.fillText(String(node.label || '').slice(0, 24), p.x, p.y + radius + 18);
+        }
+      });
+    }
+
+    function selectMemoryNode(nodeId) {
+      memoryGraphState.selectedId = nodeId || 'nexus:core';
+      const node = (memoryGraphState.graph.nodes || []).find((row) => row.id === memoryGraphState.selectedId)
+        || (memoryGraphState.graph.nodes || [])[0];
+      if (!node) return;
+      setText('memorySelectedLabel', node.label || 'Nexus');
+      const source = node.source || {};
+      const moduleName = source.module || (node.type === 'flashcard' ? 'study' : node.type === 'note' ? 'notes' : '');
+      const details = document.getElementById('memoryNodeDetails');
+      if (details) {
+        const topics = (node.semantic_topics || []).map((topic) => '<span class="semantic-topic">' + escapeHtml(topic) + '</span>').join('') || '<span class="semantic-topic">sem topicos</span>';
+        details.innerHTML =
+          '<h2>' + escapeHtml(node.label || 'No') + '</h2>' +
+          '<p>' + escapeHtml(node.details || node.subtitle || 'Sem detalhes registrados para este no.') + '</p>' +
+          '<div class="detail-meta">' +
+          '<div class="detail-row"><span>Tipo</span><span>' + escapeHtml(TYPE_LABELS[node.type] || node.type) + '</span></div>' +
+          '<div class="detail-row"><span>Cluster</span><span>' + escapeHtml(node.cluster || '-') + '</span></div>' +
+          '<div class="detail-row"><span>Relevancia</span><span>' + escapeHtml(Number(node.relevance || 0).toFixed(1)) + '</span></div>' +
+          '<div class="detail-row"><span>Chaves</span><span>' + escapeHtml((node.keywords || []).slice(0, 4).join(', ') || '-') + '</span></div>' +
+          '<div class="detail-row"><span>Origem</span><span>' + escapeHtml(moduleName || source.path || source.category || 'Nexus') + '</span></div>' +
+          '</div>' +
+          '<p><strong>Topicos semanticos</strong></p><p>' + topics + '</p>' +
+          '<p>' + escapeHtml(node.subtitle || '') + '</p>';
+      }
+      const btn = document.getElementById('btnMemoryOpenModule');
+      if (btn) btn.disabled = !moduleName;
+      renderMemoryGraphCanvas();
+    }
+
+    async function jumpToModule(module, payload) {
+      try {
+        if (window.pywebview && pywebview.api && pywebview.api.jump) {
+          await pywebview.api.jump(module, JSON.stringify(payload || {}));
+        }
+      } catch (_) {}
+    }
+
+    function openSelectedNodeModule() {
+      const node = (memoryGraphState.graph.nodes || []).find((row) => row.id === memoryGraphState.selectedId);
+      if (!node || !node.source || !node.source.module) return;
+      const payload = {};
+      if (node.source.note_id) payload.highlight_id = node.source.note_id;
+      if (node.source.card_id) payload.highlight_id = node.source.card_id;
+      payload.animate = 'memory_graph_jump';
+      jumpToModule(node.source.module, payload);
+    }
+
+    function obsidianPathValue() {
+      const input = document.getElementById('memoryGraphObsidianPath');
+      return input ? input.value.trim() : '';
+    }
+
+    function setObsidianStatus(text) {
+      const el = document.getElementById('memoryGraphObsidianStatus');
+      if (el) el.textContent = text || '';
+    }
+
+    async function exportMemoryGraphObsidian() {
+      const folder = obsidianPathValue();
+      if (!folder) {
+        setObsidianStatus('Informe uma pasta para exportar o vault Markdown.');
+        return;
+      }
+      setObsidianStatus('Exportando grafo para Markdown...');
+      const response = await nxBridge('memory_graph_export_obsidian', {
+        folder,
+        query: memoryGraphState.search,
+        include_markdown: true,
+        limit: 180
+      });
+      if (!response.ok) {
+        setObsidianStatus(response.error || 'Falha ao exportar.');
+        return;
+      }
+      setObsidianStatus((response.data && response.data.message) || 'Exportado para Obsidian.');
+    }
+
+    async function importMemoryGraphObsidian() {
+      const folder = obsidianPathValue();
+      if (!folder) {
+        setObsidianStatus('Informe uma pasta para importar arquivos Markdown.');
+        return;
+      }
+      setObsidianStatus('Importando Markdown para o MindPalace...');
+      const response = await nxBridge('memory_graph_import_obsidian', {
+        folder,
+        subject: 'Obsidian'
+      });
+      if (!response.ok) {
+        setObsidianStatus(response.error || 'Falha ao importar.');
+        return;
+      }
+      setObsidianStatus((response.data && response.data.message) || 'Markdown importado.');
+      await loadMemoryGraph();
+    }
+
+    async function loadMemoryGraph() {
+      const search = document.getElementById('memoryGraphSearch');
+      memoryGraphState.search = search ? search.value.trim() : '';
+      setText('memoryGraphSubtitle', 'Sincronizando fontes locais...');
+      const response = await nxBridge('memory_graph', {
+        query: memoryGraphState.search,
+        limit: 160,
+        include_markdown: true
+      });
+      if (!response.ok || !response.data || !response.data.ok) {
+        setText('memoryGraphSubtitle', response.error || 'Nao consegui montar o grafo agora.');
+        return;
+      }
+      memoryGraphState.graph = response.data;
+      memoryGraphState.activeTypes = new Set(visibleTypesFromGraph(response.data));
+      renderStats(response.data);
+      renderFilters(response.data);
+      renderMemoryGraphSpotlight(response.data);
+      setText('memoryGraphTitle', 'Rede local atualizada');
+      setText('memoryGraphSubtitle', (response.data.stats.nodes || 0) + ' nos conectados em ' + (response.data.stats.edges || 0) + ' ligacoes.');
+      selectMemoryNode(memoryGraphState.selectedId);
+    }
+
+    function bindCanvasEvents() {
+      const canvas = document.getElementById('memoryGraphCanvas');
+      if (!canvas) return;
+      function nearest(evt) {
+        const rect = canvas.getBoundingClientRect();
+        const x = evt.clientX - rect.left;
+        const y = evt.clientY - rect.top;
+        let best = null;
+        let bestDist = 9999;
+        visibleGraph().nodes.forEach((node) => {
+          const p = memoryGraphState.layout.get(node.id);
+          if (!p) return;
+          const dist = Math.hypot(p.x - x, p.y - y);
+          if (dist < bestDist) {
+            bestDist = dist;
+            best = node;
+          }
+        });
+        return bestDist <= 34 ? best : null;
+      }
+      canvas.addEventListener('pointermove', (evt) => {
+        const node = nearest(evt);
+        memoryGraphState.hoverId = node ? node.id : '';
+        canvas.style.cursor = node ? 'pointer' : 'default';
+      });
+      canvas.addEventListener('pointerdown', (evt) => {
+        const node = nearest(evt);
+        if (node) selectMemoryNode(node.id);
+      });
+    }
+
+    function tickMemoryGraph() {
+      memoryGraphState.frame += 1;
+      renderMemoryGraphCanvas();
+      window.requestAnimationFrame(tickMemoryGraph);
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const search = document.getElementById('memoryGraphSearch');
+      if (search) {
+        search.addEventListener('input', () => {
+          memoryGraphState.search = search.value || '';
+          renderMemoryGraphSpotlight(memoryGraphState.graph);
+          renderMemoryGraphCanvas();
+        });
+        search.addEventListener('keydown', (evt) => {
+          if (evt.key === 'Enter') loadMemoryGraph();
+        });
+      }
+      bindCanvasEvents();
+      loadMemoryGraph();
+      window.addEventListener('resize', renderMemoryGraphCanvas);
+      window.requestAnimationFrame(tickMemoryGraph);
+    });
+  </script>
+</body>
+</html>

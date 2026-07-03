@@ -1,0 +1,579 @@
+﻿..FFFF.FFFFFFFFFFFFF                                                     [100%]
+================================== FAILURES ===================================
+___ test_default_tts_provider_order_prioritizes_xtts_then_edge_then_kokoro ____
+
+    def test_default_tts_provider_order_prioritizes_xtts_then_edge_then_kokoro():
+        from src.services.tts import resolve_tts_provider_order
+    
+        order = resolve_tts_provider_order("xtts")
+    
+>       assert order[:5] == ["xtts", "edge", "kokoro", "rvc", "piper"]
+E       AssertionError: assert ['edge', 'ele...enai', 'fish'] == ['xtts', 'edg...rvc', 'piper']
+E         
+E         At index 0 diff: 'edge' != 'xtts'
+E         Use -v to get more diff
+
+tests\test_tts_speech.py:27: AssertionError
+___ test_tts_provider_order_uses_selected_primary_before_standard_fallbacks ___
+
+    def test_tts_provider_order_uses_selected_primary_before_standard_fallbacks():
+        from src.services.tts import resolve_tts_provider_order
+    
+        order = resolve_tts_provider_order("piper")
+    
+>       assert order[:3] == ["piper", "edge", "kokoro"]
+E       AssertionError: assert ['edge', 'elevenlabs', 'murf'] == ['piper', 'edge', 'kokoro']
+E         
+E         At index 0 diff: 'edge' != 'piper'
+E         Use -v to get more diff
+
+tests\test_tts_speech.py:36: AssertionError
+______ test_tts_provider_order_honors_configured_fallbacks_after_primary ______
+
+    def test_tts_provider_order_honors_configured_fallbacks_after_primary():
+        from src.services.tts import resolve_tts_provider_order
+    
+        order = resolve_tts_provider_order("xtts", "edge,kokoro,rvc,edge")
+    
+>       assert order[:4] == ["xtts", "edge", "kokoro", "rvc"]
+E       AssertionError: assert ['edge', 'ele...rf', 'openai'] == ['xtts', 'edg...okoro', 'rvc']
+E         
+E         At index 0 diff: 'edge' != 'xtts'
+E         Use -v to get more diff
+
+tests\test_tts_speech.py:45: AssertionError
+______________ test_xtts_provider_falls_back_to_edge_then_kokoro ______________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x000001D097825A90>
+
+    def test_xtts_provider_falls_back_to_edge_then_kokoro(monkeypatch):
+        from src.services.tts import TTSService
+    
+        service = TTSService.__new__(TTSService)
+        service.provider = "xtts"
+        service.provider_order = ["xtts", "edge", "kokoro", "local"]
+        service.edge_tts_available = True
+        service.client = None
+        service.last_error = ""
+        calls = []
+    
+>       monkeypatch.setattr(
+            service,
+            "_speak_with_xtts",
+            lambda text: calls.append(("xtts", text)) or False,
+        )
+E       AttributeError: <src.services.tts.TTSService object at 0x000001D09788D850> has no attribute '_speak_with_xtts'
+
+tests\test_tts_speech.py:60: AttributeError
+___________ test_xtts_requires_reference_audio_before_loading_model ___________
+
+tmp_path = WindowsPath('C:/Users/maria/AppData/Local/Temp/pytest-of-maria/pytest-16/test_xtts_requires_reference_a0')
+
+    def test_xtts_requires_reference_audio_before_loading_model(tmp_path):
+        from src.services.tts import TTSService
+    
+        service = TTSService.__new__(TTSService)
+        service.xtts_speaker_wav = str(tmp_path / "missing.wav")
+        service.xtts_model_name = "tts_models/multilingual/multi-dataset/xtts_v2"
+        service.xtts_language = "pt"
+        service.xtts_device = "cpu"
+        service.last_error = ""
+    
+>       assert service._speak_with_xtts("Teste de voz.") is False
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+E       AttributeError: 'TTSService' object has no attribute '_speak_with_xtts'
+
+tests\test_tts_speech.py:128: AttributeError
+______ test_xtts_external_python_generates_audio_without_inprocess_model ______
+
+name = 'src.services.tts.subprocess'
+
+    def resolve(name: str) -> object:
+        # Simplified from zope.dottedname.
+        parts = name.split(".")
+    
+        used = parts.pop(0)
+        found: object = __import__(used)
+        for part in parts:
+            used += "." + part
+            try:
+                found = getattr(found, part)
+            except AttributeError:
+                pass
+            else:
+                continue
+            # We use explicit un-nesting of the handling block in order
+            # to avoid nested exceptions.
+            try:
+>               __import__(used)
+E               ModuleNotFoundError: No module named 'src.services.tts.subprocess'; 'src.services.tts' is not a package
+
+C:\Users\maria\AppData\Local\Programs\Python\Python311\Lib\site-packages\_pytest\monkeypatch.py:79: ModuleNotFoundError
+
+The above exception was the direct cause of the following exception:
+
+tmp_path = WindowsPath('C:/Users/maria/AppData/Local/Temp/pytest-of-maria/pytest-16/test_xtts_external_python_gene0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x000001D09788EED0>
+
+    def test_xtts_external_python_generates_audio_without_inprocess_model(tmp_path, monkeypatch):
+        from src.services.tts import TTSService
+    
+        ref = tmp_path / "ref.wav"
+        ref.write_bytes(b"RIFFfake")
+        out_seen = {}
+    
+        class Completed:
+            returncode = 0
+            stderr = ""
+    
+        def fake_run(cmd, **kwargs):
+            out_path = cmd[cmd.index("--out") + 1]
+            out_seen["cmd"] = cmd
+            out_seen["out"] = out_path
+            Path(out_path).write_bytes(b"RIFFgenerated")
+            return Completed()
+    
+        service = TTSService.__new__(TTSService)
+        service.xtts_python = "C:/xtts/python.exe"
+        service.xtts_speaker_wav = str(ref)
+        service.xtts_model_name = "tts_models/multilingual/multi-dataset/xtts_v2"
+        service.xtts_language = "pt"
+        service.xtts_device = "cpu"
+        service.last_error = ""
+    
+>       monkeypatch.setattr("src.services.tts.subprocess.run", fake_run)
+
+tests\test_tts_speech.py:158: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Users\maria\AppData\Local\Programs\Python\Python311\Lib\site-packages\_pytest\monkeypatch.py:104: in derive_importpath
+    target = resolve(module)
+             ^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+name = 'src.services.tts.subprocess'
+
+    def resolve(name: str) -> object:
+        # Simplified from zope.dottedname.
+        parts = name.split(".")
+    
+        used = parts.pop(0)
+        found: object = __import__(used)
+        for part in parts:
+            used += "." + part
+            try:
+                found = getattr(found, part)
+            except AttributeError:
+                pass
+            else:
+                continue
+            # We use explicit un-nesting of the handling block in order
+            # to avoid nested exceptions.
+            try:
+                __import__(used)
+            except ImportError as ex:
+                expected = str(ex).split()[-1]
+                if expected == used:
+                    raise
+                else:
+>                   raise ImportError(f"import error in {used}: {ex}") from ex
+E                   ImportError: import error in src.services.tts.subprocess: No module named 'src.services.tts.subprocess'; 'src.services.tts' is not a package
+
+C:\Users\maria\AppData\Local\Programs\Python\Python311\Lib\site-packages\_pytest\monkeypatch.py:85: ImportError
+________ test_xtts_external_python_uses_persistent_worker_when_enabled ________
+
+obj = <module 'src.services.tts' from 'D:\\Downloads\\Projeto AI\\src\\services\\tts.py'>
+name = '_get_xtts_external_worker', ann = 'src.services.tts'
+
+    def annotated_getattr(obj: object, name: str, ann: str) -> object:
+        try:
+>           obj = getattr(obj, name)
+                  ^^^^^^^^^^^^^^^^^^
+E           AttributeError: module 'src.services.tts' has no attribute '_get_xtts_external_worker'
+
+C:\Users\maria\AppData\Local\Programs\Python\Python311\Lib\site-packages\_pytest\monkeypatch.py:92: AttributeError
+
+The above exception was the direct cause of the following exception:
+
+tmp_path = WindowsPath('C:/Users/maria/AppData/Local/Temp/pytest-of-maria/pytest-16/test_xtts_external_python_uses0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x000001D097C1C790>
+
+    def test_xtts_external_python_uses_persistent_worker_when_enabled(tmp_path, monkeypatch):
+        from src.services.tts import TTSService
+    
+        ref = tmp_path / "ref.wav"
+        ref.write_bytes(b"RIFFfake")
+        seen = {}
+    
+        class FakeWorker:
+            def synthesize(self, text, out):
+                seen["text"] = text
+                seen["out"] = out
+                Path(out).write_bytes(b"RIFFpersistent")
+    
+        def fake_worker(**kwargs):
+            seen["kwargs"] = kwargs
+            return FakeWorker()
+    
+        service = TTSService.__new__(TTSService)
+        service.xtts_python = "C:/xtts/python.exe"
+        service.xtts_persistent = True
+        service.xtts_speaker_wav = str(ref)
+        service.xtts_model_name = "tts_models/multilingual/multi-dataset/xtts_v2"
+        service.xtts_language = "pt"
+        service.xtts_device = "cpu"
+        service.last_error = ""
+    
+>       monkeypatch.setattr("src.services.tts._get_xtts_external_worker", fake_worker)
+
+tests\test_tts_speech.py:193: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Users\maria\AppData\Local\Programs\Python\Python311\Lib\site-packages\_pytest\monkeypatch.py:106: in derive_importpath
+    annotated_getattr(target, attr, ann=module)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+obj = <module 'src.services.tts' from 'D:\\Downloads\\Projeto AI\\src\\services\\tts.py'>
+name = '_get_xtts_external_worker', ann = 'src.services.tts'
+
+    def annotated_getattr(obj: object, name: str, ann: str) -> object:
+        try:
+            obj = getattr(obj, name)
+        except AttributeError as e:
+>           raise AttributeError(
+                f"{type(obj).__name__!r} object at {ann} has no attribute {name!r}"
+            ) from e
+E           AttributeError: 'module' object at src.services.tts has no attribute '_get_xtts_external_worker'
+
+C:\Users\maria\AppData\Local\Programs\Python\Python311\Lib\site-packages\_pytest\monkeypatch.py:94: AttributeError
+__________________ test_xtts_warmup_starts_persistent_worker __________________
+
+obj = <module 'src.services.tts' from 'D:\\Downloads\\Projeto AI\\src\\services\\tts.py'>
+name = '_get_xtts_external_worker', ann = 'src.services.tts'
+
+    def annotated_getattr(obj: object, name: str, ann: str) -> object:
+        try:
+>           obj = getattr(obj, name)
+                  ^^^^^^^^^^^^^^^^^^
+E           AttributeError: module 'src.services.tts' has no attribute '_get_xtts_external_worker'
+
+C:\Users\maria\AppData\Local\Programs\Python\Python311\Lib\site-packages\_pytest\monkeypatch.py:92: AttributeError
+
+The above exception was the direct cause of the following exception:
+
+tmp_path = WindowsPath('C:/Users/maria/AppData/Local/Temp/pytest-of-maria/pytest-16/test_xtts_warmup_starts_persis0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x000001D097C189D0>
+
+    def test_xtts_warmup_starts_persistent_worker(tmp_path, monkeypatch):
+        from src.services.tts import TTSService
+    
+        ref = tmp_path / "ref.wav"
+        ref.write_bytes(b"RIFFfake")
+        seen = {}
+    
+        class FakeWorker:
+            def preload(self):
+                seen["preload"] = True
+    
+        class SyncThread:
+            def __init__(self, target, **kwargs):
+                self.target = target
+    
+            def start(self):
+                self.target()
+    
+        def fake_worker(**kwargs):
+            seen["kwargs"] = kwargs
+            return FakeWorker()
+    
+        service = TTSService.__new__(TTSService)
+        service.xtts_python = "C:/xtts/python.exe"
+        service.xtts_persistent = True
+        service.xtts_speaker_wav = str(ref)
+        service.xtts_model_name = "tts_models/multilingual/multi-dataset/xtts_v2"
+        service.xtts_language = "pt"
+        service.xtts_device = "cpu"
+    
+>       monkeypatch.setattr("src.services.tts._get_xtts_external_worker", fake_worker)
+
+tests\test_tts_speech.py:234: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Users\maria\AppData\Local\Programs\Python\Python311\Lib\site-packages\_pytest\monkeypatch.py:106: in derive_importpath
+    annotated_getattr(target, attr, ann=module)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+obj = <module 'src.services.tts' from 'D:\\Downloads\\Projeto AI\\src\\services\\tts.py'>
+name = '_get_xtts_external_worker', ann = 'src.services.tts'
+
+    def annotated_getattr(obj: object, name: str, ann: str) -> object:
+        try:
+            obj = getattr(obj, name)
+        except AttributeError as e:
+>           raise AttributeError(
+                f"{type(obj).__name__!r} object at {ann} has no attribute {name!r}"
+            ) from e
+E           AttributeError: 'module' object at src.services.tts has no attribute '_get_xtts_external_worker'
+
+C:\Users\maria\AppData\Local\Programs\Python\Python311\Lib\site-packages\_pytest\monkeypatch.py:94: AttributeError
+_______________ test_styletts2_requires_command_before_running ________________
+
+tmp_path = WindowsPath('C:/Users/maria/AppData/Local/Temp/pytest-of-maria/pytest-16/test_styletts2_requires_comman0')
+
+    def test_styletts2_requires_command_before_running(tmp_path):
+        from src.services.tts import TTSService
+    
+        service = TTSService.__new__(TTSService)
+        service.styletts2_command = ""
+        service.styletts2_reference_wav = str(tmp_path / "reference.wav")
+        service.last_error = ""
+    
+>       assert service._speak_with_styletts2("Teste de voz.") is False
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AttributeError: 'TTSService' object has no attribute '_speak_with_styletts2'
+
+tests\test_tts_speech.py:250: AttributeError
+____________ test_styletts2_external_python_uses_persistent_worker ____________
+
+obj = <module 'src.services.tts' from 'D:\\Downloads\\Projeto AI\\src\\services\\tts.py'>
+name = '_get_styletts2_external_worker', ann = 'src.services.tts'
+
+    def annotated_getattr(obj: object, name: str, ann: str) -> object:
+        try:
+>           obj = getattr(obj, name)
+                  ^^^^^^^^^^^^^^^^^^
+E           AttributeError: module 'src.services.tts' has no attribute '_get_styletts2_external_worker'
+
+C:\Users\maria\AppData\Local\Programs\Python\Python311\Lib\site-packages\_pytest\monkeypatch.py:92: AttributeError
+
+The above exception was the direct cause of the following exception:
+
+tmp_path = WindowsPath('C:/Users/maria/AppData/Local/Temp/pytest-of-maria/pytest-16/test_styletts2_external_python0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x000001D097C63A90>
+
+    def test_styletts2_external_python_uses_persistent_worker(tmp_path, monkeypatch):
+        from src.services.tts import TTSService
+    
+        ref = tmp_path / "ref.wav"
+        ref.write_bytes(b"RIFFref")
+        seen = {}
+    
+        class FakeWorker:
+            def synthesize(self, text, out):
+                seen["text"] = text
+                seen["out"] = out
+                Path(out).write_bytes(b"RIFFstyletts2")
+    
+        def fake_worker(**kwargs):
+            seen["kwargs"] = kwargs
+            return FakeWorker()
+    
+        service = TTSService.__new__(TTSService)
+        service.styletts2_python = "C:/styletts2/python.exe"
+        service.styletts2_persistent = True
+        service.styletts2_reference_wav = str(ref)
+        service.styletts2_alpha = 0.25
+        service.styletts2_beta = 0.65
+        service.styletts2_diffusion_steps = 3
+        service.styletts2_embedding_scale = 1.4
+        service.last_error = ""
+    
+>       monkeypatch.setattr("src.services.tts._get_styletts2_external_worker", fake_worker)
+
+tests\test_tts_speech.py:281: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Users\maria\AppData\Local\Programs\Python\Python311\Lib\site-packages\_pytest\monkeypatch.py:106: in derive_importpath
+    annotated_getattr(target, attr, ann=module)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+obj = <module 'src.services.tts' from 'D:\\Downloads\\Projeto AI\\src\\services\\tts.py'>
+name = '_get_styletts2_external_worker', ann = 'src.services.tts'
+
+    def annotated_getattr(obj: object, name: str, ann: str) -> object:
+        try:
+            obj = getattr(obj, name)
+        except AttributeError as e:
+>           raise AttributeError(
+                f"{type(obj).__name__!r} object at {ann} has no attribute {name!r}"
+            ) from e
+E           AttributeError: 'module' object at src.services.tts has no attribute '_get_styletts2_external_worker'
+
+C:\Users\maria\AppData\Local\Programs\Python\Python311\Lib\site-packages\_pytest\monkeypatch.py:94: AttributeError
+_______________ test_styletts2_warmup_starts_persistent_worker ________________
+
+obj = <module 'src.services.tts' from 'D:\\Downloads\\Projeto AI\\src\\services\\tts.py'>
+name = '_get_styletts2_external_worker', ann = 'src.services.tts'
+
+    def annotated_getattr(obj: object, name: str, ann: str) -> object:
+        try:
+>           obj = getattr(obj, name)
+                  ^^^^^^^^^^^^^^^^^^
+E           AttributeError: module 'src.services.tts' has no attribute '_get_styletts2_external_worker'
+
+C:\Users\maria\AppData\Local\Programs\Python\Python311\Lib\site-packages\_pytest\monkeypatch.py:92: AttributeError
+
+The above exception was the direct cause of the following exception:
+
+tmp_path = WindowsPath('C:/Users/maria/AppData/Local/Temp/pytest-of-maria/pytest-16/test_styletts2_warmup_starts_p0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x000001D097B98B10>
+
+    def test_styletts2_warmup_starts_persistent_worker(tmp_path, monkeypatch):
+        from src.services.tts import TTSService
+    
+        ref = tmp_path / "ref.wav"
+        ref.write_bytes(b"RIFFref")
+        seen = {}
+    
+        class FakeWorker:
+            def preload(self):
+                seen["preload"] = True
+    
+        class SyncThread:
+            def __init__(self, target, **kwargs):
+                self.target = target
+    
+            def start(self):
+                self.target()
+    
+        def fake_worker(**kwargs):
+            seen["kwargs"] = kwargs
+            return FakeWorker()
+    
+        service = TTSService.__new__(TTSService)
+        service.styletts2_python = "C:/styletts2/python.exe"
+        service.styletts2_persistent = True
+        service.styletts2_reference_wav = str(ref)
+        service.styletts2_alpha = 0.25
+        service.styletts2_beta = 0.65
+        service.styletts2_diffusion_steps = 3
+        service.styletts2_embedding_scale = 1.4
+    
+>       monkeypatch.setattr("src.services.tts._get_styletts2_external_worker", fake_worker)
+
+tests\test_tts_speech.py:325: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Users\maria\AppData\Local\Programs\Python\Python311\Lib\site-packages\_pytest\monkeypatch.py:106: in derive_importpath
+    annotated_getattr(target, attr, ann=module)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+obj = <module 'src.services.tts' from 'D:\\Downloads\\Projeto AI\\src\\services\\tts.py'>
+name = '_get_styletts2_external_worker', ann = 'src.services.tts'
+
+    def annotated_getattr(obj: object, name: str, ann: str) -> object:
+        try:
+            obj = getattr(obj, name)
+        except AttributeError as e:
+>           raise AttributeError(
+                f"{type(obj).__name__!r} object at {ann} has no attribute {name!r}"
+            ) from e
+E           AttributeError: 'module' object at src.services.tts has no attribute '_get_styletts2_external_worker'
+
+C:\Users\maria\AppData\Local\Programs\Python\Python311\Lib\site-packages\_pytest\monkeypatch.py:94: AttributeError
+______________ test_styletts2_worker_ignores_json_scalar_stdout _______________
+
+    def test_styletts2_worker_ignores_json_scalar_stdout():
+>       from src.services.tts import _PersistentStyleTTS2Worker
+E       ImportError: cannot import name '_PersistentStyleTTS2Worker' from 'src.services.tts' (D:\Downloads\Projeto AI\src\services\tts.py)
+
+tests\test_tts_speech.py:334: ImportError
+________ test_tts_pipeline_prefetches_next_file_before_playing_current ________
+
+tmp_path = WindowsPath('C:/Users/maria/AppData/Local/Temp/pytest-of-maria/pytest-16/test_tts_pipeline_prefetches_n0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x000001D097C787D0>
+
+    def test_tts_pipeline_prefetches_next_file_before_playing_current(tmp_path, monkeypatch):
+        from src.services.tts import TTSService
+    
+        events = []
+        service = TTSService.__new__(TTSService)
+        service.provider = "styletts2"
+        service.provider_order = ["styletts2"]
+        service.tts_prefetch_chunks = True
+        service.pause_between_chunks_sec = 0
+        service._interrupt_event = __import__("threading").Event()
+        service.last_error = ""
+    
+        def fake_generate(provider, text):
+            path = tmp_path / f"{text}.wav"
+            path.write_bytes(b"RIFF")
+            events.append(("generate", text))
+            return path
+    
+        def fake_play(path):
+            events.append(("play", Path(path).stem))
+    
+>       monkeypatch.setattr(service, "_generate_audio_file_for_provider", fake_generate)
+E       AttributeError: <src.services.tts.TTSService object at 0x000001D097C78E50> has no attribute '_generate_audio_file_for_provider'
+
+tests\test_tts_speech.py:374: AttributeError
+____________________ test_piper_jarvis_medium_model_files _____________________
+
+    def test_piper_jarvis_medium_model_files():
+>       from src.services.tts import piper_jarvis_model_files
+E       ImportError: cannot import name 'piper_jarvis_model_files' from 'src.services.tts' (D:\Downloads\Projeto AI\src\services\tts.py)
+
+tests\test_tts_speech.py:388: ImportError
+___________ test_piper_provider_falls_back_to_edge_when_unavailable ___________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x000001D097BC8110>
+
+    def test_piper_provider_falls_back_to_edge_when_unavailable(monkeypatch):
+        from src.services.tts import TTSService
+    
+        service = TTSService.__new__(TTSService)
+        service.provider = "piper"
+        service.client = None
+        service.last_error = ""
+    
+        class DummyLocalEngine:
+            def say(self, text):
+                raise AssertionError("local engine should not be used when Edge fallback succeeds")
+    
+            def runAndWait(self):
+                raise AssertionError("local engine should not be used when Edge fallback succeeds")
+    
+        service.local_engine = DummyLocalEngine()
+        calls = []
+    
+>       monkeypatch.setattr(
+            service,
+            "_speak_with_piper",
+            lambda text: calls.append(("piper", text)) or False,
+        )
+E       AttributeError: <src.services.tts.TTSService object at 0x000001D097BCB550> has no attribute '_speak_with_piper'
+
+tests\test_tts_speech.py:414: AttributeError
+__________________ test_panel_exposes_piper_jarvis_provider ___________________
+
+    def test_panel_exposes_piper_jarvis_provider():
+        html = Path("src/ui/panel.html").read_text(encoding="utf-8")
+    
+>       assert '<option value="piper">Piper JARVIS (PC local)</option>' in html
+E       assert '<option value="piper">Piper JARVIS (PC local)</option>' in '<!DOCTYPE html>\n<html lang="pt-BR">\n\n<head>\n  <meta charset="UTF-8">\n  <title>AI Assistant ù Painel Pro</title>\...nel.js"></script>\n  </div> <!-- Fim app-wrapper -->\n  \n\n  <!-- MEMORY MANAGER SCRIPT -->\n  \n\n</body>\n\n</html>'
+
+tests\test_tts_speech.py:433: AssertionError
+__________ test_panel_exposes_styletts2_and_fallback_order_controls ___________
+
+    def test_panel_exposes_styletts2_and_fallback_order_controls():
+        html = Path("src/ui/panel.html").read_text(encoding="utf-8")
+    
+>       assert '<option value="styletts2">StyleTTS2 (Clone local)</option>' in html
+E       assert '<option value="styletts2">StyleTTS2 (Clone local)</option>' in '<!DOCTYPE html>\n<html lang="pt-BR">\n\n<head>\n  <meta charset="UTF-8">\n  <title>AI Assistant ù Painel Pro</title>\...nel.js"></script>\n  </div> <!-- Fim app-wrapper -->\n  \n\n  <!-- MEMORY MANAGER SCRIPT -->\n  \n\n</body>\n\n</html>'
+
+tests\test_tts_speech.py:439: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/test_tts_speech.py::test_default_tts_provider_order_prioritizes_xtts_then_edge_then_kokoro
+FAILED tests/test_tts_speech.py::test_tts_provider_order_uses_selected_primary_before_standard_fallbacks
+FAILED tests/test_tts_speech.py::test_tts_provider_order_honors_configured_fallbacks_after_primary
+FAILED tests/test_tts_speech.py::test_xtts_provider_falls_back_to_edge_then_kokoro
+FAILED tests/test_tts_speech.py::test_xtts_requires_reference_audio_before_loading_model
+FAILED tests/test_tts_speech.py::test_xtts_external_python_generates_audio_without_inprocess_model
+FAILED tests/test_tts_speech.py::test_xtts_external_python_uses_persistent_worker_when_enabled
+FAILED tests/test_tts_speech.py::test_xtts_warmup_starts_persistent_worker - ...
+FAILED tests/test_tts_speech.py::test_styletts2_requires_command_before_running
+FAILED tests/test_tts_speech.py::test_styletts2_external_python_uses_persistent_worker
+FAILED tests/test_tts_speech.py::test_styletts2_warmup_starts_persistent_worker
+FAILED tests/test_tts_speech.py::test_styletts2_worker_ignores_json_scalar_stdout
+FAILED tests/test_tts_speech.py::test_tts_pipeline_prefetches_next_file_before_playing_current
+FAILED tests/test_tts_speech.py::test_piper_jarvis_medium_model_files - Impor...
+FAILED tests/test_tts_speech.py::test_piper_provider_falls_back_to_edge_when_unavailable
+FAILED tests/test_tts_speech.py::test_panel_exposes_piper_jarvis_provider - a...
+FAILED tests/test_tts_speech.py::test_panel_exposes_styletts2_and_fallback_order_controls
+17 failed, 3 passed in 3.29s

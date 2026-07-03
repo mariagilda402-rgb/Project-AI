@@ -1,0 +1,2378 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <title>Nexus Mobile</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#0d0d12">
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        window.onerror = function (msg, url, line) {
+            console.error("Global error:", msg, url, line);
+            if (typeof showToast === 'function') showToast("Erro: " + msg);
+            return true;
+        };
+        // alert("WebView Info: " + navigator.userAgent);
+    </script>
+    <!-- Supabase JS Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+
+<body>
+
+    <!-- Jarvis Call Banner (Hidden by default) -->
+    <!-- Jarvis Call Banner (Hidden by default) -->
+    <div id="jarvis-call-banner"
+        style="display: none; position: fixed; top: 0; left: 0; width: 100%; background: rgba(0, 206, 201, 0.9); color: white; padding: 10px; z-index: 1000; align-items: center; justify-content: space-between; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);">
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <i class="fa-solid fa-phone-volume fa-shake"></i>
+            <div>
+                <strong style="display: block; font-size: 0.9rem;">Em Ligação com Jarvis</strong>
+                <span id="jarvis-call-timer" style="font-size: 0.8rem;">00:00</span>
+            </div>
+        </div>
+        <div style="display: flex; gap: 15px;">
+            <button onclick="openJarvisFullScreen()"
+                style="background: none; border: none; color: white; font-size: 1.2rem;"><i
+                    class="fa-solid fa-expand"></i></button>
+            <button onclick="endJarvisCall()"
+                style="background: var(--accent-pink); border: none; color: white; padding: 5px 15px; border-radius: 20px; font-weight: bold;"><i
+                    class="fa-solid fa-phone-slash"></i></button>
+        </div>
+    </div>
+
+    <!-- Jarvis Full Screen Call Modal -->
+    <div id="jarvis-fullscreen-modal" class="modal-overlay"
+        style="display: none; background: rgba(10, 10, 15, 0.95); backdrop-filter: blur(20px); flex-direction: column; justify-content: space-between; padding: 40px 20px; z-index: 9999;">
+        <!-- Top Status -->
+        <div style="text-align: center; color: var(--text-secondary);">
+            <div style="font-size: 1.2rem; font-weight: bold; color: var(--accent-primary); margin-bottom: 5px;">Jarvis
+                AI</div>
+            <div id="jarvis-fullscreen-timer" style="font-size: 1rem; font-family: monospace;">00:00</div>
+        </div>
+
+        <!-- Center Siri-like Waves -->
+        <div
+            style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 40px;">
+            <div id="jarvis-fullscreen-jarvis-text"
+                style="color: white; font-size: 1.5rem; text-align: center; min-height: 80px; max-width: 80%; opacity: 0.9; font-weight: 300;">
+                Ouvindo...</div>
+            <p id="jarvis-user-transcript"
+                style="color:rgba(255,255,255,0.7); font-size:1.1rem; text-align:center; margin-top:-20px; font-style:italic; max-width:80%;">
+            </p>
+
+            <div class="jarvis-siri-waves"
+                style="display: flex; align-items: center; justify-content: center; height: 100px; gap: 8px;">
+                <div class="wave-bar"
+                    style="width: 8px; height: 20px; background: var(--accent-primary); border-radius: 4px; animation: pulse-wave 1s infinite ease-in-out alternate;">
+                </div>
+                <div class="wave-bar"
+                    style="width: 8px; height: 50px; background: var(--accent-green); border-radius: 4px; animation: pulse-wave 1s infinite ease-in-out alternate 0.2s;">
+                </div>
+                <div class="wave-bar"
+                    style="width: 8px; height: 80px; background: var(--accent-pink); border-radius: 4px; animation: pulse-wave 1s infinite ease-in-out alternate 0.4s;">
+                </div>
+                <div class="wave-bar"
+                    style="width: 8px; height: 40px; background: var(--accent-orange); border-radius: 4px; animation: pulse-wave 1s infinite ease-in-out alternate 0.6s;">
+                </div>
+                <div class="wave-bar"
+                    style="width: 8px; height: 60px; background: var(--accent-primary); border-radius: 4px; animation: pulse-wave 1s infinite ease-in-out alternate 0.8s;">
+                </div>
+            </div>
+
+            <div id="jarvis-fullscreen-user-text"
+                style="color: var(--text-secondary); font-size: 1.1rem; text-align: center; min-height: 60px; max-width: 80%; font-style: italic;">
+                ...</div>
+        </div>
+
+        <!-- Bottom Controls -->
+        <div style="display: flex; justify-content: center; gap: 30px; align-items: center;">
+            <button onclick="minimizeJarvisCall()"
+                style="width: 60px; height: 60px; border-radius: 50%; border: none; background: rgba(255,255,255,0.1); color: white; font-size: 1.5rem; backdrop-filter: blur(10px);"><i
+                    class="fa-solid fa-compress"></i></button>
+            <button onclick="endJarvisCall()"
+                style="width: 80px; height: 80px; border-radius: 50%; border: none; background: var(--accent-pink); color: white; font-size: 2rem; box-shadow: 0 0 20px rgba(232,67,147,0.4);"><i
+                    class="fa-solid fa-phone-slash"></i></button>
+            <button onclick="toggleJarvisMute()" id="jarvis-mute-btn"
+                style="width: 60px; height: 60px; border-radius: 50%; border: none; background: rgba(255,255,255,0.1); color: white; font-size: 1.5rem; backdrop-filter: blur(10px);"><i
+                    class="fa-solid fa-microphone"></i></button>
+        </div>
+    </div>
+
+    <!-- Top Header -->
+    <header class="app-header">
+        <div class="user-profile">
+            <div class="avatar-ring">
+                <img src="https://ui-avatars.com/api/?name=User&background=6c5ce7&color=fff" alt="User Avatar"
+                    class="avatar">
+            </div>
+            <div class="user-info">
+                <h1 class="greeting">Olá, <span id="user-name">Comandante</span></h1>
+                <div class="level-badge"><i class="fa-solid fa-star"></i> Nv. <span id="user-level">--</span></div>
+                <button id="sync-status-chip" onclick="openSettingsView()" type="button"
+                    style="margin-top:6px;background:rgba(255,255,255,0.08);border:1px solid var(--border-glass);color:var(--text-secondary);padding:4px 10px;border-radius:12px;font-size:0.7rem;cursor:pointer;font-family:inherit">
+                    <i class="fa-solid fa-cloud"></i> <span id="sync-status-text">Offline</span>
+                </button>
+            </div>
+        </div>
+        <div class="top-actions">
+            <button class="icon-btn" aria-label="Atualizar Interface Web" onclick="forceOTAUpdate()"
+                title="Puxar atualização da interface"><i class="fa-solid fa-rotate"></i></button>
+            <button class="icon-btn" aria-label="Atualizar APK Completo" onclick="updateNativeApk()"
+                title="Atualizar aplicativo Android"><i class="fa-brands fa-android"></i></button>
+            <button class="icon-btn" aria-label="Limpeza" onclick="navigateTo('view-cleaner')"
+                title="Limpeza do celular" style="position:relative">
+                <i class="fa-solid fa-broom"></i>
+                <span id="storage-warning-badge" class="storage-warn-badge" style="display:none"></span>
+            </button>
+            <button class="icon-btn" aria-label="Configurações" onclick="openSettingsModal()"><i
+                    class="fa-solid fa-gear"></i></button>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="app-content" id="main-content">
+        <!-- Dashboard View (Home) -->
+        <div id="view-home" class="view active-view">
+            <!-- Stats Cards -->
+            <section class="stats-grid">
+                <div class="stat-card glass">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+                        <div class="stat-icon xp"><i class="fa-solid fa-bolt"></i></div>
+                        <span id="xp-streak-badge"
+                            style="font-size:0.75rem;font-weight:700;color:#f97316;background:rgba(249,115,22,0.15);padding:3px 8px;border-radius:10px">&#128293;
+                            0</span>
+                    </div>
+                    <div>
+                        <div class="stat-label">XP Total</div>
+                        <div class="stat-value" id="stat-xp">0</div>
+                        <div
+                            style="margin-top:8px;background:rgba(255,255,255,0.08);border-radius:4px;overflow:hidden;height:4px">
+                            <div id="xp-progress-bar"
+                                style="height:100%;border-radius:4px;background:linear-gradient(90deg,var(--accent-purple),var(--accent-pink));width:0%;transition:width 0.6s ease">
+                            </div>
+                        </div>
+                        <div style="margin-top:4px;font-size:0.7rem;color:var(--text-secondary)" id="xp-level-label">
+                            Nivel 1</div>
+                    </div>
+                </div>
+                <div class="stat-card glass">
+                    <div class="stat-icon points"><i class="fa-solid fa-star"></i></div>
+                    <div>
+                        <div class="stat-label">Pontos</div>
+                        <div class="stat-value" id="stat-points">0</div>
+                        <div style="margin-top:6px;font-size:0.75rem;color:var(--accent-green)" id="points-today-label">
+                            +0 hoje</div>
+                    </div>
+                </div>
+                <div class="stat-card glass">
+                    <div class="stat-icon" style="background:rgba(0,184,148,0.2);color:var(--accent-green)"><i
+                            class="fa-solid fa-check-double"></i></div>
+                    <div>
+                        <div class="stat-label">Hábitos Hoje</div>
+                        <div class="stat-value" id="stat-habits-today">0/0</div>
+                        <div style="margin-top:6px;font-size:0.75rem;color:var(--text-secondary)"
+                            id="habits-streak-label">&#128293; 0 dias</div>
+                    </div>
+                </div>
+                <div class="stat-card glass">
+                    <div class="stat-icon" style="background:rgba(253,121,168,0.2);color:var(--accent-pink)"><i
+                            class="fa-solid fa-list-check"></i></div>
+                    <div>
+                        <div class="stat-label">Tarefas</div>
+                        <div class="stat-value" id="stat-tasks-pending">0</div>
+                        <div style="margin-top:6px;font-size:0.75rem;color:var(--text-secondary)">pendentes</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Tab Hoje: briefing + checklist -->
+            <section class="glass" id="hoje-panel" style="margin-bottom:16px;padding:16px;border-radius:16px">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+                    <h3 class="section-title" style="margin:0"><i class="fa-solid fa-sun"></i> Hoje</h3>
+                    <span id="hoje-date-label" style="font-size:0.75rem;color:var(--text-secondary)"></span>
+                </div>
+                <p id="hoje-briefing-text"
+                    style="margin:0 0 12px;font-size:0.9rem;color:var(--text-secondary);line-height:1.4">Carregando seu
+                    dia...</p>
+                <div id="hoje-habits-checklist" style="display:flex;flex-direction:column;gap:8px"></div>
+                <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+                    <button class="study-chip" onclick="navigateTo('view-studies')"><i class="fa-solid fa-brain"></i>
+                        SRS</button>
+                    <button class="study-chip" onclick="navigateTo('view-routines')"><i
+                            class="fa-solid fa-list-check"></i> Rotina</button>
+                    <button class="study-chip" onclick="navigateTo('view-studies');setTimeout(openQuiz,300)"><i
+                            class="fa-solid fa-bolt"></i> Quiz</button>
+                    <button class="study-chip" onclick="requestMorningBriefing()"><i class="fa-solid fa-robot"></i>
+                        Briefing</button>
+                    <button class="study-chip" onclick="openVisionBoard()" style="border-color:var(--accent-purple)"><i class="fa-solid fa-images" style="color:var(--accent-purple)"></i> Vision Board</button>
+                </div>
+            </section>
+
+
+                <!-- Chat Interface -->
+                <div id="home-chat-container" class="glass"
+                    style="margin-top: 20px; margin-bottom: 80px; padding: 15px; border-radius: 16px; display: flex; flex-direction: column; gap: 10px; height: 350px;">
+                    <h3 style="margin: 0; font-size: 1.1rem; color: var(--accent-blue);"><i
+                            class="fa-solid fa-comments"></i> Jarvis Chat</h3>
+
+                    <div id="chat-history"
+                        style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding-right: 5px;">
+                        <div class="chat-message jarvis-msg"
+                            style="align-self: flex-start; background: rgba(0, 206, 201, 0.15); border: 1px solid var(--accent-blue); padding: 10px 15px; border-radius: 12px; border-bottom-left-radius: 2px; max-width: 85%;">
+                            <p style="margin: 0; font-size: 0.95rem; color: white;">Olá! Como posso ajudar você hoje?
+                            </p>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; gap: 10px;">
+                        <input type="text" id="chat-input" placeholder="Digite uma mensagem (Enter para enviar)..."
+                            onkeypress="if(event.key === 'Enter') sendChatMessage()"
+                            style="flex: 1; padding: 12px; border-radius: 12px; background: rgba(0,0,0,0.5); color: white; border: 1px solid var(--border-glass); font-size: 1rem;">
+                    </div>
+                </div>
+        </div>
+
+        <!-- Habits View -->
+        <!-- FASE 3: HABITS -->
+        <div id="view-habits" class="view" style="position:relative;overflow:hidden">
+            <div class="view-header">
+                <h2 class="page-title" style="margin-bottom:0">Habitos</h2>
+                <div class="view-header-actions">
+                    <button class="icon-btn calendar-btn"
+                        onclick="NexusCalendar.open({module:'habits',onSelect:function(){loadHabits();}})"
+                        title="Calendario"><i class="fa-solid fa-calendar"></i> <span
+                            id="habits-date-label">Hoje</span></button>
+                    <button class="icon-btn" onclick="openHabitForm()" title="Novo habito"><i
+                            class="fa-solid fa-plus"></i></button>
+                </div>
+            </div>
+
+            <div class="glass" style="padding:14px;border-radius:14px;margin-bottom:16px">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+                    <span style="font-size:0.85rem;color:var(--text-secondary);font-weight:600">CONSISTENCIA</span>
+                </div>
+                <div id="habit-heatmap-container" style="display:flex;gap:4px;flex-wrap:wrap"></div>
+            </div>
+
+            <!-- Habits Analytics Dashboard -->
+            <div class="glass" style="margin-bottom:16px;padding:15px;border-radius:16px">
+                <h3 style="margin:0 0 12px;font-size:0.95rem;color:var(--text-secondary)"><i
+                        class="fa-solid fa-chart-line"></i> Ader&ecirc;ncia (&#218;ltimos 14 Dias)</h3>
+                <div style="position:relative;height:180px;width:100%">
+                    <canvas id="habits-line-chart"></canvas>
+                </div>
+            </div>
+
+            <!-- Habit filters -->
+            <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:10px;margin-bottom:10px;scrollbar-width:none"
+                class="habit-filters-scroll">
+                <button class="study-chip active" data-filter="all" onclick="filterHabits('all',this)">Todos</button>
+                <button class="study-chip" data-filter="morning" onclick="filterHabits('morning',this)"><i
+                        class="fa-solid fa-sun"></i> Manhã</button>
+                <button class="study-chip" data-filter="afternoon" onclick="filterHabits('afternoon',this)"><i
+                        class="fa-solid fa-cloud-sun"></i> Tarde</button>
+                <button class="study-chip" data-filter="night" onclick="filterHabits('night',this)"><i
+                        class="fa-solid fa-moon"></i> Noite</button>
+                <button class="study-chip" data-filter="done" onclick="filterHabits('done',this)"><i
+                        class="fa-solid fa-check-double"></i> Concluídos</button>
+            </div>
+
+            <div id="habits-list" class="list-container" style="padding-bottom:80px"></div>
+
+            <!-- Habit Detail Modal (full CRUD form) -->
+            <div id="habit-detail-modal" class="bottom-sheet" style="display:none">
+                <div class="bottom-sheet-content glass">
+                    <div class="bottom-sheet-handle"></div>
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+                        <h3 id="habit-form-title" style="margin:0;font-size:1.1rem">Habito</h3>
+                        <button onclick="closeHabitDetail()" class="icon-btn"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                    <div class="form-field"><label>Nome</label><input type="text" id="habit-form-name"
+                            placeholder="Ex: Meditar 10 min"></div>
+                    <div class="form-field"><label>Descricao</label><input type="text" id="habit-form-desc"
+                            placeholder="Opcional"></div>
+                    <div style="display:flex;gap:10px">
+                        <div class="form-field" style="flex:1"><label>Dificuldade</label>
+                            <select id="habit-form-xp">
+                                <option value="10">Fácil (10 XP)</option>
+                                <option value="25" selected>Médio (25 XP)</option>
+                                <option value="50">Difícil (50 XP)</option>
+                            </select>
+                        </div>
+                        <div class="form-field" style="flex:1"><label>Periodo</label>
+                            <select id="habit-form-period">
+                                <option value="morning">Manha</option>
+                                <option value="afternoon">Tarde</option>
+                                <option value="night">Noite</option>
+                                <option value="all">Qualquer</option>
+                            </select>
+                        </div>
+                    </div>
+                    <label class="form-label-sm">Dias da Semana</label>
+                    <div class="dow-row" id="habit-form-dow">
+                        <button type="button" class="dow-btn" data-d="0">D</button>
+                        <button type="button" class="dow-btn selected" data-d="1">S</button>
+                        <button type="button" class="dow-btn selected" data-d="2">T</button>
+                        <button type="button" class="dow-btn selected" data-d="3">Q</button>
+                        <button type="button" class="dow-btn selected" data-d="4">Q</button>
+                        <button type="button" class="dow-btn selected" data-d="5">S</button>
+                        <button type="button" class="dow-btn" data-d="6">S</button>
+                    </div>
+                    <div class="form-field" style="margin-top:12px"><label>Lembrete</label><input type="time"
+                            id="habit-alarm-time"></div>
+                    <div class="habit-subtasks-editor">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+                            <span class="form-label-sm" style="margin:0">Subtarefas</span>
+                            <button onclick="addHabitSubtaskInline()"
+                                style="background:none;border:none;color:var(--accent-primary);font-size:0.85rem;font-weight:700;cursor:pointer">+
+                                Adicionar</button>
+                        </div>
+                        <div id="habit-subtasks-list" class="mini-subtasks-list"></div>
+                    </div>
+                    <div
+                        style="display:flex;gap:8px;align-items:center;margin:12px 0;padding:10px;background:rgba(255,255,255,0.04);border-radius:10px">
+                        <div style="flex:1;text-align:center">
+                            <div style="font-size:1.4rem;font-weight:800;color:#f97316" id="habit-detail-streak">0</div>
+                            <div style="font-size:0.7rem;color:var(--text-secondary)">Streak</div>
+                        </div>
+                        <div style="flex:1;text-align:center">
+                            <div style="font-size:1.4rem;font-weight:800;color:var(--accent-green)"
+                                id="habit-detail-total">0</div>
+                            <div style="font-size:0.7rem;color:var(--text-secondary)">Total</div>
+                        </div>
+                    </div>
+                    <div style="display:flex;gap:10px;margin-top:16px">
+                        <button onclick="deleteCurrentHabit()"
+                            style="flex:1;background:rgba(255,71,87,0.15);border:1px solid var(--accent-pink);color:var(--accent-pink);padding:14px;border-radius:12px;font-weight:700"><i
+                                class="fa-solid fa-trash"></i></button>
+                        <button onclick="saveHabitForm()"
+                            style="flex:2;background:var(--accent-primary);border:none;color:white;padding:14px;border-radius:12px;font-weight:700">Salvar</button>
+                        <button id="habit-detail-complete-btn" onclick="completeCurrentHabit()"
+                            style="flex:2;background:rgba(255,255,255,0.1);border:none;color:white;padding:14px;border-radius:12px;font-weight:700"><i
+                                class="fa-solid fa-check"></i> Feito</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="view-finance" class="view">
+            <div class="view-header">
+                <h2 class="page-title" style="margin-bottom:0">Financas</h2>
+                <div class="view-header-actions">
+                    <button class="icon-btn calendar-btn"
+                        onclick="NexusCalendar.open({module:'finance',onSelect:function(){loadFinances();}})"><i
+                            class="fa-solid fa-calendar"></i> <span id="finance-date-label">Hoje</span></button>
+                    <button class="icon-btn" onclick="openFinanceOverflow(event)" title="Mais"><i
+                            class="fa-solid fa-ellipsis-vertical"></i></button>
+                </div>
+            </div>
+
+            <!-- Finance Analytics Dashboard -->
+            <div class="glass" style="margin-bottom:16px;padding:15px;border-radius:16px">
+                <h3 style="margin:0 0 12px;font-size:0.95rem;color:var(--text-secondary)"><i
+                        class="fa-solid fa-chart-pie"></i> Despesas por Categoria (Mês)</h3>
+                <div style="position:relative;height:200px;width:100%">
+                    <canvas id="finance-pie-chart"></canvas>
+                </div>
+            </div>
+            <div class="glass" style="margin-bottom:16px;padding:15px;border-radius:16px">
+                <h3 style="margin:0 0 12px;font-size:0.95rem;color:var(--text-secondary)"><i
+                        class="fa-solid fa-chart-column"></i> Evolução (Últimos 6 Meses)</h3>
+                <div style="position:relative;height:200px;width:100%">
+                    <canvas id="finance-bar-chart"></canvas>
+                </div>
+            </div>
+
+            <div class="list-container" id="finance-list">
+                <div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> Carregando...</div>
+            </div>
+
+            <!-- Finance Goals -->
+            <div class="glass" style="margin-bottom:16px;padding:16px;border-radius:16px">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+                    <h3 style="margin:0;font-size:0.95rem;color:white"><i class="fa-solid fa-piggy-bank" style="color:var(--accent-green)"></i> Metas de Economia</h3>
+                    <button onclick="openFinanceGoalForm()" style="background:var(--accent-green);border:none;color:white;width:30px;height:30px;border-radius:50%;font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center"><i class="fa-solid fa-plus"></i></button>
+                </div>
+                <div id="finance-goals-list" style="display:flex;flex-direction:column;gap:12px">
+                    <div style="text-align:center;padding:20px;color:var(--text-secondary);font-size:0.85rem">Nenhuma meta ainda. Crie uma!</div>
+                </div>
+            </div>
+
+            <!-- Budget Limits -->
+            <div class="glass" style="margin-bottom:80px;padding:16px;border-radius:16px">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+                    <h3 style="margin:0;font-size:0.95rem;color:white"><i class="fa-solid fa-gauge" style="color:var(--accent-pink)"></i> Orçamento por Categoria</h3>
+                    <button onclick="openBudgetForm()" style="background:var(--accent-pink);border:none;color:white;width:30px;height:30px;border-radius:50%;font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center"><i class="fa-solid fa-plus"></i></button>
+                </div>
+                <div id="finance-budgets-list" style="display:flex;flex-direction:column;gap:12px">
+                    <div style="text-align:center;padding:20px;color:var(--text-secondary);font-size:0.85rem">Nenhum limite definido.</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tasks View -->
+        <!-- FASE 4: TASKS -->
+        <div id="view-tasks" class="view" style="position:relative;overflow:hidden">
+            <div class="view-header">
+                <h2 class="page-title" style="margin-bottom:0">Tarefas</h2>
+                <div class="view-header-actions">
+                    <button class="icon-btn calendar-btn"
+                        onclick="NexusCalendar.open({module:'tasks',onSelect:function(){loadTasks();}})"><i
+                            class="fa-solid fa-calendar"></i> <span id="tasks-date-label">Hoje</span></button>
+                    <button class="icon-btn" onclick="openTaskForm()" title="Nova tarefa"><i
+                            class="fa-solid fa-plus"></i></button>
+                    <button class="icon-btn" onclick="toggleTaskKanban()" title="Kanban"><i
+                            class="fa-solid fa-table-columns"></i></button>
+                </div>
+            </div>
+
+            <!-- Task filters -->
+            <div
+                style="display:flex;gap:6px;overflow-x:auto;padding-bottom:10px;margin-bottom:10px;scrollbar-width:none">
+                <button class="study-chip active" data-filter="all" onclick="filterTasks('all',this)">Todas</button>
+                <button class="study-chip" data-filter="today" onclick="filterTasks('today',this)">Hoje</button>
+                <button class="study-chip" data-filter="high" onclick="filterTasks('high',this)"><i
+                        class="fa-solid fa-fire" style="color:var(--accent-pink)"></i> Alta</button>
+                <button class="study-chip" data-filter="done" onclick="filterTasks('done',this)">Concluídas</button>
+            </div>
+
+            <!-- LIST VIEW -->
+            <div id="tasks-list-view" class="list-container" style="padding-bottom:80px"></div>
+
+            <!-- KANBAN VIEW (hidden by default) -->
+            <div id="tasks-kanban-view"
+                style="display:none;gap:12px;overflow-x:auto;padding-bottom:80px;height:calc(100vh - 200px)">
+                <div class="kanban-column" style="flex:0 0 85%">
+                    <h3 style="font-size:0.9rem;color:var(--text-secondary);margin-bottom:10px">A FAZER</h3>
+                    <div id="kanban-todo" style="display:flex;flex-direction:column;gap:10px;min-height:100px"></div>
+                </div>
+                <div class="kanban-column" style="flex:0 0 85%">
+                    <h3 style="font-size:0.9rem;color:var(--accent-primary);margin-bottom:10px">FAZENDO</h3>
+                    <div id="kanban-doing" style="display:flex;flex-direction:column;gap:10px;min-height:100px"></div>
+                </div>
+                <div class="kanban-column" style="flex:0 0 85%;padding-right:20px">
+                    <h3 style="font-size:0.9rem;color:var(--accent-green);margin-bottom:10px">CONCLUIDO</h3>
+                    <div id="kanban-done" style="display:flex;flex-direction:column;gap:10px;min-height:100px"></div>
+                </div>
+            </div>
+
+            <!-- Task Detail Modal -->
+            <div id="task-detail-modal" class="bottom-sheet" style="display:none">
+                <div class="bottom-sheet-content glass">
+                    <div class="bottom-sheet-handle"></div>
+                    <input type="text" id="task-detail-name"
+                        style="width:100%;background:none;border:none;color:white;font-size:1.4rem;font-weight:700;margin-bottom:10px;font-family:inherit"
+                        onchange="saveTaskDetail()">
+                    <textarea id="task-detail-description" placeholder="Descricao..." rows="2"
+                        style="width:100%;background:rgba(255,255,255,0.05);border:1px solid var(--border-glass);color:white;padding:10px;border-radius:8px;font-family:inherit;margin-bottom:12px;resize:none"
+                        onchange="saveTaskDetail()"></textarea>
+                    <div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+                        <select id="task-detail-priority"
+                            style="background:rgba(255,255,255,0.1);color:white;border:none;padding:6px 12px;border-radius:8px;font-size:0.85rem"
+                            onchange="saveTaskDetail()">
+                            <option value="low">Fácil (10 XP)</option>
+                            <option value="medium">Média (25 XP)</option>
+                            <option value="high">Alta (50 XP)</option>
+                        </select>
+                        <select id="task-detail-status"
+                            style="background:rgba(255,255,255,0.1);color:white;border:none;padding:6px 12px;border-radius:8px;font-size:0.85rem"
+                            onchange="saveTaskDetail()">
+                            <option value="todo">A fazer</option>
+                            <option value="doing">Fazendo</option>
+                            <option value="done">Concluida</option>
+                        </select>
+                        <input type="date" id="task-detail-due"
+                            style="background:rgba(255,255,255,0.1);color:white;border:none;padding:6px 12px;border-radius:8px;font-size:0.85rem"
+                            onchange="saveTaskDetail()">
+                    </div>
+                    <div
+                        style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding:10px;background:rgba(255,255,255,0.04);border-radius:10px">
+                        <label class="switch" style="margin:0"><input type="checkbox" id="task-detail-notify-enabled"
+                                onchange="saveTaskDetail()"><span class="slider"></span></label>
+                        <span style="font-size:0.85rem;flex:1">Notificar</span>
+                        <input type="datetime-local" id="task-detail-notify-at"
+                            style="background:rgba(255,255,255,0.1);color:white;border:none;padding:6px 10px;border-radius:8px;font-size:0.8rem"
+                            onchange="saveTaskDetail()">
+                    </div>
+                    <div style="margin-bottom:20px">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+                            <span
+                                style="font-size:0.85rem;color:var(--text-secondary);font-weight:600">SUBTAREFAS</span>
+                            <button onclick="addSubtaskInline()"
+                                style="background:none;border:none;color:var(--accent-primary);font-size:0.85rem;font-weight:700;cursor:pointer">+
+                                Adicionar</button>
+                        </div>
+                        <div id="task-subtasks-list"
+                            style="display:flex;flex-direction:column;gap:8px;max-height:150px;overflow-y:auto"></div>
+                    </div>
+                    <div style="display:flex;gap:10px">
+                        <button onclick="deleteCurrentTask()"
+                            style="flex:1;background:rgba(255,71,87,0.15);border:1px solid var(--accent-pink);color:var(--accent-pink);padding:14px;border-radius:12px;font-weight:700"><i
+                                class="fa-solid fa-trash"></i></button>
+                        <button onclick="completeCurrentTask()"
+                            style="flex:2;background:var(--accent-green);border:none;color:white;padding:14px;border-radius:12px;font-weight:700"><i
+                                class="fa-solid fa-check"></i> Concluir</button>
+                        <button onclick="closeTaskDetail()"
+                            style="flex:1;background:rgba(255,255,255,0.1);border:none;color:white;padding:14px;border-radius:12px;font-weight:700">Fechar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="view-videos" class="view">
+            <h2 class="page-title">Vídeos</h2>
+            <div id="videos-list" class="list-container">
+                <div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> Carregando...</div>
+            </div>
+        </div>
+
+        <div id="view-shop" class="view">
+            <h2 class="page-title">Loja</h2>
+            <div id="shop-list" class="list-container">
+                <div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> Carregando...</div>
+            </div>
+        </div>
+
+        <div id="view-studies" class="view" style="position:relative;overflow:hidden">
+            <!-- MAIN STUDY VIEW -->
+            <div id="study-main-view">
+                <div class="view-header">
+                    <h2 class="page-title" style="margin-bottom:0">Estudos</h2>
+                    <div class="view-header-actions">
+                        <button class="icon-btn" onclick="toggleStudySearch()" id="study-search-toggle"
+                            title="Buscar"><i class="fa-solid fa-magnifying-glass"></i></button>
+                        <button class="icon-btn" onclick="openSubjectForm()" title="Novo caderno"><i
+                                class="fa-solid fa-folder-plus"></i></button>
+                    </div>
+                </div>
+
+                <!-- Search bar (hidden) -->
+                <div id="study-search-bar" style="display:none;margin-bottom:12px">
+                    <div style="position:relative">
+                        <i class="fa-solid fa-magnifying-glass"
+                            style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--text-secondary);pointer-events:none"></i>
+                        <input type="text" id="study-search-input" placeholder="Buscar notas, tags, conteudo..."
+                            style="width:100%;padding:12px 12px 12px 42px;border-radius:12px;background:rgba(0,0,0,0.45);color:white;border:1px solid var(--border-glass);font-size:0.95rem"
+                            oninput="searchNotes(this.value)">
+                    </div>
+                    <div id="search-results" style="margin-top:8px;display:flex;flex-direction:column;gap:8px"></div>
+                </div>
+
+                <!-- Study Stats Bar -->
+                <div class="study-stats-bar glass" style="margin-bottom:16px">
+                    <div class="study-stat-item">
+                        <span class="study-stat-value" id="study-streak-val">0</span>
+                        <span class="study-stat-label"><i class="fa-solid fa-fire" style="color:#f97316"></i>
+                            Streak</span>
+                    </div>
+                    <div class="study-stat-item" style="border-left:1px solid rgba(255,255,255,0.06)">
+                        <span class="study-stat-value" id="study-pomo-val">0</span>
+                        <span class="study-stat-label"><i class="fa-solid fa-stopwatch"
+                                style="color:var(--accent-blue)"></i> Pomodoros</span>
+                    </div>
+                    <div class="study-stat-item" style="border-left:1px solid rgba(255,255,255,0.06)">
+                        <span class="study-stat-value" id="study-notes-val">0</span>
+                        <span class="study-stat-label"><i class="fa-solid fa-file"
+                                style="color:var(--accent-purple)"></i> Notas</span>
+                    </div>
+                    <div class="study-stat-item" style="border-left:1px solid rgba(255,255,255,0.06)">
+                        <span class="study-stat-value" id="study-cards-val">0</span>
+                        <span class="study-stat-label"><i class="fa-solid fa-layer-group"
+                                style="color:var(--accent-green)"></i> Cards</span>
+                    </div>
+                    <div class="study-stat-item" style="border-left:1px solid rgba(255,255,255,0.06)">
+                        <span class="study-stat-value" id="study-quiz-val">—</span>
+                        <span class="study-stat-label"><i class="fa-solid fa-bolt" style="color:#fbbf24"></i>
+                            Quiz</span>
+                    </div>
+                </div>
+
+
+                <section class="study-cockpit" id="study-cockpit">
+                    <div class="study-cockpit-head">
+                        <div>
+                            <span class="study-kicker">Hoje nos estudos</span>
+                            <h3 id="study-today-title">Pronto para estudar</h3>
+                        </div>
+                        <button class="study-jarvis-chip" onclick="openStudyJarvis()">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i>
+                            Jarvis
+                        </button>
+                    </div>
+                    <p class="study-today-copy" id="study-today-copy">Carregando suas revisoes, notas e materias...</p>
+                    <div class="study-primary-actions">
+                        <button class="study-primary-action review" onclick="showFlashcards()">
+                            <i class="fa-solid fa-layer-group"></i>
+                            <span>Revisar agora</span>
+                            <small id="study-due-count">0 cards</small>
+                        </button>
+                        <button class="study-primary-action note" onclick="openNoteEditor(null,currentNotebookId)">
+                            <i class="fa-solid fa-pen-to-square"></i>
+                            <span>Nova nota</span>
+                            <small>capturar ideia</small>
+                        </button>
+                        <button class="study-primary-action capture" onclick="triggerOcrCamera()">
+                            <i class="fa-solid fa-camera"></i>
+                            <span>Capturar</span>
+                            <small>foto para nota</small>
+                        </button>
+                        <button class="study-primary-action quiz" onclick="openQuiz()">
+                            <i class="fa-solid fa-bolt"></i>
+                            <span>Quiz rapido</span>
+                            <small>praticar</small>
+                        </button>
+                    </div>
+                </section>
+
+                <section class="study-recent-panel" id="study-recent-panel">
+                    <div class="study-section-row">
+                        <h3 class="section-title">Continuar</h3>
+                        <button onclick="renderStudyNotesList('recent', null)">ver recentes</button>
+                    </div>
+                    <div id="study-recent-notes" class="study-recent-notes"></div>
+                </section>
+
+
+                <!-- Studies Analytics Dashboard -->
+                <div class="glass" style="margin-bottom:20px;padding:15px;border-radius:16px">
+                    <h3 style="margin:0 0 12px;font-size:0.95rem;color:var(--text-secondary)"><i
+                            class="fa-solid fa-chart-bar"></i> Produtividade (Últimos 7 Dias)</h3>
+                    <div style="position:relative;height:180px;width:100%">
+                        <canvas id="studies-bar-chart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Subjects Grid (study_notebooks with covers) -->
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+                    <h3 class="section-title" style="margin:0">Materias</h3>
+                    <button onclick="openSubjectForm()"
+                        style="background:none;border:none;color:var(--accent-primary);font-size:0.85rem;cursor:pointer;font-weight:600;font-family:inherit">+
+                        Novo</button>
+                </div>
+                <div id="subjects-grid" class="subjects-grid"></div>
+                <div id="notebooks-grid" class="notebooks-grid" style="display:none"></div>
+
+                <!-- Subject detail overlay -->
+                <div id="subject-detail-view"
+                    style="display:none;position:absolute;top:0;left:0;width:100%;min-height:100%;background:var(--bg-base);z-index:5;padding-bottom:80px">
+                    <div class="view-header">
+                        <button onclick="closeSubjectDetail()"
+                            style="background:none;border:none;color:white;font-size:1.5rem"><i
+                                class="fa-solid fa-arrow-left"></i></button>
+                        <h3 id="subject-detail-title"
+                            style="margin:0;color:white;font-size:1rem;flex:1;text-align:center"></h3>
+                        <button onclick="openSubjectMenu(event)"
+                            style="background:none;border:none;color:var(--text-secondary);font-size:1.2rem"><i
+                                class="fa-solid fa-ellipsis-vertical"></i></button>
+                    </div>
+                    <div class="subject-study-summary" id="subject-study-summary"></div>
+                    <div class="subject-study-actions">
+                        <button onclick="openNoteEditor(null,currentNotebookId)">
+                            <i class="fa-solid fa-pen-to-square"></i>
+                            Nova nota
+                        </button>
+                        <button onclick="reviewSubjectFlashcards()">
+                            <i class="fa-solid fa-layer-group"></i>
+                            Revisar
+                        </button>
+                        <button onclick="openSubjectJarvis()">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i>
+                            Jarvis
+                        </button>
+                        <button onclick="generateFlashcardsFromSubject()">
+                            <i class="fa-solid fa-plus"></i>
+                            Gerar cards
+                        </button>
+                    </div>
+                    <div class="list-container" id="subject-notes-list" style="padding:0 16px"></div>
+                    <button onclick="openNoteEditor(null,currentNotebookId)"
+                        style="position:fixed;bottom:90px;right:20px;width:56px;height:56px;border-radius:28px;background:var(--accent-primary);border:none;color:white;font-size:1.5rem;box-shadow:0 4px 14px rgba(108,92,231,0.4);z-index:10"><i
+                            class="fa-solid fa-plus"></i></button>
+                </div>
+
+                <!-- Quick Tools -->
+                <h3 class="section-title" style="margin-top:20px">Ferramentas</h3>
+                <div class="actions-scroll">
+                    <button class="action-bubble" onclick="openNoteEditor(null,null)">
+                        <i class="fa-solid fa-pen-to-square"></i><br>Nova Nota
+                    </button>
+                    <button class="action-bubble" onclick="openGraphView()">
+                        <i class="fa-solid fa-project-diagram" style="color:var(--accent-pink)"></i><br>Grafo
+                    </button>
+                    <button class="action-bubble" onclick="openPomodoro()">
+                        <i class="fa-solid fa-stopwatch"></i><br>Pomodoro
+                    </button>
+                    <button class="action-bubble" onclick="showFlashcards()">
+                        <i class="fa-solid fa-clone"></i><br>Flashcards
+                    </button>
+                    <button class="action-bubble" onclick="openQuiz()">
+                        <i class="fa-solid fa-bolt" style="color:#fbbf24"></i><br>Quiz ENEM
+                    </button>
+                    <button class="action-bubble" onclick="openFocusMode()">
+                        <i class="fa-solid fa-bullseye"></i><br>Modo Foco
+                    </button>
+                    <button class="action-bubble" onclick="triggerOcrCamera()">
+                        <i class="fa-solid fa-camera"></i><br>Scan OCR
+                    </button>
+                </div>
+
+                <div class="list-container" id="studies-list" style="display:none"></div>
+            </div>
+
+            <!-- NOTEBOOK DETAIL (hidden overlay) -->
+            <div id="notebook-detail-view"
+                style="display:none;position:absolute;top:0;left:0;width:100%;min-height:100%;background:var(--bg-base);z-index:5;padding-bottom:80px">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+                    <button onclick="closeNotebookDetail()"
+                        style="background:none;border:none;color:white;font-size:1.5rem"><i
+                            class="fa-solid fa-arrow-left"></i></button>
+                    <h3 id="notebook-detail-title" style="margin:0;color:white;font-size:1rem"></h3>
+                    <button onclick="openNoteEditor(null,currentNotebookId)"
+                        style="background:none;border:none;color:var(--accent-primary);font-size:1.3rem"><i
+                            class="fa-solid fa-plus"></i></button>
+                </div>
+                <div class="list-container" id="notebook-notes-list"></div>
+            </div>
+
+
+            <!-- NOTE EDITOR (hidden overlay) — Rich Text v2 -->
+            <div id="note-editor-view" class="note-editor-fullscreen"
+                style="display:none;flex-direction:column;gap:0;position:fixed;top:0;left:0;width:100%;height:100vh;height:100dvh;z-index:200;background:var(--bg-base);padding:0">
+
+                <!-- Editor Top Bar -->
+                <div class="note-editor-topbar"
+                    style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border-glass);background:rgba(0,0,0,0.4);backdrop-filter:blur(12px);position:sticky;top:0;z-index:20;min-height:48px">
+                    <button onclick="closeNoteEditor()"
+                        style="background:none;border:none;color:white;font-size:1.35rem;padding:4px"><i
+                            class="fa-solid fa-arrow-left"></i></button>
+                    <div style="display:flex;gap:8px;align-items:center">
+                        <button id="rich-undo-btn" onclick="document.execCommand('undo')" class="re-btn"
+                            title="Desfazer"><i class="fa-solid fa-rotate-left"></i></button>
+                        <button id="rich-redo-btn" onclick="document.execCommand('redo')" class="re-btn"
+                            title="Refazer"><i class="fa-solid fa-rotate-right"></i></button>
+                        <button onclick="saveNote()"
+                            style="background:var(--accent-primary);border:none;color:white;padding:8px 12px;border-radius:8px;font-weight:700;cursor:pointer;font-size:0.84rem"><i
+                                class="fa-solid fa-floppy-disk"></i> Salvar</button>
+                    </div>
+                </div>
+
+
+                <!-- NOTE COVER & ICON (Notion Style) -->
+                <div id="note-cover-container"
+                    style="position:relative;width:100%;height:140px;background:linear-gradient(45deg, var(--bg-surface), var(--accent-purple));display:none;background-size:cover;background-position:center">
+                    <button onclick="changeNoteCover()"
+                        style="position:absolute;bottom:10px;right:10px;background:rgba(0,0,0,0.6);border:1px solid var(--border-glass);color:white;padding:6px 12px;border-radius:6px;font-size:0.8rem;backdrop-filter:blur(4px);cursor:pointer">Alterar
+                        Capa</button>
+                    <button onclick="removeNoteCover()"
+                        style="position:absolute;top:10px;right:10px;background:rgba(255,0,0,0.4);border:none;color:white;width:28px;height:28px;border-radius:50%;font-size:0.8rem;cursor:pointer"><i
+                            class="fa-solid fa-xmark"></i></button>
+                </div>
+
+                <div class="note-editor-cover-row"
+                    style="padding:0 16px;margin-top:-24px;position:relative;z-index:2;display:flex;align-items:flex-end;gap:12px">
+                    <div id="note-icon-container" onclick="changeNoteIcon()"
+                        style="width:54px;height:54px;border-radius:12px;background:var(--bg-base);border:1px solid var(--border-glass);display:flex;align-items:center;justify-content:center;font-size:1.8rem;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,0.5)">
+                        <span id="note-icon-display">📄</span>
+                    </div>
+                    <div style="display:flex;gap:6px;margin-bottom:4px">
+                        <button id="add-cover-btn" onclick="changeNoteCover()"
+                            style="background:transparent;border:none;color:var(--text-secondary);font-size:0.85rem;cursor:pointer;display:none"><i
+                                class="fa-solid fa-image"></i> Add Capa</button>
+                    </div>
+                </div>
+
+                <!-- Meta fields (title derived from first H1/line in editor) -->
+                <div class="note-editor-meta">
+                    <div style="display:flex;gap:8px;margin-bottom:10px">
+                        <select id="note-notebook"
+                            style="flex:1;padding:7px 10px;border-radius:8px;background:rgba(255,255,255,0.05);color:var(--text-secondary);border:1px solid var(--border-glass);font-size:0.82rem">
+                            <option value="">📁 Sem caderno...</option>
+                        </select>
+                        <input type="text" id="note-tags" placeholder="#tags"
+                            style="flex:1;padding:7px 10px;border-radius:8px;background:rgba(108,92,231,0.08);color:var(--accent-purple);border:1px dashed var(--accent-purple);font-size:0.82rem;font-family:inherit">
+                    </div>
+                    <input type="text" id="note-subject" placeholder="📚 Assunto (visível para a IA)"
+                        style="padding:7px 10px;border-radius:8px;background:rgba(0,0,0,0.2);color:var(--text-secondary);border:1px solid var(--border-glass);font-size:0.82rem;width:100%;font-family:inherit;margin-bottom:4px">
+                </div>
+
+                <!-- Color Picker Popup -->
+                <div id="color-picker-popup"
+                    style="display:none;position:fixed;z-index:9999;background:rgba(20,20,30,0.97);border:1px solid var(--border-glass);border-radius:14px;padding:12px;box-shadow:0 8px 32px rgba(0,0,0,0.6);backdrop-filter:blur(16px)">
+                    <div style="font-size:0.75rem;color:var(--text-secondary);margin-bottom:8px;font-weight:600">COR DO
+                        TEXTO</div>
+                    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px">
+                        <div class="color-swatch" style="background:#fff" onclick="applyTextColor('#ffffff')"
+                            title="Branco"></div>
+                        <div class="color-swatch" style="background:#f87171" onclick="applyTextColor('#f87171')"
+                            title="Vermelho"></div>
+                        <div class="color-swatch" style="background:#fb923c" onclick="applyTextColor('#fb923c')"
+                            title="Laranja"></div>
+                        <div class="color-swatch" style="background:#facc15" onclick="applyTextColor('#facc15')"
+                            title="Amarelo"></div>
+                        <div class="color-swatch" style="background:#4ade80" onclick="applyTextColor('#4ade80')"
+                            title="Verde"></div>
+                        <div class="color-swatch" style="background:#60a5fa" onclick="applyTextColor('#60a5fa')"
+                            title="Azul"></div>
+                        <div class="color-swatch" style="background:#c084fc" onclick="applyTextColor('#c084fc')"
+                            title="Roxo"></div>
+                        <div class="color-swatch" style="background:#f472b6" onclick="applyTextColor('#f472b6')"
+                            title="Rosa"></div>
+                        <div class="color-swatch" style="background:#94a3b8" onclick="applyTextColor('#94a3b8')"
+                            title="Cinza"></div>
+                        <div class="color-swatch"
+                            style="background:transparent;border:1.5px dashed rgba(255,255,255,0.3)"
+                            onclick="applyTextColor('')" title="Remover cor"><i class="fa-solid fa-xmark"
+                                style="color:var(--text-secondary);font-size:0.7rem"></i></div>
+                    </div>
+                </div>
+
+                <!-- Image File Picker (hidden) -->
+                <input type="file" id="note-image-input" accept="image/*" style="display:none"
+                    onchange="handleImageFile(event)">
+
+                <!-- Rich Editor Content Area -->
+                <div class="note-editor-writing-area">
+                    <div class="note-editor-toolbar-float" id="rich-toolbar">
+                        <button class="rt-btn rt-overflow-btn" onclick="toggleToolbarOverflow(event)" title="Mais"><i
+                                class="fa-solid fa-ellipsis"></i></button>
+                        <div class="rt-overflow-menu" id="rt-overflow-menu" style="display:none">
+                            <button class="rt-btn" onclick="richCmd('bold')" title="Negrito"><b>B</b></button>
+                            <button class="rt-btn" onclick="richCmd('italic')" title="Itálico"><i>I</i></button>
+                            <button class="rt-btn" onclick="richHeading(1)" title="Título">H1</button>
+                            <button class="rt-btn" onclick="richCmd('insertUnorderedList')" title="Lista"><i
+                                    class="fa-solid fa-list-ul"></i></button>
+                            <button class="rt-btn" onclick="openSlashMenu()" title="Inserir (/)"><i
+                                    class="fa-solid fa-plus"></i></button>
+                            <button class="rt-btn" onclick="openYouTubeModal()" title="YouTube"><i
+                                    class="fa-brands fa-youtube" style="color:#ff4444"></i></button>
+                            <button class="rt-btn ai-glow" onclick="openJarvisPanel()" title="IA"><i
+                                    class="fa-solid fa-wand-magic-sparkles"></i></button>
+                            <button class="rt-btn" onclick="richCmd('underline')"><u>U</u></button>
+                            <button class="rt-btn" onclick="richCmd('strikeThrough')"><s>S</s></button>
+                            <button class="rt-btn" onclick="richHeading(2)">H2</button>
+                            <button class="rt-btn" onclick="richHeading(3)">H3</button>
+                            <button class="rt-btn" onclick="richCmd('insertOrderedList')"><i
+                                    class="fa-solid fa-list-ol"></i></button>
+                            <button class="rt-btn" onclick="richInsertChecklist()"><i
+                                    class="fa-solid fa-square-check"></i></button>
+                            <button class="rt-btn" onclick="toggleColorPicker(event)"><span id="color-indicator"
+                                    style="display:inline-block;width:14px;height:14px;border-radius:50%;background:#fff"></span></button>
+                            <button class="rt-btn" onclick="richInsertLink()"><i class="fa-solid fa-link"></i></button>
+                            <button class="rt-btn" onclick="openImagePicker()"><i
+                                    class="fa-solid fa-image"></i></button>
+                        </div>
+                    </div>
+                    <div id="note-content-rich" class="rich-editor" contenteditable="true"
+                        data-placeholder="Escreva algo... ou pressione / para inserir blocos ✨"></div>
+
+                    <!-- Backlinks / Linked Mentions (Obsidian Style) -->
+                    <div id="backlinks-panel"
+                        style="margin-top:40px;border-top:1px solid var(--border-glass);padding-top:20px;display:none">
+                        <h4 style="color:var(--text-secondary);margin:0 0 12px;font-size:0.9rem"><i
+                                class="fa-solid fa-link"></i> Menções Vinculadas</h4>
+                        <div id="backlinks-list" style="display:flex;flex-direction:column;gap:8px"></div>
+                    </div>
+
+                    <!-- Legacy hidden textarea for saving compatibility -->
+                    <textarea id="note-content" class="legacy-hidden-textarea" hidden aria-hidden="true"
+                        tabindex="-1"></textarea>
+                </div>
+
+                <!-- AI Diff Panel -->
+                <div id="ai-diff-panel"
+                    style="display:none;flex-direction:column;gap:10px;padding:15px;margin:0 16px;border:1px solid var(--accent-blue);background:rgba(0,206,201,0.1);border-radius:8px">
+                    <span style="color:var(--accent-blue);font-weight:bold"><i class="fa-solid fa-robot"></i> Jarvis
+                        sugeriu uma alteração!</span>
+                    <div style="display:flex;gap:10px">
+                        <button onclick="acceptAiDiff()"
+                            style="flex:1;background:var(--accent-green);color:white;border:none;padding:10px;border-radius:8px;cursor:pointer"><i
+                                class="fa-solid fa-check"></i> Aceitar</button>
+                        <button onclick="rejectAiDiff()"
+                            style="flex:1;background:var(--accent-pink);color:white;border:none;padding:10px;border-radius:8px;cursor:pointer"><i
+                                class="fa-solid fa-xmark"></i> Recusar</button>
+                    </div>
+                </div>
+                <div id="ocr-status"
+                    style="display:none;color:var(--accent-blue);font-size:0.85rem;text-align:center;padding:8px"><i
+                        class="fa-solid fa-circle-notch fa-spin"></i> Transcrevendo com Gemini...</div>
+
+                <!-- Bottom Action Row -->
+                <div class="editor-study-actions">
+                    <button onclick="triggerOcrCamera()">
+                        <i class="fa-solid fa-camera"></i>
+                        Capturar
+                    </button>
+                    <button onclick="openNoteJarvisAction('summarize_text')">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i>
+                        Resumir
+                    </button>
+                    <button onclick="generateFlashcardsFromCurrentNote()">
+                        <i class="fa-solid fa-layer-group"></i>
+                        Cards
+                    </button>
+                    <button onclick="richInsertNoteLink()">
+                        <i class="fa-solid fa-note-sticky"></i>
+                        Link
+                    </button>
+                </div>
+            </div>
+
+            <!-- SLASH MENU (floating) -->
+            <div id="slash-menu"
+                style="display:none;position:fixed;z-index:99999;background:rgba(15,15,25,0.97);border:1px solid var(--border-glass);border-radius:16px;padding:8px;min-width:240px;box-shadow:0 12px 48px rgba(0,0,0,0.8);backdrop-filter:blur(20px)">
+                <div
+                    style="font-size:0.7rem;color:var(--text-secondary);padding:4px 10px 8px;font-weight:700;letter-spacing:1px">
+                    INSERIR BLOCO</div>
+                <div class="slash-item" onclick="richHeading(1);closeSlashMenu()"><span class="slash-icon">H1</span>
+                    <div><b>Título Grande</b>
+                        <div style="font-size:0.75rem;color:var(--text-secondary)">Título de seção principal</div>
+                    </div>
+                </div>
+                <div class="slash-item" onclick="richHeading(2);closeSlashMenu()"><span class="slash-icon">H2</span>
+                    <div><b>Título Médio</b>
+                        <div style="font-size:0.75rem;color:var(--text-secondary)">Título de subseção</div>
+                    </div>
+                </div>
+                <div class="slash-item" onclick="richHeading(3);closeSlashMenu()"><span class="slash-icon">H3</span>
+                    <div><b>Título Pequeno</b>
+                        <div style="font-size:0.75rem;color:var(--text-secondary)">Título menor</div>
+                    </div>
+                </div>
+                <div class="slash-item" onclick="richCmd('insertUnorderedList');closeSlashMenu()"><span
+                        class="slash-icon">•</span>
+                    <div><b>Lista com Pontos</b>
+                        <div style="font-size:0.75rem;color:var(--text-secondary)">Lista de itens</div>
+                    </div>
+                </div>
+                <div class="slash-item" onclick="richCmd('insertOrderedList');closeSlashMenu()"><span
+                        class="slash-icon">1.</span>
+                    <div><b>Lista Numerada</b>
+                        <div style="font-size:0.75rem;color:var(--text-secondary)">Lista em sequência</div>
+                    </div>
+                </div>
+                <div class="slash-item" onclick="richInsertChecklist();closeSlashMenu()"><span
+                        class="slash-icon">☑</span>
+                    <div><b>Checklist</b>
+                        <div style="font-size:0.75rem;color:var(--text-secondary)">Itens marcáveis</div>
+                    </div>
+                </div>
+                <div class="slash-item" onclick="richInsertDivider();closeSlashMenu()"><span class="slash-icon">—</span>
+                    <div><b>Divisor</b>
+                        <div style="font-size:0.75rem;color:var(--text-secondary)">Linha separadora</div>
+                    </div>
+                </div>
+                <div class="slash-item" onclick="richInsertCode();closeSlashMenu()"><span
+                        class="slash-icon">&lt;/&gt;</span>
+                    <div><b>Bloco de Código</b>
+                        <div style="font-size:0.75rem;color:var(--text-secondary)">Trecho de código</div>
+                    </div>
+                </div>
+                <div class="slash-item" onclick="richInsertQuote();closeSlashMenu()"><span class="slash-icon">❝</span>
+                    <div><b>Citação</b>
+                        <div style="font-size:0.75rem;color:var(--text-secondary)">Bloco de destaque</div>
+                    </div>
+                </div>
+                <div class="slash-item" onclick="openImagePicker();closeSlashMenu()"><span class="slash-icon">🖼</span>
+                    <div><b>Imagem</b>
+                        <div style="font-size:0.75rem;color:var(--text-secondary)">Inserir imagem local</div>
+                    </div>
+                </div>
+                <div class="slash-item" onclick="openYouTubeModal();closeSlashMenu()"><span class="slash-icon"
+                        style="color:#ff4444">▶</span>
+                    <div><b>Vídeo YouTube</b>
+                        <div style="font-size:0.75rem;color:var(--text-secondary)">Embed de vídeo assistível</div>
+                    </div>
+                </div>
+                <div class="slash-item" onclick="richInsertLink();closeSlashMenu()"><span class="slash-icon">🔗</span>
+                    <div><b>Link Clicável</b>
+                        <div style="font-size:0.75rem;color:var(--text-secondary)">Adicionar URL</div>
+                    </div>
+                </div>
+                <div class="slash-item" onclick="richInsertNoteLink();closeSlashMenu()"><span
+                        class="slash-icon">📎</span>
+                    <div><b>Atalho p/ Nota</b>
+                        <div style="font-size:0.75rem;color:var(--text-secondary)">Linkar outra nota</div>
+                    </div>
+                </div>
+                <div style="border-top:1px solid var(--border-glass);margin:6px 0"></div>
+                <div class="slash-item ai-slash" onclick="openJarvisPanel('generate_image');closeSlashMenu()"><span
+                        class="slash-icon">✨</span>
+                    <div><b>Gerar Imagem com IA</b>
+                        <div style="font-size:0.75rem;color:var(--text-secondary)">Gemini cria imagem pro bloco</div>
+                    </div>
+                </div>
+                <div class="slash-item ai-slash" onclick="openJarvisPanel('summarize_text');closeSlashMenu()"><span
+                        class="slash-icon">📝</span>
+                    <div><b>Resumir com Jarvis</b>
+                        <div style="font-size:0.75rem;color:var(--text-secondary)">Resume seleção/texto</div>
+                    </div>
+                </div>
+                <div class="slash-item ai-slash" onclick="openJarvisPanel('summarize_video');closeSlashMenu()"><span
+                        class="slash-icon">🎬</span>
+                    <div><b>Resumir Vídeo YouTube</b>
+                        <div style="font-size:0.75rem;color:var(--text-secondary)">Cole a URL e o Jarvis resume</div>
+                    </div>
+                </div>
+                <div class="slash-item ai-slash" onclick="openJarvisPanel('deep_search');closeSlashMenu()"><span
+                        class="slash-icon">🔍</span>
+                    <div><b>Pesquisa Profunda Web</b>
+                        <div style="font-size:0.75rem;color:var(--text-secondary)">IA busca e resume da web</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- YOUTUBE EMBED MODAL -->
+            <div id="yt-modal"
+                style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.75);backdrop-filter:blur(8px);align-items:center;justify-content:center;padding:20px">
+                <div
+                    style="background:rgba(20,20,30,0.98);border:1px solid var(--border-glass);border-radius:20px;padding:24px;width:100%;max-width:400px">
+                    <h3 style="margin:0 0 16px;color:white;font-size:1.1rem"><i class="fa-brands fa-youtube"
+                            style="color:#ff4444"></i> Inserir Vídeo YouTube</h3>
+                    <input type="url" id="yt-url-input" placeholder="Cole a URL do YouTube aqui..."
+                        style="width:100%;padding:12px;border-radius:10px;background:rgba(255,255,255,0.07);color:white;border:1px solid var(--border-glass);font-size:0.95rem;font-family:inherit;margin-bottom:12px">
+                    <div style="display:flex;gap:10px">
+                        <button onclick="closeYouTubeModal()"
+                            style="flex:1;background:rgba(255,255,255,0.06);border:1px solid var(--border-glass);color:var(--text-secondary);padding:11px;border-radius:10px;cursor:pointer">Cancelar</button>
+                        <button onclick="insertYouTubeEmbed()"
+                            style="flex:1;background:linear-gradient(135deg,#ff4444,#c00);border:none;color:white;padding:11px;border-radius:10px;font-weight:700;cursor:pointer"><i
+                                class="fa-solid fa-play"></i> Inserir</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- JARVIS AI PANEL MODAL -->
+            <div id="jarvis-panel"
+                style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.75);backdrop-filter:blur(8px);align-items:flex-end;justify-content:center">
+                <div
+                    style="background:rgba(15,15,25,0.99);border:1px solid var(--accent-purple);border-radius:24px 24px 0 0;padding:24px;width:100%;max-width:500px">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+                        <h3 style="margin:0;color:white;font-size:1.1rem"><i class="fa-solid fa-wand-magic-sparkles"
+                                style="color:var(--accent-purple)"></i> Jarvis IA</h3>
+                        <button onclick="closeJarvisPanel()"
+                            style="background:none;border:none;color:var(--text-secondary);font-size:1.4rem;cursor:pointer"><i
+                                class="fa-solid fa-xmark"></i></button>
+                    </div>
+                    <!-- Jarvis Action Tabs -->
+                    <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:12px;margin-bottom:16px">
+                        <button class="jarvis-tab active" onclick="setJarvisMode('summarize_text',this)"><i
+                                class="fa-solid fa-align-left"></i> Resumir</button>
+                        <button class="jarvis-tab" onclick="setJarvisMode('summarize_video',this)"><i
+                                class="fa-brands fa-youtube"></i> Vídeo</button>
+                        <button class="jarvis-tab" onclick="setJarvisMode('deep_search',this)"><i
+                                class="fa-solid fa-magnifying-glass"></i> Web</button>
+                        <button class="jarvis-tab" onclick="setJarvisMode('generate_image',this)"><i
+                                class="fa-solid fa-image"></i> Imagem</button>
+                        <button class="jarvis-tab" onclick="setJarvisMode('expand_text',this)"><i
+                                class="fa-solid fa-expand"></i> Expandir</button>
+                        <button class="jarvis-tab" onclick="setJarvisMode('translate',this)"><i
+                                class="fa-solid fa-language"></i> Traduzir</button>
+                    </div>
+                    <!-- Dynamic Input -->
+                    <div id="jarvis-input-area">
+                        <textarea id="jarvis-prompt" rows="3" placeholder="Cole o texto, URL ou prompt aqui..."
+                            style="width:100%;padding:12px;border-radius:10px;background:rgba(255,255,255,0.06);color:white;border:1px solid var(--border-glass);font-size:0.9rem;font-family:inherit;resize:none;margin-bottom:12px"></textarea>
+                        <button onclick="runJarvisAction()"
+                            style="width:100%;background:linear-gradient(135deg,var(--accent-purple),var(--accent-pink));border:none;color:white;padding:14px;border-radius:12px;font-size:1rem;font-weight:700;cursor:pointer">
+                            <i class="fa-solid fa-bolt"></i> Executar com Jarvis
+                        </button>
+                    </div>
+                    <!-- Loading State -->
+                    <div id="jarvis-loading"
+                        style="display:none;text-align:center;padding:20px;color:var(--accent-purple)">
+                        <i class="fa-solid fa-circle-notch fa-spin" style="font-size:2rem"></i>
+                        <div style="margin-top:10px;font-size:0.9rem">Jarvis processando...</div>
+                    </div>
+                    <!-- Result Area -->
+                    <div id="jarvis-result" style="display:none;margin-top:12px">
+                        <div style="background:rgba(108,92,231,0.1);border:1px solid var(--accent-purple);border-radius:10px;padding:14px;max-height:200px;overflow-y:auto;font-size:0.88rem;color:white;line-height:1.6"
+                            id="jarvis-result-text"></div>
+                        <div style="display:flex;gap:8px;margin-top:10px">
+                            <button onclick="insertJarvisResult()"
+                                style="flex:1;background:var(--accent-green);border:none;color:white;padding:10px;border-radius:8px;font-weight:700;cursor:pointer"><i
+                                    class="fa-solid fa-check"></i> Inserir na Nota</button>
+                            <button onclick="copyJarvisResult()"
+                                style="flex:1;background:rgba(255,255,255,0.08);border:1px solid var(--border-glass);color:white;padding:10px;border-radius:8px;cursor:pointer"><i
+                                    class="fa-solid fa-copy"></i> Copiar</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- NOTE LINK PICKER MODAL -->
+            <div id="note-link-modal"
+                style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.75);backdrop-filter:blur(8px);align-items:center;justify-content:center;padding:20px">
+                <div
+                    style="background:rgba(20,20,30,0.98);border:1px solid var(--border-glass);border-radius:20px;padding:24px;width:100%;max-width:400px;max-height:70vh;display:flex;flex-direction:column">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+                        <h3 style="margin:0;color:white;font-size:1rem">📎 Linkar outra Nota</h3>
+                        <button onclick="closeNoteLinkModal()"
+                            style="background:none;border:none;color:var(--text-secondary);font-size:1.3rem;cursor:pointer"><i
+                                class="fa-solid fa-xmark"></i></button>
+                    </div>
+                    <input type="text" id="note-link-search" placeholder="Buscar nota pelo título..."
+                        oninput="filterNoteLinkList(this.value)"
+                        style="width:100%;padding:10px 12px;border-radius:8px;background:rgba(255,255,255,0.07);color:white;border:1px solid var(--border-glass);font-size:0.9rem;font-family:inherit;margin-bottom:12px">
+                    <div id="note-link-list" style="overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:6px">
+                    </div>
+                </div>
+            </div>
+
+            <!-- POMODORO VIEW (hidden overlay) -->
+            <div id="pomodoro-view"
+                style="display:none;flex-direction:column;align-items:center;gap:20px;position:absolute;top:0;left:0;width:100%;min-height:calc(100vh - 70px);z-index:8;background:var(--bg-base);padding:20px">
+                <div style="width:100%;display:flex;justify-content:space-between;align-items:center">
+                    <button onclick="closePomodoro()"
+                        style="background:none;border:none;color:white;font-size:1.5rem"><i
+                            class="fa-solid fa-arrow-left"></i></button>
+                    <h3 style="margin:0;color:white">Pomodoro</h3>
+                    <span style="width:44px"></span>
+                </div>
+                <div class="pomodoro-container"
+                    style="width:100%;display:flex;flex-direction:column;align-items:center;gap:20px;padding:30px 20px">
+                    <div id="pomo-mode-label"
+                        style="font-size:0.85rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1px;font-weight:700">
+                        Foco</div>
+                    <div id="pomo-time"
+                        style="font-size:4.5rem;font-weight:800;color:white;font-variant-numeric:tabular-nums;letter-spacing:-2px">
+                        25:00</div>
+                    <div id="pomo-dots" style="display:flex;gap:6px"></div>
+                    <div style="display:flex;gap:12px">
+                        <button onclick="startPomodoro()" id="pomo-btn-start"
+                            style="background:linear-gradient(135deg,var(--accent-purple),var(--accent-pink));border:none;color:white;padding:14px 32px;border-radius:16px;font-size:1.2rem;font-weight:700;cursor:pointer"><i
+                                class="fa-solid fa-play"></i></button>
+                        <button onclick="pausePomodoro()" id="pomo-btn-pause"
+                            style="display:none;background:rgba(255,255,255,0.1);border:1px solid var(--border-glass);color:white;padding:14px 32px;border-radius:16px;font-size:1.2rem;cursor:pointer"><i
+                                class="fa-solid fa-pause"></i></button>
+                        <button onclick="resetPomodoro()"
+                            style="background:rgba(255,255,255,0.06);border:1px solid var(--border-glass);color:var(--text-secondary);padding:14px 20px;border-radius:16px;font-size:1.1rem;cursor:pointer"><i
+                                class="fa-solid fa-rotate-left"></i></button>
+                    </div>
+                </div>
+                <div style="width:100%">
+                    <h4 style="color:var(--text-secondary);font-size:0.85rem;margin-bottom:10px;font-weight:600">
+                        Historico de Hoje</h4>
+                    <div id="pomo-history"
+                        style="display:flex;flex-direction:column;gap:6px;max-height:200px;overflow-y:auto"></div>
+                </div>
+
+                <!-- Focus Sounds -->
+                <div style="width:100%">
+                    <h4 style="color:var(--text-secondary);font-size:0.85rem;margin-bottom:12px;font-weight:600"><i class="fa-solid fa-headphones"></i> Sons de Foco</h4>
+                    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px">
+                        <button class="focus-sound-btn" id="fsound-rain" onclick="toggleFocusSound('rain')"
+                            style="background:rgba(255,255,255,0.05);border:1px solid var(--border-glass);color:white;padding:12px;border-radius:14px;cursor:pointer;display:flex;align-items:center;gap:8px;font-family:inherit;font-size:0.9rem;transition:all 0.2s">
+                            <span>🌧️</span> Chuva
+                        </button>
+                        <button class="focus-sound-btn" id="fsound-fire" onclick="toggleFocusSound('fire')"
+                            style="background:rgba(255,255,255,0.05);border:1px solid var(--border-glass);color:white;padding:12px;border-radius:14px;cursor:pointer;display:flex;align-items:center;gap:8px;font-family:inherit;font-size:0.9rem;transition:all 0.2s">
+                            <span>🔥</span> Lareira
+                        </button>
+                        <button class="focus-sound-btn" id="fsound-cafe" onclick="toggleFocusSound('cafe')"
+                            style="background:rgba(255,255,255,0.05);border:1px solid var(--border-glass);color:white;padding:12px;border-radius:14px;cursor:pointer;display:flex;align-items:center;gap:8px;font-family:inherit;font-size:0.9rem;transition:all 0.2s">
+                            <span>☕</span> Cafeteria
+                        </button>
+                        <button class="focus-sound-btn" id="fsound-lofi" onclick="toggleFocusSound('lofi')"
+                            style="background:rgba(255,255,255,0.05);border:1px solid var(--border-glass);color:white;padding:12px;border-radius:14px;cursor:pointer;display:flex;align-items:center;gap:8px;font-family:inherit;font-size:0.9rem;transition:all 0.2s">
+                            <span>🎵</span> Lofi
+                        </button>
+                    </div>
+                    <audio id="focus-audio" loop></audio>
+                </div>
+            </div>
+
+            <!-- FLASHCARD VIEW (hidden overlay) -->
+            <div id="flashcard-view"
+                style="display:none;position:absolute;top:0;left:0;width:100%;height:calc(100vh - 120px);z-index:10;padding:20px;flex-direction:column;gap:15px;background:var(--bg-base)">
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                    <button onclick="closeFlashcards()"
+                        style="background:none;border:none;color:white;font-size:1.5rem"><i
+                            class="fa-solid fa-arrow-left"></i></button>
+                    <h3 style="margin:0;color:white">Flashcards (SRS)</h3>
+                    <span id="fc-counter" style="color:var(--accent-blue);font-size:0.9rem">0/0</span>
+                </div>
+                <div style="display:flex;justify-content:center;gap:16px">
+                    <span style="font-size:0.8rem;color:var(--accent-green)"><i class="fa-solid fa-check"></i> <span
+                            id="fc-known-count">0</span> sabia</span>
+                    <span style="font-size:0.8rem;color:var(--accent-pink)"><i class="fa-solid fa-xmark"></i> <span
+                            id="fc-unknown-count">0</span> errei</span>
+                </div>
+                <div id="flashcard-card" class="glass"
+                    style="flex:1;border-radius:20px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:30px;text-align:center;border:1px solid var(--accent-purple);cursor:pointer;user-select:none;transition:transform 0.3s"
+                    onclick="flipFlashcard()">
+                    <p id="fc-front" style="font-size:1.3rem;font-weight:bold;color:white;margin:0">Carregando...</p>
+                    <p id="fc-back" style="font-size:1rem;color:var(--accent-blue);margin-top:20px;display:none"></p>
+                    <p style="font-size:0.75rem;color:var(--text-secondary);margin-top:auto">Toque para revelar</p>
+                </div>
+                <div style="display:flex;gap:20px;justify-content:center">
+                    <button onclick="answerFlashcard(false)"
+                        style="flex:1;background:rgba(255,71,87,0.3);border:2px solid var(--accent-pink);color:white;padding:15px;border-radius:16px;font-size:1.5rem;cursor:pointer">&#10007;
+                        Errei</button>
+                    <button onclick="answerFlashcard(true)"
+                        style="flex:1;background:rgba(0,210,121,0.3);border:2px solid var(--accent-green);color:white;padding:15px;border-radius:16px;font-size:1.5rem;cursor:pointer">&#10003;
+                        Acertei</button>
+                </div>
+            </div>
+
+            <!-- QUIZ ENEM VIEW -->
+            <div id="quiz-view"
+                style="display:none;position:absolute;top:0;left:0;width:100%;height:calc(100vh - 120px);z-index:11;padding:20px;flex-direction:column;gap:15px;background:var(--bg-base)">
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                    <button onclick="closeQuiz()" style="background:none;border:none;color:white;font-size:1.5rem"><i
+                            class="fa-solid fa-arrow-left"></i></button>
+                    <h3 style="margin:0;color:white">Quiz ENEM</h3>
+                    <span style="width:24px"></span>
+                </div>
+                <div id="quiz-setup" class="glass quiz-setup">
+                    <h4 style="margin:0 0 12px">Configurar sessão</h4>
+                    <label class="settings-field-label">Área</label>
+                    <select id="quiz-area-sel" class="settings-select">
+                        <option value="">Todas as áreas</option>
+                        <option>Matemática</option>
+                        <option>Português</option>
+                        <option>Ciências da Natureza</option>
+                        <option>Ciências Humanas</option>
+                    </select>
+                    <label class="settings-field-label" style="margin-top:12px">Modo</label>
+                    <select id="quiz-mode-sel" class="settings-select">
+                        <option value="5">Rápido (5 questões)</option>
+                        <option value="10">Médio (10 questões)</option>
+                    </select>
+                    <button class="quiz-btn primary" style="margin-top:16px;width:100%" onclick="startQuiz()"><i
+                            class="fa-solid fa-bolt"></i> Começar</button>
+                </div>
+                <div id="quiz-play" style="display:none;flex:1"></div>
+                <div id="quiz-done" style="display:none"></div>
+            </div>
+        </div>
+
+        <!-- JOURNAL / MOOD VIEW (dedicated, separate from studies) -->
+        <div id="view-journal" class="view">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+                <h2 class="page-title" style="margin-bottom:0">Diário</h2>
+                <button class="icon-btn" onclick="openJournalEntry()"><i class="fa-solid fa-plus"></i></button>
+            </div>
+
+            <!-- Mood Calendar strip -->
+            <div class="glass" style="padding:14px;border-radius:14px;margin-bottom:16px">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+                    <span style="font-size:0.85rem;color:var(--text-secondary);font-weight:600">HUMOR - ULTIMOS 14
+                        DIAS</span>
+                    <span id="mood-avg-label" style="font-size:0.85rem;color:var(--accent-primary)"></span>
+                </div>
+                <div id="mood-calendar-strip" style="display:flex;gap:6px;overflow-x:auto;padding-bottom:4px"></div>
+            </div>
+
+            <!-- Today's mood picker -->
+            <div class="glass" id="today-mood-card" style="padding:16px;border-radius:14px;margin-bottom:16px">
+                <p style="margin:0 0 12px;font-weight:600;font-size:0.95rem">Como você está se sentindo hoje?</p>
+                <div style="display:flex;justify-content:space-around">
+                    <button class="mood-btn" data-mood="1" onclick="setTodayMood(1)" title="Pessimo">&#128531;</button>
+                    <button class="mood-btn" data-mood="2" onclick="setTodayMood(2)" title="Ruim">&#128533;</button>
+                    <button class="mood-btn" data-mood="3" onclick="setTodayMood(3)" title="Neutro">&#128528;</button>
+                    <button class="mood-btn" data-mood="4" onclick="setTodayMood(4)" title="Bom">&#128512;</button>
+                    <button class="mood-btn" data-mood="5" onclick="setTodayMood(5)" title="Otimo">&#129321;</button>
+                </div>
+                <div id="mood-selected-label"
+                    style="text-align:center;margin-top:10px;font-size:0.85rem;color:var(--text-secondary)">Selecione
+                    seu humor</div>
+            </div>
+
+            <!-- Journal entries list -->
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+                <h3 class="section-title" style="margin:0">Entradas</h3>
+            </div>
+            <div id="journal-list" class="list-container"></div>
+
+            <!-- Journal Entry Editor (hidden overlay) -->
+            <div id="journal-entry-editor"
+                style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:var(--bg-base);z-index:200;overflow-y:auto;padding:20px">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+                    <button onclick="closeJournalEntry()"
+                        style="background:none;border:none;color:white;font-size:1.5rem"><i
+                            class="fa-solid fa-arrow-left"></i></button>
+                    <h3 id="journal-entry-date" style="margin:0;color:white;font-size:1rem"></h3>
+                    <button onclick="saveJournalEntry()"
+                        style="background:var(--accent-primary);border:none;color:white;padding:8px 18px;border-radius:8px;font-weight:700;cursor:pointer">Salvar</button>
+                </div>
+
+                <!-- Mood selector in editor -->
+                <div class="glass" style="padding:14px;border-radius:12px;margin-bottom:14px">
+                    <p style="margin:0 0 10px;font-size:0.85rem;color:var(--text-secondary);font-weight:600">HUMOR DE
+                        HOJE</p>
+                    <div style="display:flex;justify-content:space-around">
+                        <button class="mood-btn-sm" data-mood="1" onclick="selectEditorMood(1)">&#128531;</button>
+                        <button class="mood-btn-sm" data-mood="2" onclick="selectEditorMood(2)">&#128533;</button>
+                        <button class="mood-btn-sm" data-mood="3" onclick="selectEditorMood(3)">&#128528;</button>
+                        <button class="mood-btn-sm" data-mood="4" onclick="selectEditorMood(4)">&#128512;</button>
+                        <button class="mood-btn-sm" data-mood="5" onclick="selectEditorMood(5)">&#129321;</button>
+                    </div>
+                </div>
+
+                <!-- Structured prompts -->
+                <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px">
+                    <div>
+                        <label
+                            style="font-size:0.8rem;color:var(--accent-green);font-weight:600;text-transform:uppercase;letter-spacing:0.5px">O
+                            melhor de hoje</label>
+                        <textarea id="journal-best" placeholder="O que foi positivo hoje?" rows="2"
+                            style="width:100%;margin-top:6px;padding:10px;border-radius:8px;background:rgba(0,0,0,0.3);color:white;border:1px solid rgba(0,184,148,0.3);font-size:0.9rem;resize:none;font-family:inherit"></textarea>
+                    </div>
+                    <div>
+                        <label
+                            style="font-size:0.8rem;color:var(--accent-pink);font-weight:600;text-transform:uppercase;letter-spacing:0.5px">O
+                            mais desafiador</label>
+                        <textarea id="journal-challenge" placeholder="O que foi dificil?" rows="2"
+                            style="width:100%;margin-top:6px;padding:10px;border-radius:8px;background:rgba(0,0,0,0.3);color:white;border:1px solid rgba(253,121,168,0.3);font-size:0.9rem;resize:none;font-family:inherit"></textarea>
+                    </div>
+                    <div>
+                        <label
+                            style="font-size:0.8rem;color:var(--accent-blue);font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Gratidao</label>
+                        <textarea id="journal-gratitude" placeholder="Pelo que voce e grato hoje?" rows="2"
+                            style="width:100%;margin-top:6px;padding:10px;border-radius:8px;background:rgba(0,0,0,0.3);color:white;border:1px solid rgba(0,206,201,0.3);font-size:0.9rem;resize:none;font-family:inherit"></textarea>
+                    </div>
+                </div>
+
+                <label
+                    style="font-size:0.8rem;color:var(--text-secondary);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:6px">Texto
+                    Livre</label>
+                <textarea id="journal-content" placeholder="Escreva livremente sobre seu dia..." rows="6"
+                    style="width:100%;padding:12px;border-radius:10px;background:rgba(0,0,0,0.4);color:white;border:1px solid var(--border-glass);font-size:0.95rem;resize:none;line-height:1.6;font-family:inherit"></textarea>
+
+                <div style="margin-top:12px;display:flex;gap:8px">
+                    <button id="journal-mic-btn" onclick="startJournalDictation()"
+                        style="flex:0 0 auto;background:linear-gradient(135deg,var(--accent-purple),var(--accent-pink));border:none;color:white;padding:12px 18px;border-radius:12px;font-size:1.2rem;cursor:pointer"><i
+                            class="fa-solid fa-microphone"></i></button>
+                    <span id="journal-mic-status"
+                        style="color:var(--text-secondary);font-size:0.85rem;align-self:center">Pressione para
+                        ditar</span>
+                </div>
+            </div>
+        </div>
+
+        <div id="view-goals" class="view">
+            <div class="view-header">
+                <h2 class="page-title" style="margin-bottom:0">Metas</h2>
+                <div class="view-header-actions">
+                    <button class="icon-btn" onclick="openGoalForm()" title="Nova meta"><i
+                            class="fa-solid fa-plus"></i></button>
+                </div>
+            </div>
+            <div id="goals-archived-section" style="display:none;margin-bottom:16px">
+                <h3 class="section-title">Metas Concluidas</h3>
+                <div id="goals-archived-list" style="display:flex;flex-direction:column;gap:10px"></div>
+            </div>
+
+            <div id="goals-list" style="display: flex; flex-direction: column; gap: 15px;">
+                <div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> Carregando...</div>
+            </div>
+        </div>
+
+        <!-- Fitness View -->
+        <div id="view-fitness" class="view">
+            <div class="view-header">
+                <h2 class="page-title" style="margin-bottom:0">Saude & Fitness</h2>
+                <div class="view-header-actions">
+                    <button class="icon-btn calendar-btn"
+                        onclick="NexusCalendar.open({module:'fitness',onSelect:function(){loadFitness();}})"><i
+                            class="fa-solid fa-calendar"></i> <span id="fitness-date-label">Hoje</span></button>
+                    <button class="icon-btn" onclick="openWorkoutForm()" title="Novo treino"><i
+                            class="fa-solid fa-plus"></i></button>
+                </div>
+            </div>
+
+            <!-- Fitness Tabs -->
+            <div class="fitness-tabs"
+                style="display:flex;gap:0;background:rgba(0,0,0,0.3);border-radius:12px;padding:4px;margin-bottom:16px">
+                <button class="fitness-tab active" onclick="switchFitnessTab('treinos',this)">Treinos</button>
+                <button class="fitness-tab" onclick="switchFitnessTab('dieta',this)">Dieta</button>
+                <button class="fitness-tab" onclick="switchFitnessTab('medidas',this)">Medidas</button>
+            </div>
+
+            <!-- TREINOS TAB -->
+            <div id="fitness-tab-treinos">
+                <!-- Stats Row -->
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px">
+                    <div class="glass" style="padding:12px;text-align:center;border-radius:12px">
+                        <div style="font-size:1.4rem;font-weight:800;color:var(--accent-primary)" id="fit-week-count">0
+                        </div>
+                        <div style="font-size:0.7rem;color:var(--text-secondary)">Treinos/semana</div>
+                    </div>
+                    <div class="glass" style="padding:12px;text-align:center;border-radius:12px">
+                        <div style="font-size:1.4rem;font-weight:800;color:var(--accent-green)" id="fit-streak">0</div>
+                        <div style="font-size:0.7rem;color:var(--text-secondary)">Dias streak</div>
+                    </div>
+                    <div class="glass" style="padding:12px;text-align:center;border-radius:12px">
+                        <div style="font-size:1.4rem;font-weight:800;color:var(--accent-blue)" id="fit-total">0</div>
+                        <div style="font-size:0.7rem;color:var(--text-secondary)">Total treinos</div>
+                    </div>
+                </div>
+                <div id="fitness-list" class="list-container"></div>
+            </div>
+
+            <!-- DIETA TAB -->
+            <div id="fitness-tab-dieta" style="display:none">
+                <!-- Daily calorie progress -->
+                <div class="glass" style="padding:16px;border-radius:14px;margin-bottom:16px">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                        <span style="font-weight:600">Calorias Hoje</span>
+                        <span id="diet-cal-text" style="color:var(--accent-primary);font-weight:700">0 / 2000
+                            kcal</span>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.08);border-radius:6px;overflow:hidden;height:8px">
+                        <div id="diet-cal-bar"
+                            style="height:100%;border-radius:6px;background:linear-gradient(90deg,var(--accent-primary),var(--accent-secondary));width:0%;transition:width 0.5s">
+                        </div>
+                    </div>
+                    <!-- Macros -->
+                    <div style="display:flex;gap:10px;margin-top:14px">
+                        <div style="flex:1;text-align:center">
+                            <div style="font-size:0.7rem;color:var(--accent-pink);font-weight:700;margin-bottom:4px">
+                                PROTEÍNA</div>
+                            <div id="diet-protein" style="font-weight:800;font-size:1rem">0g</div>
+                        </div>
+                        <div style="flex:1;text-align:center">
+                            <div style="font-size:0.7rem;color:var(--accent-blue);font-weight:700;margin-bottom:4px">
+                                CARBO</div>
+                            <div id="diet-carb" style="font-weight:800;font-size:1rem">0g</div>
+                        </div>
+                        <div style="flex:1;text-align:center">
+                            <div style="font-size:0.7rem;color:var(--accent-green);font-weight:700;margin-bottom:4px">
+                                GORDURA</div>
+                            <div id="diet-fat" style="font-weight:800;font-size:1rem">0g</div>
+                        </div>
+                    </div>
+                </div>
+                <button onclick="openMealLogger()"
+                    style="width:100%;background:var(--accent-primary);border:none;color:white;padding:14px;border-radius:12px;font-size:1rem;font-weight:700;cursor:pointer;margin-bottom:16px;font-family:inherit"><i
+                        class="fa-solid fa-utensils"></i> Registrar Refeição</button>
+                <div id="diet-meals-list" class="list-container"></div>
+            </div>
+
+            <!-- MEDIDAS TAB -->
+            <div id="fitness-tab-medidas" style="display:none">
+                <div class="glass" style="padding:16px;border-radius:14px;margin-bottom:16px">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+                        <h4 style="margin:0;font-size:0.9rem">Peso Atual</h4>
+                        <span id="measure-weight-val"
+                            style="font-size:1.8rem;font-weight:800;color:var(--accent-primary)">-- kg</span>
+                    </div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                        <div style="background:rgba(255,255,255,0.04);padding:10px;border-radius:8px;text-align:center">
+                            <div style="font-size:0.7rem;color:var(--text-secondary);margin-bottom:4px">IMC</div>
+                            <div id="measure-bmi" style="font-weight:700">--</div>
+                        </div>
+                        <div style="background:rgba(255,255,255,0.04);padding:10px;border-radius:8px;text-align:center">
+                            <div style="font-size:0.7rem;color:var(--text-secondary);margin-bottom:4px">% Gordura</div>
+                            <div id="measure-fat-pct" style="font-weight:700">--%</div>
+                        </div>
+                    </div>
+                </div>
+                <button onclick="openBodyMeasurement()"
+                    style="width:100%;background:var(--accent-purple);border:none;color:white;padding:14px;border-radius:12px;font-size:1rem;font-weight:700;cursor:pointer;margin-bottom:16px;font-family:inherit"><i
+                        class="fa-solid fa-ruler"></i> Registrar Medidas</button>
+                <div id="measures-list" class="list-container"></div>
+            </div>
+        </div>
+
+        <!-- ALARMS VIEW -->
+        <div id="view-alarms" class="view">
+            <div class="view-header">
+                <h2>Alarmes</h2>
+                <div class="header-actions">
+                    <button class="icon-btn" onclick="openAlarmForm()"><i class="fa-solid fa-plus"></i></button>
+                </div>
+            </div>
+
+            <div class="glass" style="padding:15px; margin-bottom:15px;">
+                <p style="color:var(--text-secondary); font-size:0.9rem; margin:0;"><i
+                        class="fa-solid fa-info-circle"></i> Os alarmes tocam usando o Web Audio API ou integração
+                    nativa caso disponível.</p>
+            </div>
+
+            <div id="alarms-list" class="list-container">
+            </div>
+        </div>
+
+        <!-- IoT / Casa View -->
+        <div id="view-iot" class="view">
+            <h2 class="page-title">Casa</h2>
+            <div class="glass" style="padding:16px;border-radius:14px;margin-bottom:16px">
+                <p style="margin:0;font-size:0.9rem;color:var(--text-secondary)">
+                    <i class="fa-solid fa-house-signal"></i> Controle dispositivos IoT quando o Nexus desktop estiver na
+                    mesma rede. Funciona offline com lista vazia.
+                </p>
+            </div>
+            <div id="iot-list" class="list-container">
+                <div style="text-align:center;color:var(--text-secondary);margin-top:20px;padding:20px">
+                    <i class="fa-solid fa-wifi" style="font-size:2rem;margin-bottom:10px;opacity:0.5"></i>
+                    <p>Nenhum dispositivo encontrado.<br>Conecte-se à rede do Nexus desktop para descobrir lâmpadas e
+                        sensores.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ROUTINES -->
+        <div id="view-routines" class="view">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+                <h2 class="page-title" style="margin-bottom:0">Rotinas</h2>
+                <div style="display:flex;gap:8px">
+                    <button class="icon-btn" onclick="openNewRoutine()"><i class="fa-solid fa-plus"></i></button>
+                </div>
+            </div>
+
+            <div class="glass" style="padding:16px;border-radius:14px;margin-bottom:20px">
+                <p style="margin:0;font-size:0.9rem;color:var(--text-secondary)"><i
+                        class="fa-solid fa-clock-rotate-left"></i> Rotinas são conjuntos de ações com lembretes. Ex:
+                    Rotina Matinal às 07:00.</p>
+            </div>
+
+            <div id="routines-list" class="list-container" style="padding-bottom:80px"></div>
+
+            <!-- Routine Runner Modal -->
+            <div id="routine-runner-modal"
+                style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:var(--bg-base);z-index:200;padding:20px;flex-direction:column">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:30px">
+                    <button onclick="closeRoutineRunner()"
+                        style="background:none;border:none;color:white;font-size:1.5rem"><i
+                            class="fa-solid fa-arrow-left"></i></button>
+                    <h3 id="runner-title" style="margin:0;color:white">Rotina Matinal</h3>
+                    <span style="width:24px"></span>
+                </div>
+
+                <div id="runner-steps" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:12px"></div>
+
+                <button onclick="finishRoutine()"
+                    style="width:100%;background:linear-gradient(135deg,var(--accent-green),var(--accent-blue));border:none;color:white;padding:16px;border-radius:16px;font-size:1.1rem;font-weight:800;margin-top:20px">Finalizar
+                    Rotina</button>
+            </div>
+        </div>
+
+        <!-- PHONE CLEANER VIEW -->
+        <div id="view-cleaner" class="view">
+            <div class="view-header">
+                <h2 class="page-title" style="margin-bottom:0">Limpeza</h2>
+                <div class="view-header-actions">
+                    <button class="icon-btn" onclick="scanPhoneStorage()" title="Escanear"><i
+                            class="fa-solid fa-magnifying-glass"></i></button>
+                </div>
+            </div>
+
+            <div class="glass cleaner-stats-card" style="padding:16px;border-radius:16px;margin-bottom:16px">
+                <div class="cleaner-stats-grid">
+                    <div class="cleaner-stat">
+                        <span class="cleaner-stat-label">Armazenamento</span>
+                        <span class="cleaner-stat-value" id="cleaner-storage-used">—</span>
+                        <span class="cleaner-stat-sub" id="cleaner-storage-free">livre</span>
+                    </div>
+                    <div class="cleaner-stat">
+                        <span class="cleaner-stat-label">Cache App</span>
+                        <span class="cleaner-stat-value" id="cleaner-cache-size">—</span>
+                    </div>
+                    <div class="cleaner-stat">
+                        <span class="cleaner-stat-label">RAM</span>
+                        <span class="cleaner-stat-value" id="cleaner-ram-info">—</span>
+                    </div>
+                    <div class="cleaner-stat">
+                        <span class="cleaner-stat-label">Processos</span>
+                        <span class="cleaner-stat-value" id="cleaner-process-count">—</span>
+                    </div>
+                </div>
+                <div class="cleaner-storage-bar-wrap">
+                    <div class="cleaner-storage-bar" id="cleaner-storage-bar" style="width:0%"></div>
+                </div>
+            </div>
+
+            <div id="cleaner-scan-results" class="cleaner-categories" style="margin-bottom:16px"></div>
+
+            <div class="cleaner-actions">
+                <button class="cleaner-btn cleaner-btn-quick" onclick="runQuickClean()">
+                    <i class="fa-solid fa-bolt"></i> Limpeza Rapida
+                </button>
+                <button class="cleaner-btn cleaner-btn-deep" onclick="runDeepClean()">
+                    <i class="fa-solid fa-broom"></i> Limpeza Profunda
+                </button>
+            </div>
+
+            <div id="cleaner-progress" class="glass cleaner-progress"
+                style="display:none;padding:16px;border-radius:16px;margin-top:16px">
+                <div class="cleaner-progress-label" id="cleaner-progress-label">Limpando...</div>
+                <div class="cleaner-progress-bar-wrap">
+                    <div class="cleaner-progress-bar" id="cleaner-progress-bar"></div>
+                </div>
+            </div>
+
+            <div id="cleaner-results" class="glass cleaner-results"
+                style="display:none;padding:16px;border-radius:16px;margin-top:16px">
+                <h3 style="margin:0 0 10px;font-size:0.95rem"><i class="fa-solid fa-check-circle"
+                        style="color:var(--accent-green)"></i> Resultado</h3>
+                <p id="cleaner-results-text" style="margin:0;font-size:0.9rem;color:var(--text-secondary)"></p>
+            </div>
+
+            <div class="glass" style="padding:16px;border-radius:16px;margin-top:16px">
+                <h3 class="section-title" style="margin-bottom:10px"><i class="fa-solid fa-lightbulb"></i> Dicas</h3>
+                <div id="cleaner-tips-list" class="cleaner-tips-list"></div>
+                <button onclick="requestCleanerAiAdvice()" id="cleaner-ai-btn" class="cleaner-ai-btn"
+                    style="margin-top:12px">
+                    <i class="fa-solid fa-robot"></i> Analise com Jarvis (Wi-Fi)
+                </button>
+                <p id="cleaner-ai-advice"
+                    style="margin:12px 0 0;font-size:0.85rem;color:var(--text-secondary);line-height:1.45;display:none">
+                </p>
+            </div>
+        </div>
+
+        <!-- SETTINGS VIEW -->
+        <div id="view-settings" class="view">
+            <h2 class="page-title">Configurações</h2>
+
+            <!-- Auth / Cloud Section -->
+            <div class="glass" style="margin-bottom:20px;padding:20px;border-radius:16px;text-align:center">
+                <div id="auth-status-icon" style="font-size:3rem;color:var(--text-secondary);margin-bottom:10px">
+                    <i class="fa-solid fa-cloud-offline"></i>
+                </div>
+                <h3 id="auth-status-title" style="margin:0 0 5px;font-size:1.2rem">Offline (Conta Local)</h3>
+                <p id="auth-status-desc" style="color:var(--text-secondary);font-size:0.9rem;margin-bottom:20px">Seus
+                    dados estão salvos apenas neste dispositivo.</p>
+
+                <button id="btn-login-google" onclick="loginWithGoogle()"
+                    style="background:#fff;color:#000;border:none;padding:12px 20px;border-radius:8px;font-weight:bold;font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;width:100%">
+                    <img src="https://cdn-icons-png.flaticon.com/512/2991/2991148.png" style="width:20px;height:20px">
+                    Entrar com o Google
+                </button>
+                <button id="btn-logout" onclick="logoutGoogle()"
+                    style="background:rgba(255,0,0,0.2);color:#ff4757;border:1px solid rgba(255,0,0,0.4);padding:12px 20px;border-radius:8px;font-weight:bold;font-size:1rem;cursor:pointer;display:none;width:100%">
+                    Sair da Conta
+                </button>
+            </div>
+
+            <!-- Sync Section -->
+            <h3 class="section-title">Sincronização</h3>
+            <div class="glass settings-card" style="margin-bottom:20px;padding:15px;border-radius:16px">
+                <button onclick="forceSyncData()"
+                    style="background:var(--accent-primary);color:white;border:none;padding:12px 20px;border-radius:8px;font-weight:bold;font-size:1rem;cursor:pointer;width:100%;margin-bottom:10px">
+                    <i class="fa-solid fa-rotate"></i> Forçar Sincronização
+                </button>
+                <label class="settings-field-label">Intervalo automático</label>
+                <select id="cfg-sync-interval" class="settings-select" onchange="setSyncInterval(this.value)"
+                    style="margin-bottom:8px">
+                    <option value="30">30 segundos</option>
+                    <option value="60" selected>60 segundos</option>
+                    <option value="120">2 minutos</option>
+                    <option value="300">5 minutos</option>
+                </select>
+                <p id="sync-interval-hint"
+                    style="color:var(--text-secondary);font-size:0.8rem;text-align:center;margin:0">O aplicativo
+                    sincroniza automaticamente quando online.</p>
+            </div>
+
+            <!-- Network & Jarvis -->
+            <h3 class="section-title">Rede &amp; Jarvis</h3>
+            <div class="glass settings-card" style="margin-bottom:20px;padding:15px;border-radius:16px">
+                <div id="settings-wifi-status" class="settings-net-off" style="font-weight:700;margin-bottom:8px">
+                    Verificando...</div>
+                <p style="color:var(--text-secondary);font-size:0.85rem;margin:0;line-height:1.45">Ligação de voz, chat
+                    com IA e ações do Jarvis exigem <strong>Wi-Fi</strong> e o Nexus desktop ligado na mesma rede.</p>
+                <div style="display:grid;grid-template-columns:1fr 88px;gap:8px;margin-top:12px">
+                    <div>
+                        <label class="settings-field-label">IP do PC</label>
+                        <input id="unified-jarvis-host" class="settings-select" placeholder="192.168.0.44"
+                            onchange="saveUnifiedJarvisSettings()" style="width:100%">
+                    </div>
+                    <div>
+                        <label class="settings-field-label">Porta</label>
+                        <input id="unified-jarvis-port" class="settings-select" type="number" min="1024" max="65535"
+                            value="5124" onchange="saveUnifiedJarvisSettings()" style="width:100%">
+                    </div>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px">
+                    <button onclick="connectUnifiedJarvis(true)"
+                        style="background:var(--accent-primary);color:white;border:none;padding:10px;border-radius:10px;font-weight:800">
+                        <i class="fa-solid fa-plug"></i> Conectar PC
+                    </button>
+                    <button onclick="sendUnifiedJarvisInterrupt('all')"
+                        style="background:rgba(255,255,255,0.06);color:white;border:1px solid var(--border-glass);padding:10px;border-radius:10px;font-weight:800">
+                        <i class="fa-solid fa-stop"></i> Interromper
+                    </button>
+                </div>
+                <p id="unified-jarvis-settings-hint"
+                    style="color:var(--text-secondary);font-size:0.78rem;margin:10px 0 0;line-height:1.35">
+                    Com USB use 127.0.0.1. Sem USB, use o IP Wi-Fi do PC.
+                </p>
+            </div>
+
+            <!-- API Keys -->
+            <h3 class="section-title">Chaves de API (IA)</h3>
+            <div class="glass settings-card" style="margin-bottom:20px;padding:15px;border-radius:16px">
+                <label class="settings-field-label">Gemini API Key</label>
+                <input type="password" id="nexus_gemini_key" class="settings-select" placeholder="AIzaSy..."
+                    onchange="saveApiKey('gemini', this.value)" style="margin-bottom:12px;width:100%">
+
+                <label class="settings-field-label">Groq API Key (Voz)</label>
+                <input type="password" id="nexus_groq_key" class="settings-select" placeholder="gsk_..."
+                    onchange="saveApiKey('groq', this.value)" style="margin-bottom:8px;width:100%">
+
+                <p style="color:var(--text-secondary);font-size:0.8rem;margin:0">Deixe em branco para usar a chave
+                    padrão.</p>
+            </div>
+
+            <!-- Finance budget -->
+            <h3 class="section-title">Financas</h3>
+            <div class="glass settings-card" style="margin-bottom:20px;padding:15px;border-radius:16px">
+                <label class="settings-field-label">Orcamento diario (R$)</label>
+                <input type="number" id="nexus_daily_budget" class="settings-select" min="0" step="1" placeholder="100"
+                    onchange="saveDailyBudget(this.value)" style="margin-bottom:8px">
+                <p style="color:var(--text-secondary);font-size:0.8rem;margin:0">Usado no calendario de financas.</p>
+            </div>
+
+            <!-- Experience -->
+            <h3 class="section-title">Experiência</h3>
+            <div class="glass settings-card" style="margin-bottom:20px;padding:15px;border-radius:16px">
+                <label class="settings-field-label">Animações</label>
+                <select id="cfg-motion-level" class="settings-select" onchange="applyMotionLevel(this.value)"
+                    style="margin-bottom:12px">
+                    <option value="reduced">Reduzidas</option>
+                    <option value="balanced" selected>Balanceadas</option>
+                    <option value="expressive">Expressivas</option>
+                </select>
+                <div class="toggle-row" style="margin-bottom:10px">
+                    <span>Modo AMOLED (preto puro)</span>
+                    <label class="switch"><input type="checkbox" id="toggle-amoled" onchange="toggleAmoled()"><span
+                            class="slider"></span></label>
+                </div>
+                <div class="toggle-row" style="margin-bottom:10px">
+                    <span>Modo ENEM (destaque estudos)</span>
+                    <label class="switch"><input type="checkbox" id="toggle-enem-mode"
+                            onchange="applyEnemMode(this.checked)"><span class="slider"></span></label>
+                </div>
+                <div class="toggle-row">
+                    <span>Notificações locais</span>
+                    <label class="switch"><input type="checkbox" id="toggle-notifications" checked
+                            onchange="applyNotificationsPref(this.checked)"><span class="slider"></span></label>
+                </div>
+            </div>
+
+            <!-- Appearance Section -->
+            <h3 class="section-title">Aparência (Neon)</h3>
+            <div class="glass"
+                style="margin-bottom:20px;padding:15px;border-radius:16px;display:flex;gap:15px;justify-content:center">
+                <button onclick="changeThemeColor('#6c5ce7')"
+                    style="width:40px;height:40px;border-radius:50%;background:#6c5ce7;border:2px solid white;cursor:pointer"></button>
+                <button onclick="changeThemeColor('#00f2fe')"
+                    style="width:40px;height:40px;border-radius:50%;background:#00f2fe;border:2px solid white;cursor:pointer"></button>
+                <button onclick="changeThemeColor('#ff7675')"
+                    style="width:40px;height:40px;border-radius:50%;background:#ff7675;border:2px solid white;cursor:pointer"></button>
+                <button onclick="changeThemeColor('#fdcb6e')"
+                    style="width:40px;height:40px;border-radius:50%;background:#fdcb6e;border:2px solid white;cursor:pointer"></button>
+            </div>
+
+            <!-- Phone optimization -->
+            <h3 class="section-title">Otimizacao</h3>
+            <div class="glass settings-card" style="margin-bottom:20px;padding:15px;border-radius:16px">
+                <p style="color:var(--text-secondary);font-size:0.85rem;margin:0 0 12px;line-height:1.45">Libera cache,
+                    arquivos temporarios e dados orfaos do app para deixar o Nexus mais rapido.</p>
+                <button onclick="runQuickClean()"
+                    style="background:rgba(0,184,148,0.2);color:var(--accent-green);border:1px solid var(--accent-green);padding:12px 20px;border-radius:8px;font-weight:bold;font-size:0.95rem;cursor:pointer;width:100%;margin-bottom:8px">
+                    <i class="fa-solid fa-bolt"></i> Otimizar App (Rapida)
+                </button>
+                <button onclick="navigateTo('view-cleaner');runDeepClean()"
+                    style="background:rgba(108,92,231,0.15);color:var(--accent-purple);border:1px solid var(--accent-purple);padding:12px 20px;border-radius:8px;font-weight:bold;font-size:0.95rem;cursor:pointer;width:100%">
+                    <i class="fa-solid fa-broom"></i> Limpeza Profunda
+                </button>
+                <p id="settings-storage-hint"
+                    style="color:var(--text-secondary);font-size:0.8rem;margin:10px 0 0;text-align:center">Cache: —</p>
+            </div>
+
+            <!-- Local Data Section -->
+            <h3 class="section-title">Dados Locais</h3>
+            <div class="glass"
+                style="margin-bottom:20px;padding:15px;border-radius:16px;display:flex;flex-direction:column;gap:10px">
+                <button onclick="exportLocalDB()"
+                    style="background:rgba(255,255,255,0.1);color:white;border:1px solid var(--border-glass);padding:12px 20px;border-radius:8px;font-size:0.95rem;cursor:pointer">
+                    <i class="fa-solid fa-download"></i> Exportar Backup (JSON)
+                </button>
+                <label
+                    style="background:rgba(255,255,255,0.1);color:white;border:1px solid var(--border-glass);padding:12px 20px;border-radius:8px;font-size:0.95rem;cursor:pointer;text-align:center">
+                    <i class="fa-solid fa-upload"></i> Importar Backup
+                    <input type="file" style="display:none" accept=".json" onchange="importLocalDB(event)">
+                </label>
+                <button onclick="clearLocalDB()"
+                    style="background:rgba(255,0,0,0.1);color:#ff4757;border:1px solid rgba(255,0,0,0.3);padding:12px 20px;border-radius:8px;font-size:0.95rem;cursor:pointer;margin-top:10px">
+                    <i class="fa-solid fa-trash"></i> Apagar Tudo
+                </button>
+            </div>
+
+            <div style="text-align:center;padding:20px;color:var(--text-secondary);font-size:0.8rem">
+                Nexus Mobile v3.0<br>Made by Antigravity
+            </div>
+        </div>
+
+    </main>
+
+    <div id="unified-jarvis-status" class="unified-jarvis-status" data-state="offline">
+        <span>Jarvis PC offline</span>
+    </div>
+    <section id="unified-renderer-surface" class="unified-renderer-surface" hidden></section>
+
+    <!-- Nexus AI FAB -->
+    <button class="glass" id="nexus-ai-fab" onclick="toggleJarvisCall()" title="Ligar para o Jarvis"
+        style="position: fixed; bottom: 90px; right: 20px; width: 60px; height: 60px; border-radius: 30px; background: linear-gradient(135deg, var(--accent-purple), var(--accent-blue)); color: white; border: none; box-shadow: 0 4px 15px rgba(108, 92, 231, 0.4); z-index: 999; display: flex; align-items: center; justify-content: center; font-size: 1.5rem;">
+        <i class="fa-solid fa-microphone"></i>
+    </button>
+
+    <!-- Bottom Navigation -->
+    <nav class="bottom-nav">
+        <a href="#" class="nav-item active" data-target="view-home">
+            <i class="fa-solid fa-house"></i>
+            <span>Início</span>
+        </a>
+        <a href="#" class="nav-item" data-target="view-habits">
+            <i class="fa-solid fa-check-double"></i>
+            <span>Hábitos</span>
+        </a>
+        <a href="#" class="nav-item" data-target="view-finance">
+            <i class="fa-solid fa-chart-pie"></i>
+            <span>Finanças</span>
+        </a>
+        <a href="#" class="nav-item" data-target="view-routines">
+            <i class="fa-solid fa-clock-rotate-left"></i>
+            <span>Rotinas</span>
+        </a>
+        <a href="#" class="nav-item" data-target="view-tasks">
+            <i class="fa-solid fa-list-check"></i>
+            <span>Tarefas</span>
+        </a>
+        <a href="#" class="nav-item" data-target="view-videos">
+            <i class="fa-solid fa-play"></i>
+            <span>Vídeos</span>
+        </a>
+        <a href="#" class="nav-item" data-target="view-shop">
+            <i class="fa-solid fa-store"></i>
+            <span>Loja</span>
+        </a>
+        <a href="#" class="nav-item" data-target="view-studies">
+            <i class="fa-solid fa-book"></i>
+            <span>Estudos</span>
+        </a>
+        <a href="#" class="nav-item" data-target="view-goals">
+            <i class="fa-solid fa-bullseye"></i>
+            <span>Metas</span>
+        </a>
+        <a href="#" class="nav-item" data-target="view-fitness">
+            <i class="fa-solid fa-dumbbell"></i>
+            <span>Treino</span>
+        </a>
+        <a href="#" class="nav-item" data-target="view-alarms">
+            <i class="fa-solid fa-clock"></i>
+            <span>Alarmes</span>
+        </a>
+        <a href="#" class="nav-item" data-target="view-iot">
+            <i class="fa-solid fa-lightbulb"></i>
+            <span>Casa</span>
+        </a>
+        <a href="#" class="nav-item" data-target="view-journal" id="nav-journal">
+            <i class="fa-solid fa-book-open"></i>
+            <span>Diário</span>
+        </a>
+        <a href="#" class="nav-item" data-target="view-cleaner" id="nav-cleaner">
+            <i class="fa-solid fa-broom"></i>
+            <span>Limpar</span>
+        </a>
+    </nav>
+
+    <!-- FAB Removed by User Request -->
+
+    <!-- Hidden file input for OCR camera fallback -->
+    <input type="file" id="ocr-file-input" accept="image/*" capture="environment" style="display:none"
+        onchange="handleOcrFileSelected(event)">
+
+    <div id="note-config-sheet" class="bottom-sheet" style="display:none">
+        <div class="bottom-sheet-content glass">
+            <div class="bottom-sheet-handle"></div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+                <h3 style="margin:0;font-size:1.05rem">Ajustes da nota</h3>
+                <button onclick="closeNoteConfigSheet()" class="icon-btn"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="form-field"><label>Titulo</label><input type="text" id="note-config-title"></div>
+            <div style="display:flex;gap:10px">
+                <div class="form-field" style="flex:0.45"><label>Icone</label><input type="text" id="note-config-icon"
+                        placeholder="📄"></div>
+                <div class="form-field" style="flex:1"><label>Capa</label><input type="url" id="note-config-cover"
+                        placeholder="URL da capa"></div>
+            </div>
+            <div class="form-field"><label>Materia</label><select id="note-config-notebook"></select></div>
+            <div class="form-field"><label>Tags</label><input type="text" id="note-config-tags"
+                    placeholder="#historia #resumo"></div>
+            <div class="form-field"><label>Assunto visivel para a IA</label><input type="text" id="note-config-subject"
+                    placeholder="Ex: Revolucao Francesa"></div>
+            <div style="display:flex;gap:10px;margin-top:16px">
+                <button onclick="deleteNoteFromConfigSheet()"
+                    style="flex:1;background:rgba(255,71,87,0.15);border:1px solid var(--accent-pink);color:var(--accent-pink);padding:13px;border-radius:12px;font-weight:700">Excluir</button>
+                <button onclick="saveNoteConfigSheet()"
+                    style="flex:2;background:var(--accent-primary);border:none;color:white;padding:13px;border-radius:12px;font-weight:700">Salvar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="ocr-source-sheet" class="bottom-sheet" style="display:none">
+        <div class="bottom-sheet-content glass">
+            <div class="bottom-sheet-handle"></div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+                <h3 style="margin:0;font-size:1.05rem">Foto para texto</h3>
+                <button onclick="closeOcrSourceSheet()" class="icon-btn"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="sheet-action-grid">
+                <button onclick="startOcrFromCamera()"><i class="fa-solid fa-camera"></i><span>Tirar foto</span></button>
+                <button onclick="startOcrFromGallery()"><i class="fa-solid fa-images"></i><span>Galeria</span></button>
+            </div>
+        </div>
+    </div>
+
+    <div id="finance-tx-sheet" class="bottom-sheet" style="display:none">
+        <div class="bottom-sheet-content glass">
+            <div class="bottom-sheet-handle"></div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+                <h3 id="finance-tx-title" style="margin:0;font-size:1.05rem">Lancamento</h3>
+                <button onclick="closeFinanceTransactionForm()" class="icon-btn"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <input type="hidden" id="finance-tx-type" value="expense">
+            <div class="form-field"><label>Descricao</label><input type="text" id="finance-tx-desc"
+                    placeholder="Ex: mercado, salario, lanche"></div>
+            <div style="display:flex;gap:10px">
+                <div class="form-field" style="flex:1"><label>Valor</label><input type="number" id="finance-tx-amount"
+                        step="0.01" min="0" placeholder="0.00"></div>
+                <div class="form-field" style="flex:1"><label>Data</label><input type="date" id="finance-tx-date"></div>
+            </div>
+            <div class="form-field"><label>Categoria</label><input type="text" id="finance-tx-category"
+                    placeholder="Alimentacao, estudo, salario..."></div>
+            <button onclick="saveFinanceTransactionForm()"
+                style="width:100%;background:var(--accent-primary);border:none;color:white;padding:14px;border-radius:12px;font-weight:800">Salvar
+                lancamento</button>
+        </div>
+    </div>
+
+    <!-- Create Modal (Quick Add) -->
+    <div id="create-modal" class="modal-overlay">
+        <div class="modal-content glass">
+            <div class="modal-header">
+                <h2 class="modal-title">Novo Registro</h2>
+                <button class="close-btn" onclick="closeCreateModal()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body" style="display: flex; flex-direction: column; gap: 15px;">
+                <select id="create-type"
+                    style="padding: 12px; border-radius: 8px; background: rgba(0,0,0,0.5); color: white; border: 1px solid var(--border-glass);">
+                    <option value="task">📝 Nova Tarefa</option>
+                    <option value="habit">🔥 Novo Hábito</option>
+                </select>
+                <input type="text" id="create-title" placeholder="Nome / Título"
+                    style="padding: 12px; border-radius: 8px; background: rgba(0,0,0,0.5); color: white; border: 1px solid var(--border-glass);">
+
+                <div id="habit-options" style="display: none; flex-direction: column; gap: 15px;">
+                    <div style="display:flex; gap:10px;">
+                        <input type="time" id="create-time"
+                            style="flex:1; padding: 12px; border-radius: 8px; background: rgba(0,0,0,0.5); color: white; border: 1px solid var(--border-glass);">
+                        <select id="create-icon"
+                            style="flex:1; padding: 12px; border-radius: 8px; background: rgba(0,0,0,0.5); color: white; border: 1px solid var(--border-glass);">
+                            <option value="fa-fire">🔥 Fogo</option>
+                            <option value="fa-dumbbell">💪 Peso</option>
+                            <option value="fa-book">📚 Livro</option>
+                            <option value="fa-droplet">💧 Água</option>
+                            <option value="fa-heart">❤️ Coração</option>
+                        </select>
+                    </div>
+                    <select id="create-freq"
+                        style="padding: 12px; border-radius: 8px; background: rgba(0,0,0,0.5); color: white; border: 1px solid var(--border-glass);">
+                        <option value="daily">Todos os Dias</option>
+                        <option value="weekdays">Dias de Semana</option>
+                        <option value="weekends">Finais de Semana</option>
+                    </select>
+                    <input type="number" id="create-xp" placeholder="Recompensa de XP (ex: 50)"
+                        style="padding: 12px; border-radius: 8px; background: rgba(0,0,0,0.5); color: white; border: 1px solid var(--border-glass);">
+                    <input type="text" id="create-desc" placeholder="Descrição (opcional)"
+                        style="padding: 12px; border-radius: 8px; background: rgba(0,0,0,0.5); color: white; border: 1px solid var(--border-glass);">
+                </div>
+
+                <button onclick="saveQuickAdd()"
+                    style="background: linear-gradient(135deg, var(--accent-purple), var(--accent-blue)); color: white; padding: 14px; border: none; border-radius: 12px; font-weight: 800; font-size: 1.1rem; margin-top: 10px; box-shadow: 0 0 15px rgba(108,92,231,0.5);">SALVAR</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal-overlay">
+        <div class="modal-content glass">
+            <div class="modal-header">
+                <h2 class="modal-title">Módulos do App</h2>
+                <button class="close-btn" onclick="closeSettingsModal()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <button onclick="openSettingsView()"
+                    style="width:100%;background:rgba(108,92,231,0.15);border:1px solid var(--accent-purple);color:var(--accent-purple);padding:12px;border-radius:10px;font-weight:700;cursor:pointer;margin-bottom:16px;font-family:inherit">
+                    <i class="fa-solid fa-cloud"></i> Conta &amp; Sincronização
+                </button>
+                <div class="toggle-row">
+                    <span>Hábitos</span>
+                    <label class="switch"><input type="checkbox" id="toggle-habits" onchange="toggleModule('habits')"
+                            checked><span class="slider"></span></label>
+                </div>
+                <div class="toggle-row">
+                    <span>Finanças</span>
+                    <label class="switch"><input type="checkbox" id="toggle-finance" onchange="toggleModule('finance')"
+                            checked><span class="slider"></span></label>
+                </div>
+                <div class="toggle-row">
+                    <span>Tarefas</span>
+                    <label class="switch"><input type="checkbox" id="toggle-tasks" onchange="toggleModule('tasks')"
+                            checked><span class="slider"></span></label>
+                </div>
+                <div class="toggle-row">
+                    <span>Vídeos</span>
+                    <label class="switch"><input type="checkbox" id="toggle-videos" onchange="toggleModule('videos')"
+                            checked><span class="slider"></span></label>
+                </div>
+                <div class="toggle-row">
+                    <span>Loja</span>
+                    <label class="switch"><input type="checkbox" id="toggle-shop" onchange="toggleModule('shop')"
+                            checked><span class="slider"></span></label>
+                </div>
+                <div class="toggle-row">
+                    <span>Casa</span>
+                    <label class="switch"><input type="checkbox" id="toggle-iot" onchange="toggleModule('iot')"
+                            checked><span class="slider"></span></label>
+                </div>
+                <div class="toggle-row">
+                    <span>Estudos</span>
+                    <label class="switch"><input type="checkbox" id="toggle-studies" onchange="toggleModule('studies')"
+                            checked><span class="slider"></span></label>
+                </div>
+                <div class="toggle-row">
+                    <span>Rotinas</span>
+                    <label class="switch"><input type="checkbox" id="toggle-routines"
+                            onchange="toggleModule('routines')" checked><span class="slider"></span></label>
+                </div>
+                <div class="toggle-row">
+                    <span>Metas</span>
+                    <label class="switch"><input type="checkbox" id="toggle-goals" onchange="toggleModule('goals')"
+                            checked><span class="slider"></span></label>
+                </div>
+                <div class="toggle-row">
+                    <span>Diário</span>
+                    <label class="switch"><input type="checkbox" id="toggle-journal" onchange="toggleModule('journal')"
+                            checked><span class="slider"></span></label>
+                </div>
+                <div class="toggle-row">
+                    <span>Treinos</span>
+                    <label class="switch"><input type="checkbox" id="toggle-fitness" onchange="toggleModule('fitness')"
+                            checked><span class="slider"></span></label>
+                </div>
+                <div class="toggle-row">
+                    <span>Limpeza</span>
+                    <label class="switch"><input type="checkbox" id="toggle-cleaner" onchange="toggleModule('cleaner')"
+                            checked><span class="slider"></span></label>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Nexus Calendar Modal (shared) -->
+    <div id="nexus-calendar-modal" class="modal-overlay" style="display:none"
+        onclick="if(event.target===this)NexusCalendar.close()">
+        <div class="nexus-calendar-panel glass" onclick="event.stopPropagation()">
+            <div class="nexus-cal-header">
+                <h3>Calendario</h3>
+                <div class="nexus-cal-nav">
+                    <button type="button" class="icon-btn" onclick="NexusCalendar.changeMonth(-1)">&lt;</button>
+                    <span id="nexus-cal-month-label"></span>
+                    <button type="button" class="icon-btn" onclick="NexusCalendar.changeMonth(1)">&gt;</button>
+                    <button type="button" class="cal-today-btn" onclick="NexusCalendar.goToday()">Hoje</button>
+                </div>
+            </div>
+            <div class="nexus-cal-dow">
+                <span>D</span><span>S</span><span>T</span><span>Q</span><span>Q</span><span>S</span><span>S</span></div>
+            <div id="nexus-cal-grid" class="nexus-cal-grid"></div>
+            <div class="nexus-cal-legend">
+                <span class="hm-legend hm-green"></span> 100%
+                <span class="hm-legend hm-orange"></span> 1-49%
+                <span class="hm-legend hm-red"></span> 0%
+                <span class="hm-legend hm-gray"></span> vazio
+            </div>
+        </div>
+    </div>
+
+    <!-- Goal Form Modal -->
+    <div id="goal-form-modal" class="mobile-form-sheet" style="display:none">
+        <div class="bottom-sheet-content glass">
+            <div class="bottom-sheet-handle"></div>
+            <h3 id="goal-form-title" style="margin:0 0 16px">Nova Meta</h3>
+            <div class="form-field"><label>Nome</label><input type="text" id="goal-form-name"></div>
+            <div class="form-field"><label>Descricao</label><textarea id="goal-form-description" rows="2"></textarea>
+            </div>
+            <div class="form-field"><label>Data alvo</label><input type="date" id="goal-form-target-date"></div>
+            <div class="form-field"><label>Progresso: <span id="goal-form-progress-label">0</span>%</label><input
+                    type="range" id="goal-form-progress" min="0" max="100" value="0"
+                    oninput="document.getElementById('goal-form-progress-label').textContent=this.value"></div>
+            <div class="form-field"><label>Status</label>
+                <select id="goal-form-status">
+                    <option value="active">Ativa</option>
+                    <option value="paused">Pausada</option>
+                    <option value="achieved">Concluida</option>
+                </select>
+            </div>
+            <div style="display:flex;gap:10px;margin-top:16px">
+                <button onclick="deleteGoalForm()" id="goal-form-delete-btn"
+                    style="flex:1;background:rgba(255,71,87,0.15);border:1px solid var(--accent-pink);color:var(--accent-pink);padding:14px;border-radius:12px;font-weight:700;display:none"><i
+                        class="fa-solid fa-trash"></i></button>
+                <button onclick="saveGoalForm()"
+                    style="flex:2;background:var(--accent-primary);border:none;color:white;padding:14px;border-radius:12px;font-weight:700">Salvar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Workout Form Modal -->
+    <div id="workout-form-modal" class="mobile-form-sheet" style="display:none">
+        <div class="bottom-sheet-content glass">
+            <div class="bottom-sheet-handle"></div>
+            <h3 id="workout-form-title" style="margin:0 0 16px">Treino</h3>
+            <div class="form-field"><label>Nome</label><input type="text" id="workout-form-name"></div>
+            <div class="form-field"><label>Grupo muscular</label><input type="text" id="workout-form-muscle"></div>
+            <div style="display:flex;gap:10px">
+                <div class="form-field" style="flex:1"><label>Data</label><input type="date" id="workout-form-date">
+                </div>
+                <div class="form-field" style="flex:1"><label>Duracao (min)</label><input type="number"
+                        id="workout-form-duration" min="0"></div>
+            </div>
+            <div class="form-field"><label>Calorias</label><input type="number" id="workout-form-calories" min="0">
+            </div>
+            <div class="form-field"><label>Notas</label><textarea id="workout-form-notes" rows="2"></textarea></div>
+            <div class="form-field">
+                <div style="display:flex;justify-content:space-between;align-items:center"><label
+                        style="margin:0">Exercicios</label><button onclick="addWorkoutExercise()"
+                        style="background:none;border:none;color:var(--accent-primary);font-weight:700;cursor:pointer">+
+                        Add</button></div>
+                <div id="workout-exercises-list" style="margin-top:8px;display:flex;flex-direction:column;gap:6px">
+                </div>
+            </div>
+            <div style="display:flex;gap:10px;margin-top:16px">
+                <button onclick="deleteWorkoutForm()" id="workout-form-delete-btn"
+                    style="flex:1;background:rgba(255,71,87,0.15);border:1px solid var(--accent-pink);color:var(--accent-pink);padding:14px;border-radius:12px;font-weight:700;display:none"><i
+                        class="fa-solid fa-trash"></i></button>
+                <button onclick="saveWorkoutForm()"
+                    style="flex:2;background:var(--accent-primary);border:none;color:white;padding:14px;border-radius:12px;font-weight:700">Salvar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Subject Form Modal -->
+    <div id="subject-form-modal" class="bottom-sheet" style="display:none">
+        <div class="bottom-sheet-content glass">
+            <div class="bottom-sheet-handle"></div>
+            <h3 style="margin:0 0 16px">Nova Materia</h3>
+            <div class="form-field"><label>Nome</label><input type="text" id="subject-form-name"></div>
+            <div class="form-field"><label>Emoji</label><input type="text" id="subject-form-icon" value="📚"></div>
+            <div class="form-field"><label>URL da capa (opcional)</label><input type="url" id="subject-form-cover"
+                    placeholder="https://..."></div>
+            <button onclick="saveSubjectForm()"
+                style="width:100%;background:var(--accent-primary);border:none;color:white;padding:14px;border-radius:12px;font-weight:700;margin-top:8px">Criar</button>
+        </div>
+    </div>
+
+    <!-- Subject context menu -->
+    <div id="subject-menu-popup" class="context-menu-popup" style="display:none">
+        <button onclick="changeSubjectCover()">Alterar capa</button>
+        <button onclick="renameSubject()">Alterar titulo</button>
+        <button onclick="deleteSubject()" style="color:var(--accent-pink)">Excluir</button>
+    </div>
+
+    <!-- Subtask inline input -->
+    <div id="subtask-inline-modal" class="bottom-sheet" style="display:none">
+        <div class="bottom-sheet-content glass">
+            <h3 style="margin:0 0 12px">Nova subtarefa</h3>
+            <input type="text" id="subtask-inline-name" placeholder="Nome da subtarefa"
+                style="width:100%;padding:12px;border-radius:8px;background:rgba(0,0,0,0.4);color:white;border:1px solid var(--border-glass);font-family:inherit">
+            <button onclick="confirmSubtaskInline()"
+                style="width:100%;margin-top:12px;background:var(--accent-primary);border:none;color:white;padding:12px;border-radius:10px;font-weight:700">Adicionar</button>
+        </div>
+    </div>
+
+    <script src="app.js?v=2"></script>
+    <script>
+        if ('serviceWorker' in navigator && /^https?:$/.test(window.location.protocol)) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(registration => console.log('SW Registered', registration.scope))
+                    .catch(err => console.log('SW failed', err));
+            });
+        }
+
+        function forceOTAUpdate() {
+            if (window.NexusAndroid && typeof window.NexusAndroid.installWebUpdate === 'function') {
+                window.NexusAndroid.installWebUpdate();
+                return;
+            }
+
+            if ('caches' in window) {
+                caches.keys().then(function (names) {
+                    for (let name of names) caches.delete(name);
+                }).then(() => {
+                    if ('serviceWorker' in navigator) {
+                        navigator.serviceWorker.getRegistrations().then(function (registrations) {
+                            for (let registration of registrations) {
+                                registration.unregister();
+                            }
+                            alert("App atualizado com sucesso!");
+                            window.location.reload(true);
+                        });
+                    } else {
+                        alert("App atualizado com sucesso!");
+                        window.location.reload(true);
+                    }
+                });
+            } else {
+                window.location.reload(true);
+            }
+        }
+
+        function updateNativeApk() {
+            if (window.NexusAndroid && typeof window.NexusAndroid.installNativeApk === 'function') {
+                if (confirm("Isso fará o download da última versão completa do APK para instalar funcionalidades nativas. Deseja prosseguir?")) {
+                    const apkUrl = 'https://github.com/mariagilda402-rgb/Project-AI/releases/latest/download/app-debug.apk';
+                    window.NexusAndroid.installNativeApk(apkUrl);
+                }
+            } else {
+                alert("Atualização nativa só funciona no aplicativo Android.");
+            }
+        }
+    </script>
+
+    <!-- GRAPH VIEW (hidden overlay) -->
+    <div id="graph-view"
+        style="display:none;position:absolute;top:0;left:0;width:100%;height:100vh;z-index:9999;background:var(--bg-base)">
+        <!-- Controls -->
+        <div
+            style="position:absolute;top:0;left:0;width:100%;padding:16px;display:flex;justify-content:space-between;align-items:center;z-index:2;background:linear-gradient(to bottom, rgba(15,15,25,0.9), transparent)">
+            <button onclick="closeGraphView()"
+                style="background:rgba(0,0,0,0.5);border:1px solid var(--border-glass);backdrop-filter:blur(10px);color:white;width:40px;height:40px;border-radius:50%;font-size:1.2rem;cursor:pointer"><i
+                    class="fa-solid fa-arrow-left"></i></button>
+            <h3 style="margin:0;color:white;text-shadow:0 2px 4px rgba(0,0,0,0.8)">Mapa de Conhecimento</h3>
+            <button onclick="centerGraph()"
+                style="background:rgba(0,0,0,0.5);border:1px solid var(--border-glass);backdrop-filter:blur(10px);color:white;width:40px;height:40px;border-radius:50%;font-size:1rem;cursor:pointer"><i
+                    class="fa-solid fa-crosshairs"></i></button>
+        </div>
+        <!-- Canvas -->
+        <canvas id="graph-canvas" style="width:100%;height:100%;display:block"></canvas>
+    </div>
+
+    <!-- Alarms UI Modals -->
+    <div id="alarm-form-modal" class="modal-overlay" style="display:none"
+        onclick="if(event.target===this)closeAlarmForm()">
+        <div class="mobile-form-sheet-content glass" onclick="event.stopPropagation()">
+            <div class="mobile-form-sheet-header">
+                <h3>Novo Alarme</h3>
+                <button type="button" class="icon-btn" onclick="closeAlarmForm()"><i
+                        class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="form-field">
+                <label>Hora</label>
+                <input type="time" id="alarm-time" required>
+            </div>
+            <div class="form-field">
+                <label>Nome do Alarme (Opcional)</label>
+                <input type="text" id="alarm-name" placeholder="Ex: Acordar">
+            </div>
+            <div class="form-field">
+                <label>Dias da Semana</label>
+                <div id="alarm-days" style="display:flex;gap:5px;flex-wrap:wrap;margin-top:5px;">
+                    <button type="button" class="day-chip active" data-day="0">D</button>
+                    <button type="button" class="day-chip active" data-day="1">S</button>
+                    <button type="button" class="day-chip active" data-day="2">T</button>
+                    <button type="button" class="day-chip active" data-day="3">Q</button>
+                    <button type="button" class="day-chip active" data-day="4">Q</button>
+                    <button type="button" class="day-chip active" data-day="5">S</button>
+                    <button type="button" class="day-chip active" data-day="6">S</button>
+                </div>
+            </div>
+            <button class="primary-btn" onclick="saveAlarm()" style="width:100%;margin-top:20px;">Salvar Alarme</button>
+            <button class="icon-btn" id="alarm-delete-btn" onclick="deleteAlarm()"
+                style="width:100%;margin-top:10px;background:rgba(255,0,0,0.1);color:var(--accent-pink);display:none;">Excluir
+                Alarme</button>
+        </div>
+    </div>
+
+    <!-- Alarm Ringing Modal -->
+    <div id="alarm-ring-modal" class="modal-overlay" style="display:none;background:rgba(0,0,0,0.9);z-index:99999;">
+        <div
+            style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;width:100%;text-align:center;">
+            <i class="fa-solid fa-bell fa-shake"
+                style="font-size:4rem;color:var(--accent-primary);margin-bottom:20px;"></i>
+            <h2 id="alarm-ring-time" style="font-size:3rem;margin:0;color:white;">00:00</h2>
+            <p id="alarm-ring-name"
+                style="font-size:1.2rem;color:var(--text-secondary);margin-top:10px;margin-bottom:40px;">Alarme</p>
+            <button onclick="stopAlarmRinging()"
+                style="background:var(--accent-pink);color:white;border:none;border-radius:30px;padding:15px 40px;font-size:1.2rem;font-weight:bold;box-shadow:0 4px 15px rgba(232,67,147,0.4);">PARAR
+                ALARME</button>
+        </div>
+    </div>
+
+    <!-- Finance Goal Form Modal -->
+    <div id="finance-goal-modal" class="modal-overlay" style="display:none;z-index:9000;align-items:flex-end;justify-content:center;">
+        <div class="glass" style="width:100%;max-width:500px;padding:24px;border-radius:24px 24px 0 0;border-bottom:none">
+            <h3 style="margin:0 0 20px;color:white"><i class="fa-solid fa-piggy-bank" style="color:var(--accent-green)"></i> Nova Meta de Economia</h3>
+            <div class="form-field"><label>Objetivo (Ex: Notebook)</label><input type="text" id="fg-name" placeholder="Nome da meta"></div>
+            <div class="form-field"><label>Valor Total (R$)</label><input type="number" id="fg-target" placeholder="1000.00" step="0.01"></div>
+            <div class="form-field"><label>Valor já Guardado (R$)</label><input type="number" id="fg-saved" placeholder="0.00" step="0.01" value="0"></div>
+            <div style="display:flex;gap:10px;margin-top:16px">
+                <button onclick="closeFinanceGoalForm()" style="flex:1;padding:14px;border-radius:12px;border:1px solid var(--border-glass);background:transparent;color:var(--text-secondary);font-family:inherit;font-weight:700;cursor:pointer">Cancelar</button>
+                <button onclick="saveFinanceGoal()" style="flex:1;padding:14px;border-radius:12px;border:none;background:var(--accent-green);color:white;font-family:inherit;font-weight:700;cursor:pointer">Salvar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Budget Form Modal -->
+    <div id="budget-form-modal" class="modal-overlay" style="display:none;z-index:9000;align-items:flex-end;justify-content:center;">
+        <div class="glass" style="width:100%;max-width:500px;padding:24px;border-radius:24px 24px 0 0;border-bottom:none">
+            <h3 style="margin:0 0 20px;color:white"><i class="fa-solid fa-gauge" style="color:var(--accent-pink)"></i> Limite de Categoria</h3>
+            <div class="form-field"><label>Categoria</label><input type="text" id="bg-category" placeholder="Ex: Alimentação, Lazer..."></div>
+            <div class="form-field"><label>Limite Mensal (R$)</label><input type="number" id="bg-limit" placeholder="500.00" step="0.01"></div>
+            <div style="display:flex;gap:10px;margin-top:16px">
+                <button onclick="closeBudgetForm()" style="flex:1;padding:14px;border-radius:12px;border:1px solid var(--border-glass);background:transparent;color:var(--text-secondary);font-family:inherit;font-weight:700;cursor:pointer">Cancelar</button>
+                <button onclick="saveBudgetLimit()" style="flex:1;padding:14px;border-radius:12px;border:none;background:var(--accent-pink);color:white;font-family:inherit;font-weight:700;cursor:pointer">Salvar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Vision Board View -->
+    <div id="vision-board-modal" class="modal-overlay" style="display:none;z-index:9500;flex-direction:column;background:var(--bg-base)">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:20px 20px 10px">
+            <h2 style="margin:0;color:white;font-size:1.3rem"><i class="fa-solid fa-images" style="color:var(--accent-purple)"></i> Vision Board</h2>
+            <button onclick="closeVisionBoard()" style="background:none;border:none;color:white;font-size:1.5rem;cursor:pointer"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <p style="margin:0 20px 16px;color:var(--text-secondary);font-size:0.85rem">Seus sonhos e grandes objetivos de vida</p>
+        <div style="padding:0 16px;margin-bottom:12px">
+            <label for="vision-file-input" style="display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:14px;border-radius:16px;border:2px dashed var(--border-glass);cursor:pointer;color:var(--accent-purple);font-weight:700;font-family:inherit;background:rgba(108,92,231,0.08)">
+                <i class="fa-solid fa-plus-circle"></i> Adicionar Imagem
+            </label>
+            <input type="file" id="vision-file-input" accept="image/*" style="display:none" onchange="addVisionImage(event)">
+        </div>
+        <div id="vision-board-grid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;padding:0 16px 100px;overflow-y:auto;flex:1"></div>
+    </div>
+
+    <!-- Custom Confirm Modal -->
+    <div id="custom-confirm-modal" class="modal-overlay" style="display:none;z-index:100000;align-items:center;justify-content:center;">
+        <div class="glass" style="width:90%;max-width:320px;padding:24px;border-radius:20px;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,0.5);">
+            <div style="font-size:3rem;color:var(--accent-pink);margin-bottom:16px;"><i class="fa-solid fa-circle-exclamation"></i></div>
+            <h3 style="margin:0 0 12px;font-size:1.2rem;color:white;">Atenção</h3>
+            <p id="custom-confirm-message" style="margin:0 0 24px;color:var(--text-secondary);font-size:0.95rem;line-height:1.4;"></p>
+            <div style="display:flex;gap:12px;">
+                <button id="custom-confirm-cancel" style="flex:1;padding:12px;border-radius:12px;border:1px solid var(--border-glass);background:rgba(255,255,255,0.05);color:var(--text-secondary);font-weight:700;font-family:inherit;cursor:pointer;">Cancelar</button>
+                <button id="custom-confirm-ok" style="flex:1;padding:12px;border-radius:12px;border:none;background:var(--accent-pink);color:white;font-weight:700;font-family:inherit;cursor:pointer;">Excluir</button>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>

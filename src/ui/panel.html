@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <title>AI Assistant — Painel Pro</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="panel.css">
+</head>
+
+<body>
+  <!-- Toast Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Confirmação de ação crítica (WhatsApp, arquivos, etc.) -->
+  <div id="criticalConfirmModal" role="dialog" aria-modal="true">
+    <div class="cc-card">
+      <div class="cc-title">Confirmação de segurança</div>
+      <div class="cc-detail" id="ccDetail"></div>
+      <div class="cc-tool" id="ccTool"></div>
+      <div class="cc-actions">
+        <button type="button" class="btn-secondary" id="ccBtnNo">Cancelar</button>
+        <button type="button" class="btn-primary" id="ccBtnYes" style="background: var(--success);">Confirmar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main App Wrapper for Rounded Corners & Glow -->
+  <div id="app-wrapper">
+
+    <div class="sidebar">
+      <div class="logo">AI Manager</div>
+      <button class="nav-btn active" data-tab="home">🏠 Início</button>
+      <button class="nav-btn" data-tab="dashboard">📊 Dashboard Vida</button>
+      <button class="nav-btn" data-tab="routines">🔄 Minhas Rotinas</button>
+      <button class="nav-btn" data-tab="agents">🤖 Meus Agentes</button>
+      <button class="nav-btn" data-tab="chat">💬 Histórico de Chat</button>
+      <button class="nav-btn" data-tab="logs">📋 Logs do Sistema</button>
+      <button class="nav-btn" data-tab="modes">⚔️ Modos de Conversa</button>
+      <button class="nav-btn" data-tab="reference">📖 Referência</button>
+      <button class="nav-btn" data-tab="diagnostics">🩺 Diagnóstico</button>
+      <button class="nav-btn" data-tab="config">⚙️ Configurações</button>
+      <button class="nav-btn" data-tab="memory" style="color: var(--accent);">🧠 Memória Jarvis</button>
+      <div style="flex:1"></div>
+      <button class="nav-btn" data-tab="trash" style="color: var(--danger)">🗑️ Lixeira</button>
+    </div>
+
+    <div class="content-area">
+
+      <!-- Header with Active Indicator and Close Button -->
+      <div style="position:absolute; top:0; left:0; right:0; height:60px; background:linear-gradient(180deg, rgba(139,92,246,0.1) 0%, transparent 100%); border-bottom:1px solid rgba(139,92,246,0.2); display:flex; align-items:center; justify-content:space-between; padding:0 25px; z-index:998;">
+        <div style="display:flex; align-items:center; gap:8px; color:var(--accent); font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:1px;">
+          <span style="width:6px; height:6px; background:var(--accent); border-radius:50%; animation:pulseActive 1.5s infinite;"></span>
+          PAINEL ATIVO
+        </div>
+        <button onclick="if(window.pywebview) pywebview.api.close_panel(); else window.close();" style="background:rgba(139,92,246,0.15); border:1px solid var(--border-accent); color:var(--accent); width:32px; height:32px; border-radius:8px; cursor:pointer; font-weight:bold; font-size:16px; transition:all 0.3s cubic-bezier(0.34,1.56,0.64,1); display:flex; align-items:center; justify-content:center; box-shadow:0 4px 12px rgba(0,0,0,0.5);" onmouseover="this.style.background='var(--danger)'; this.style.color='#fff'; this.style.borderColor='var(--danger)'; this.style.boxShadow='0 8px 24px rgba(239,68,68,0.4)'; this.style.transform='scale(1.05)';" onmouseout="this.style.background='rgba(139,92,246,0.15)'; this.style.color='var(--accent)'; this.style.borderColor='var(--border-accent)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.5)'; this.style.transform='scale(1)';" title="Fechar painel (Win+Shift+A para alternar)">✕</button>
+      </div>
+
+      <!-- Spacer for content area -->
+      <div style="height:60px;"></div>
+
+      <div class="main-content">
+
+        <!-- ================= PAGE: DASHBOARD VIDA ================= -->
+        <div id="page-dashboard" class="page">
+          <div class="header">
+            <div>
+              <h1 class="h1">Dashboard de Vida (Nexus)</h1>
+              <p class="subtitle">Visão unificada de Hábitos, Finanças, Tarefas, Metas e Alertas Proativos</p>
+            </div>
+            <div style="display:flex; gap:8px;">
+              <button class="btn btn-secondary" onclick="loadMorningBriefing()">🌅 Briefing</button>
+              <button class="btn btn-secondary" onclick="loadProactiveSuggestions()">💡 Sugestões</button>
+              <button class="btn btn-primary" onclick="refreshDashboardVida()">↻ Atualizar Tudo</button>
+            </div>
+          </div>
+
+          <!-- Briefing Matinal -->
+          <div id="briefing-card" class="glass-panel" style="padding: 20px; margin-top: 16px; display: none; border-left: 3px solid var(--accent);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 14px;">
+              <h2 style="font-size: 1.05rem; margin:0; color: var(--accent);"><span style="margin-right:8px;">🌅</span>Briefing Matinal</h2>
+              <button onclick="document.getElementById('briefing-card').style.display='none'" style="background:none; border:none; color:var(--text-dim); cursor:pointer; font-size:1.2rem;">×</button>
+            </div>
+            <div id="briefing-summary" style="font-size:13px; color:var(--text-dim); line-height:1.7;"></div>
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-top: 14px;">
+              <div style="background:var(--surface); border-radius:8px; padding:12px; border:1px solid var(--border);">
+                <div style="font-size:10px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.5px; margin-bottom:6px;">Tarefas Pendentes</div>
+                <div id="briefing-tasks" style="font-size:12px; color:var(--text);"></div>
+              </div>
+              <div style="background:var(--surface); border-radius:8px; padding:12px; border:1px solid var(--border);">
+                <div style="font-size:10px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.5px; margin-bottom:6px;">Eventos Hoje</div>
+                <div id="briefing-events" style="font-size:12px; color:var(--text);"></div>
+              </div>
+              <div style="background:var(--surface); border-radius:8px; padding:12px; border:1px solid var(--border);">
+                <div style="font-size:10px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.5px; margin-bottom:6px;">Finanças do Mês</div>
+                <div id="briefing-finance" style="font-size:12px;"></div>
+              </div>
+              <div style="background:var(--surface); border-radius:8px; padding:12px; border:1px solid var(--border);">
+                <div style="font-size:10px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.5px; margin-bottom:6px;">Hábitos Ativos</div>
+                <div id="briefing-habits" style="font-size:12px; color:var(--text);"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Sugestões Proativas -->
+          <div id="proactive-card" class="glass-panel" style="padding: 20px; margin-top: 16px; display: none; border-left: 3px solid var(--warning);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 14px;">
+              <h2 style="font-size: 1.05rem; margin:0; color: var(--warning);"><span style="margin-right:8px;">💡</span>Sugestões Proativas</h2>
+              <button onclick="document.getElementById('proactive-card').style.display='none'" style="background:none; border:none; color:var(--text-dim); cursor:pointer; font-size:1.2rem;">×</button>
+            </div>
+            <div id="proactive-list" style="display:flex; flex-direction:column; gap:10px;"></div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-top: 20px;">
+            <div class="glass-panel" style="padding: 20px;">
+              <h2 style="font-size: 1.1rem; margin-bottom: 15px; color: var(--accent);">📊 Finanças</h2>
+              <div id="dashboard-finance-content">
+                <p class="subtitle">Carregando...</p>
+              </div>
+            </div>
+
+            <div class="glass-panel" style="padding: 20px;">
+              <h2 style="font-size: 1.1rem; margin-bottom: 15px; color: var(--success);">🌱 Hábitos &amp; Saúde</h2>
+              <div id="dashboard-habits-content">
+                <p class="subtitle">Carregando...</p>
+              </div>
+            </div>
+
+            <div class="glass-panel" style="padding: 20px;">
+              <h2 style="font-size: 1.1rem; margin-bottom: 15px; color: var(--warning);">📅 Tarefas &amp; Calendário</h2>
+              <div id="dashboard-tasks-content">
+                <p class="subtitle">Carregando...</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ================= PAGE: ROTINAS ================= -->
+        <div id="page-routines" class="page">
+          <div class="header">
+            <div>
+              <h1 class="h1">Minhas Rotinas</h1>
+              <p class="subtitle">Gerencie suas rotinas diárias e encadeamento de tarefas</p>
+            </div>
+            <button class="btn btn-primary" onclick="promptCreateRoutine()">+ Nova Rotina</button>
+          </div>
+          <div id="routines-list" style="display: flex; flex-direction: column; gap: 16px; margin-top: 20px;">
+            <p class="subtitle">Carregando rotinas...</p>
+          </div>
+        </div>
+
+        <!-- ================= PAGE: HOME ================= -->
+        <div id="page-home" class="page active">
+      <h1>Início</h1>
+      <div class="home-layout">
+        <div class="home-main">
+          <div class="orb-frame">
+            <iframe src="http://127.0.0.1:5123"></iframe>
+          </div>
+          <div class="status-badge" id="statusLabel">INATIVO</div>
+          <div class="chat-box">
+            <input type="text" id="chatInput" placeholder="Digite um comando para a IA...">
+            <button class="btn-secondary" id="btnUploadFile" title="Processar Arquivo"
+              style="padding: 10px;">📎</button>
+            <button class="btn-primary" id="sendBtn">Enviar</button>
+            <button type="button" class="btn-secondary" id="btnOpenNexus" title="Abrir Nexus">Nexus</button>
+          </div>
+          <div id="chatFeedback" style="color: var(--success); font-size:13px; opacity:0; transition: opacity 0.3s;">✓
+            Enviado</div>
+          <div id="fileFeedback" style="color: var(--accent); font-size:13px; opacity:0; transition: opacity 0.3s;">
+            Arquivo Selecionado</div>
+          <div style="margin-top:10px; display:flex; align-items:center; gap:10px;">
+            <label style="margin:0; white-space:nowrap;">Agente Ativo:</label>
+            <select id="agentSelect" style="flex:1;"></select>
+          </div>
+        </div>
+        <div class="home-side">
+          <div class="stats-panel">
+            <h3 style="font-size:14px; border-bottom: 1px solid var(--border); padding-bottom:10px;">Dashboard em Tempo
+              Real</h3>
+
+            <div class="stat-item">
+              <span class="stat-label">Agentes Ativos</span>
+              <span class="stat-value" id="statAgents">1</span>
+            </div>
+
+            <div class="stat-item">
+              <div style="width:100%">
+                <div style="display:flex; justify-content:space-between">
+                  <span class="stat-label">Uso de CPU</span>
+                  <span class="stat-value" id="statCpuText">0%</span>
+                </div>
+                <div class="stat-progress">
+                  <div class="stat-bar" id="statCpuBar" style="width:0%"></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="stat-item">
+              <div style="width:100%">
+                <div style="display:flex; justify-content:space-between">
+                  <span class="stat-label">Memória RAM</span>
+                  <span class="stat-value" id="statRamText">0 GB</span>
+                </div>
+                <div class="stat-progress">
+                  <div class="stat-bar" id="statRamBar" style="width:0%; background:#10b981;"></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="stat-item">
+              <span class="stat-label">Tokens P/ Min (Estimado)</span>
+              <span class="stat-value" id="statTokens" style="color:var(--accent)">0</span>
+            </div>
+
+            <div class="stat-item" style="flex-direction:column; align-items:flex-start; gap:6px; margin-top:8px; padding-top:12px; border-top:1px solid var(--border);">
+              <span class="stat-label" style="width:100%;">Assistente (tempo real)</span>
+              <div style="font-size:12px; color:var(--text-dim); line-height:1.5; width:100%;" id="runtimeStatusBlock">
+                <div>Mic: <span id="rtMic">—</span></div>
+                <div>Processando: <span id="rtProc">—</span></div>
+                <div>Fila (aprox.): <span id="rtQueue">—</span></div>
+                <div>LLM: <span id="rtLlm">—</span></div>
+                <div style="color:var(--danger); max-height:3em; overflow:hidden;" id="rtErr"></div>
+              </div>
+            </div>
+            <div class="stat-item" style="flex-direction:column; align-items:flex-start; gap:4px;">
+              <span class="stat-label">Últimas ferramentas</span>
+              <pre id="rtTools" style="font-size:11px; color:var(--text-dim); white-space:pre-wrap; max-height:120px; overflow:auto; width:100%; margin:0;">—</pre>
+            </div>
+            <div class="stat-item" style="flex-direction:column; align-items:flex-start; gap:6px;">
+              <span class="stat-label">Inicializacao</span>
+              <div class="startup-phases" id="startupPhases">
+                <div class="startup-phase"><strong>Aguardando status</strong><span>0ms</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="stats-panel" style="margin-top: 16px;">
+          <h3 style="font-size:14px; border-bottom: 1px solid var(--border); padding-bottom:10px;">Ações Rápidas (IoT &
+            Utils)</h3>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px;">
+            <button class="btn-secondary" onclick="sendQuickCommand('Ligue a luz do quarto')"
+              style="padding: 10px 8px; font-size: 12px; background: rgba(59, 130, 246, 0.1); border-color: rgba(59, 130, 246, 0.3); color: #fff;">💡
+              Luz Quarto</button>
+            <button class="btn-secondary" onclick="sendQuickCommand('Ligue a luz da sala')"
+              style="padding: 10px 8px; font-size: 12px; background: rgba(59, 130, 246, 0.1); border-color: rgba(59, 130, 246, 0.3); color: #fff;">💡
+              Luz Sala</button>
+            <button class="btn-secondary" onclick="sendQuickCommand('Desligue todas as luzes')"
+              style="padding: 10px 8px; font-size: 12px; background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.3); color: #fff;">🌙
+              Apagar Tudo</button>
+            <button class="btn-secondary" onclick="sendQuickCommand('Qual o clima de hoje?')"
+              style="padding: 10px 8px; font-size: 12px;">🌤️ Previsão Tempo</button>
+            <button class="btn-secondary" onclick="sendQuickCommand('Resuma as manchetes e notícias mais recentes')"
+              style="padding: 10px 8px; font-size: 12px; grid-column: span 2; border-color: var(--accent); color: var(--accent); font-weight: 600;">📰
+              Manchetes do Dia</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  <!-- AGENTES -->
+  <div id="page-agents" class="page">
+    <div id="agents-list-view">
+      <div class="agents-header">
+        <h1>Meus Agentes</h1>
+        <button class="btn-icon" id="btnCreateAgent" title="Novo Agente">+</button>
+      </div>
+      <div class="agent-grid" id="agentGrid">
+        <!-- populated via js -->
+      </div>
+    </div>
+
+    <div id="agent-detail-view" style="display:none;">
+      <div class="detail-header">
+        <button class="btn-secondary" id="btnBackAgents">← Voltar</button>
+        <h1 style="margin:0;" id="detailTitle">Detalhes do Agente</h1>
+        <div style="flex:1"></div>
+        <button class="btn-danger" id="btnDeleteAgent">Mover para Lixeira</button>
+        <button class="btn-primary" id="btnActivateAgent" style="background:var(--success);">Ativar</button>
+        <button class="btn-primary" id="btnSaveAgent">Salvar Alterações</button>
+      </div>
+
+      <div class="detail-grid">
+        <div class="detail-col">
+          <h2>Configurações</h2>
+          <input type="hidden" id="fId">
+          <div class="form-group">
+            <label>Nome do Agente</label>
+            <div class="persona-gen-row">
+              <input type="text" id="fName" style="flex:1;">
+              <button class="btn-generate" id="btnGenPersona" title="Gerar personalidade com IA">✨ Gerar
+                Persona</button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Personalidade (Prompt)</label>
+            <textarea id="fPersona" rows="4"></textarea>
+          </div>
+          <div class="form-group">
+            <label>Provedor TTS</label>
+            <select id="fTtsProvider">
+              <option value="edge">Edge TTS (Nuvem)</option>
+              <option value="rvc">RVC + Edge base</option>
+              <option value="fish">Fish Audio (API)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Voz Edge</label>
+            <input type="text" id="fTtsVoice">
+          </div>
+          <div class="form-group">
+            <label>Voz Kokoro</label>
+            <input type="text" id="fKokoroVoice">
+          </div>
+          <div class="form-group">
+            <label>Velocidade de Fala: <span class="slider-val" id="fSpeedVal">1.0x</span></label>
+            <input type="range" id="fSpeed" min="0.5" max="2.0" step="0.1" value="1.0">
+          </div>
+        </div>
+
+        <div class="detail-col">
+          <h2>Memórias deste Agente</h2>
+          <div style="display:flex; gap:10px; margin-bottom:16px;">
+            <input type="text" id="memSearch" placeholder="Buscar memória...">
+            <button class="btn-secondary" id="btnMemSearch">Buscar</button>
+          </div>
+          <div class="mem-list" id="agentMemList">
+            <!-- memories -->
+          </div>
+          <div style="display:flex; gap:10px; margin-top:16px; border-top:1px solid var(--border); padding-top:16px;">
+            <button class="btn-secondary" id="btnMemExport" style="flex:1">Exportar JSON</button>
+            <button class="btn-secondary" id="btnMemImport" style="flex:1">Importar JSON</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODOS -->
+  <div id="page-modes" class="page">
+    <h1>Orquestração Multi-Agente</h1>
+    <div class="modes-layout">
+      <div class="mode-card">
+        <h2>Preset Rápido</h2>
+        <select id="modePresetSelect">
+          <option value="">Personalizado...</option>
+          <option value="interview">Entrevista de Emprego (Round-Robin)</option>
+          <option value="debate">Debate Tecnológico (Debate 4 turnos)</option>
+          <option value="brainstorm">Brainstorm Criativo (Round-Robin)</option>
+        </select>
+      </div>
+
+      <div class="mode-card">
+        <h2>Configuração da Sessão</h2>
+        <div class="form-group">
+          <label>Selecione os Agentes Participantes:</label>
+          <div class="checkbox-list" id="modeAgentsList"></div>
+        </div>
+
+        <div class="form-group">
+          <label>Modo de Interação</label>
+          <select id="modeSelect">
+            <option value="roundrobin">Round-Robin (Todos falam uma vez)</option>
+            <option value="debate">Debate Livre (Discussão contínua)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label id="modeInputLabel">Tema / Pergunta Inicial</label>
+          <textarea id="modeInput" rows="3"></textarea>
+        </div>
+
+        <div id="debateOpts" style="display:none;" class="form-group">
+          <label>Número de Rodadas</label>
+          <input type="number" id="modeRounds" value="3" min="1" max="10">
+        </div>
+
+        <div id="roundRobinOpts" class="form-group">
+          <label style="display:flex; align-items:center; gap:8px;">
+            <input type="checkbox" id="modeChained" style="width:auto;">
+            Passar contexto entre eles (Chained)
+          </label>
+        </div>
+
+        <button class="btn-primary" id="btnModesStart" style="width:100%; margin-top:10px;">▶️ Iniciar Sessão</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MEMORIA JARVIS -->
+  <div id="page-memory" class="page">
+    <h1>🧠 Memória do Jarvis</h1>
+    <p style="color:var(--text-dim); font-size:13px; margin-bottom:20px;">Visualize, edite e exclua os dados estruturados que o Jarvis sabe sobre você.</p>
+
+    <!-- Lock Screen -->
+    <div id="memory-lock" style="display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:360px; gap:16px;">
+      <div style="font-size:4rem;">🔒</div>
+      <h2 style="color:var(--accent); margin:0;">Acesso Restrito</h2>
+      <p style="color:var(--text-dim); text-align:center;">Insira sua senha para gerenciar a memória do Jarvis</p>
+      <div id="memory-setup-note" style="display:none; color:var(--warning); font-size:12px; text-align:center; max-width:300px;">Primeira vez: defina uma senha para proteger este módulo</div>
+      <input type="password" id="memory-pwd-input" placeholder="Senha..." style="max-width:280px; text-align:center;" onkeydown="if(event.key==='Enter') unlockMemory()">
+      <div style="display:flex; gap:10px;">
+        <button class="btn-primary" onclick="unlockMemory()">🔓 Desbloquear</button>
+      </div>
+    </div>
+
+    <!-- Memory Content (hidden until unlocked) -->
+    <div id="memory-content" style="display:none;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+        <h2 style="margin:0; color:var(--accent);">Dados na Memória</h2>
+        <div style="display:flex; gap:8px;">
+          <button class="btn-secondary" onclick="refreshMemory()">↻ Atualizar</button>
+          <button class="btn-secondary" onclick="lockMemory()">🔒 Bloquear</button>
+        </div>
+      </div>
+      <div id="memory-categories" style="display:flex; flex-direction:column; gap:16px;"></div>
+      <p id="memory-empty" style="display:none; color:var(--text-dim); font-style:italic;">Nenhuma memória estruturada encontrada.</p>
+    </div>
+  </div>
+
+  <!-- REFERENCIA -->
+  <div id="page-reference" class="page">
+    <h1>Referência de ferramentas</h1>
+    <p style="color:var(--text-dim); max-width:800px; font-size:13px;">Marcadores e lista de segurança. O atalho global do painel vem de <code>PANEL_HOTKEY</code> no .env (reinicie o app após alterar).</p>
+    <div class="mode-card" style="max-width:900px;">
+      <h2>Segurança e confirmação</h2>
+      <pre id="refSecurity" style="font-size:12px; color:var(--text); white-space:pre-wrap; max-height:200px; overflow:auto;"></pre>
+      <h2 style="margin-top:20px;">Marcadores (modo texto)</h2>
+      <pre id="refMarkers" style="font-size:12px; color:var(--text-dim); white-space:pre-wrap; max-height:280px; overflow:auto;"></pre>
+      <h2 style="margin-top:20px;">Function calling (trecho)</h2>
+      <pre id="refFc" style="font-size:12px; color:var(--text-dim); white-space:pre-wrap; max-height:320px; overflow:auto;"></pre>
+    </div>
+  </div>
+
+  <!-- DIAGNOSTICO -->
+  <div id="page-diagnostics" class="page">
+    <h1>Diagnóstico</h1>
+    <div class="mode-card" style="max-width:700px;">
+      <button class="btn-secondary" id="btnDiagAudio">Áudio / microfone</button>
+      <button class="btn-secondary" id="btnDiagTts">Teste TTS</button>
+      <button class="btn-secondary" id="btnDiagLlm">Ping LLM</button>
+      <pre id="diagResult" style="margin-top:12px; font-size:12px; color:var(--text); white-space:pre-wrap;"></pre>
+    </div>
+    <h2 style="margin-top:24px;">Telemetria local (últimas linhas)</h2>
+    <button class="btn-secondary" id="btnTelemetryRefresh">Atualizar eventos</button>
+    <pre id="telemetryTail" style="font-size:11px; color:var(--text-dim); max-height:200px; overflow:auto; background:var(--surface); padding:10px; border-radius:8px;"></pre>
+    <h2 style="margin-top:24px;">Memória estruturada</h2>
+    <button class="btn-secondary" id="btnStructMemRefresh">Recarregar</button>
+    <pre id="structMemView" style="font-size:11px; color:var(--text-dim); max-height:240px; overflow:auto; background:var(--surface); padding:10px; border-radius:8px;"></pre>
+    <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap;">
+      <input type="text" id="structCat" placeholder="categoria (ex: notes)" style="flex:1; min-width:120px; padding:8px; border-radius:6px; border:1px solid var(--border); background:var(--bg-panel); color:var(--text);">
+      <input type="text" id="structKey" placeholder="chave" style="flex:1; min-width:120px; padding:8px; border-radius:6px; border:1px solid var(--border); background:var(--bg-panel); color:var(--text);">
+      <button class="btn-danger" id="btnStructDel">Apagar entrada</button>
+    </div>
+    <h2 style="margin-top:24px;">Preferências (export / import)</h2>
+    <p style="font-size:12px; color:var(--text-dim);">Exporta JSON sem segredos (.env nunca incluído).</p>
+    <button class="btn-secondary" id="btnPrefExport">Exportar</button>
+    <button class="btn-secondary" id="btnPrefImport">Importar</button>
+  </div>
+
+  <!-- CONFIGURACOES -->
+  <div id="page-config" class="page">
+    <h1>Configurações do Sistema</h1>
+    <div class="mode-card" style="max-width:600px;">
+      <h2>Aparência</h2>
+      <div class="form-group">
+        <label>Tema da Interface</label>
+        <select id="themeSelect">
+          <option value="dark">Dark Modern (Padrão)</option>
+          <option value="neon">Cyber Neon</option>
+          <option value="light">Light Mode</option>
+          <option value="jarvis">Terminal Hacker (ADA v2)</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin-top: 15px;">
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+          <input type="checkbox" id="neonBorderToggle" style="width:auto; height:16px;">
+          Habilitar Borda Neon Dinâmica (Glow Rotativo)
+        </label>
+      </div>
+      <div class="form-group">
+        <label>Nivel de movimento</label>
+        <select id="cfgMotionLevel">
+          <option value="balanced">Balanceado</option>
+          <option value="expressive">Expressivo</option>
+          <option value="reduced">Reduzido</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Densidade visual</label>
+        <select id="cfgUiDensity">
+          <option value="comfortable">Confortavel</option>
+          <option value="compact">Compacta</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+          <input type="checkbox" id="cfgStudyProfessorMode" style="width:auto; height:16px;">
+          Modo Professor ENEM (Jarvis mais didático nos estudos)
+        </label>
+      </div>
+      <button class="btn-secondary" id="btnSaveUiConfig" style="width:100%;">Aplicar aparencia</button>
+      <div class="form-group" style="margin-top: 15px; display:flex; align-items:center; gap:10px;">
+        <label style="margin:0;">Cor do Neon / Acento:</label>
+        <input type="color" id="neonColorPicker" value="#8b5cf6" style="width:50px; height:30px; padding:0; border:none; border-radius:4px; cursor:pointer; background:transparent;">
+      </div>
+
+      <h2 style="margin-top:30px;">Segurança</h2>
+      <div class="form-group">
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+          <input type="checkbox" id="criticalConfirmToggle" style="width:auto; height:16px;">
+          Confirmação crítica (WhatsApp, excluir/mover arquivos, automação sensível)
+        </label>
+      </div>
+      <div style="font-size:12px; color:var(--text-dim); margin-top:6px; line-height:1.45; max-width:560px;">
+        Ligada: pede confirmação antes de ações críticas — use o painel ou diga <strong>confirmar</strong> / <strong>cancelar</strong> no microfone.
+        Desligada: essas ações executam sem perguntar.
+      </div>
+      <div class="form-group" style="margin-top:12px;">
+        <label>Atalho global do painel (definido no .env: PANEL_HOTKEY)</label>
+        <input type="text" id="cfgHotkey" value="—" disabled style="opacity:0.9;">
+      </div>
+      <p style="font-size:11px; color:var(--text-muted);">Altere <code>PANEL_HOTKEY</code> e reinicie o assistente para aplicar.</p>
+
+      <h2 style="margin-top:30px;">Voz e STT</h2>
+      <div class="form-group">
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+          <input type="checkbox" id="cfgUseMic" style="width:auto; height:16px;">
+          Microfone continuo ativo
+        </label>
+      </div>
+      <div class="form-group">
+        <label>Idioma STT</label>
+        <input type="text" id="cfgSttLanguage" placeholder="pt-BR">
+      </div>
+      <div class="form-group">
+        <label>Sensibilidade do microfone: <span class="slider-val" id="cfgSttEnergyVal">1100</span></label>
+        <input type="range" id="cfgSttEnergyThreshold" min="150" max="8000" step="50" value="1100">
+      </div>
+      <div class="form-group">
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+          <input type="checkbox" id="cfgSttDynamicEnergy" style="width:auto; height:16px;">
+          Ajustar sensibilidade automaticamente ao ruido ambiente
+        </label>
+      </div>
+      <div class="form-group">
+        <label>Pausa para encerrar fala: <span class="slider-val" id="cfgSttPauseVal">0.8s</span></label>
+        <input type="range" id="cfgSttPauseThreshold" min="0.25" max="3" step="0.05" value="0.8">
+      </div>
+      <div class="form-group">
+        <label>Silencio antes/depois da fala: <span class="slider-val" id="cfgSttNonSpeakingVal">0.35s</span></label>
+        <input type="range" id="cfgSttNonSpeakingDuration" min="0.1" max="2" step="0.05" value="0.35">
+      </div>
+      <div class="form-group">
+        <label>Duracao minima de audio: <span class="slider-val" id="cfgSttMinAudioVal">0.35s</span></label>
+        <input type="range" id="cfgSttMinAudioSeconds" min="0.05" max="3" step="0.05" value="0.35">
+      </div>
+      <div class="form-group">
+        <label>Tempo de calibracao: <span class="slider-val" id="cfgSttCalibrationVal">0.8s</span></label>
+        <input type="range" id="cfgSttCalibrationSeconds" min="0.1" max="5" step="0.1" value="0.8">
+      </div>
+      <button class="btn-primary" id="btnSaveSttConfig" style="width:100%;">Aplicar STT em tempo real</button>
+
+      <h2 style="margin-top:30px;">Inicializacao e Performance</h2>
+      <div class="form-group">
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+          <input type="checkbox" id="cfgStartVisionTracker" style="width:auto; height:16px;">
+          Iniciar rastreador de gestos/face
+        </label>
+      </div>
+      <div class="form-group">
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+          <input type="checkbox" id="cfgStartHeartbeat" style="width:auto; height:16px;">
+          Iniciar heartbeat de memoria
+        </label>
+      </div>
+      <div class="form-group">
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+          <input type="checkbox" id="cfgStartProactiveAgent" style="width:auto; height:16px;">
+          Iniciar agente proativo em segundo plano
+        </label>
+      </div>
+      <div class="form-group">
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+          <input type="checkbox" id="cfgEnableClapTrigger" style="width:auto; height:16px;">
+          Ativar gatilho por duas palmas
+        </label>
+        <label style="display:block; margin-top:10px;">Sensibilidade das palmas: <span class="slider-val" id="cfgClapThresholdVal">0.15</span></label>
+        <input type="number" id="cfgClapThreshold" min="0.03" max="1" step="0.01" value="0.15" title="Sensibilidade das palmas">
+        <label style="display:block; margin-top:10px;">Janela entre palmas (s): <span class="slider-val" id="cfgClapMaxGapVal">1.2s</span></label>
+        <input type="number" id="cfgClapMaxGap" min="0.2" max="4" step="0.1" value="1.2" title="Janela entre palmas">
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; margin-top:10px;">
+          Pre-carregar XTTS ao iniciar
+        </label>
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; margin-top:10px;">
+          Pre-carregar StyleTTS2 ao iniciar
+        </label>
+        <button class="btn-secondary" id="btnSaveStartupConfig" style="width:100%; margin-top:10px;">Salvar inicializacao</button>
+      </div>
+
+      <h2 style="margin-top:30px;">Nexus Life OS (janelas desktop)</h2>
+      <p style="font-size:12px; color:var(--text-dim); max-width:560px; line-height:1.45;">
+        Cada módulo abre numa janela à parte no mesmo processo do assistente. Ao abrir um módulo novo, o anterior fecha automaticamente.
+        Os dados são os mesmos que a IA altera via <code>nexus_command</code> / REST (<code>data/nexus.db</code>).
+      </p>
+	      <div class="nexus-theme-tool" id="nexusWindowThemeTool">
+	        <div class="nexus-theme-row">
+	          <div class="form-group" style="margin:0;">
+	            <label>Janela Nexus</label>
+	            <select id="nexusThemeModule"></select>
+	          </div>
+	          <div class="form-group" style="margin:0;">
+	            <label>Preset visual</label>
+	            <select id="nexusThemePreset"></select>
+	          </div>
+	          <button type="button" class="btn-secondary" id="btnApplyNexusTheme">Aplicar</button>
+	        </div>
+	        <div class="nexus-theme-generate">
+	          <textarea id="nexusThemePrompt" rows="2" placeholder="Ex.: tema neon verde financeiro, glassmorphism premium, contraste alto"></textarea>
+	          <button type="button" class="btn-secondary" id="btnGenerateNexusTheme">Gerar e aplicar</button>
+	        </div>
+	        <div class="nexus-theme-preview" id="nexusThemeStatus">Carregando temas por janela...</div>
+	        <div class="nexus-theme-swatches" id="nexusThemeSwatches"></div>
+	      </div>
+	      <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:12px;">
+        <button type="button" class="btn-secondary" data-nexus-mod="overview">Visão geral</button>
+        <button type="button" class="btn-secondary" data-nexus-mod="habits">Hábitos</button>
+        <button type="button" class="btn-secondary" data-nexus-mod="finance">Finanças</button>
+        <button type="button" class="btn-secondary" data-nexus-mod="notes">Notas</button>
+        <button type="button" class="btn-secondary" data-nexus-mod="study">SRS</button>
+        <button type="button" class="btn-secondary" data-nexus-mod="tasks">Tarefas</button>
+        <button type="button" class="btn-secondary" data-nexus-mod="progress">Progresso</button>
+	        <button type="button" class="btn-secondary" data-nexus-mod="goals">Metas / recompensas</button>
+	        <button type="button" class="btn-secondary" data-nexus-mod="quiz">Quiz</button>
+	        <button type="button" class="btn-secondary" data-nexus-mod="news">Noticias</button>
+	      </div>
+      <p style="font-size:11px; color:var(--text-muted); margin-top:10px;">HUD web legado: <code>http://localhost:5123/nexus/</code> (se o visualizador estiver ligado).</p>
+
+      <h2 style="margin-top:30px;">Chaves e Provedores</h2>
+      <div class="form-group">
+        <label>Provedor LLM Principal</label>
+        <input type="text" id="cfgProvider" value="Carregando..." disabled>
+      </div>
+      <div class="form-group">
+        <label>Modelo Gemini</label>
+        <input type="text" id="cfgGemini" value="Carregando..." disabled>
+      </div>
+      <div class="form-group">
+        <label>Modelo Groq (Whisper)</label>
+        <input type="text" id="cfgGroq" value="Carregando..." disabled>
+      </div>
+      <div class="form-group">
+        <label>Provedor TTS</label>
+        <select id="cfgTts">
+          <option value="edge">Edge TTS (API rápida)</option>
+          <option value="rvc">RVC + Edge base</option>
+          <option value="openai">OpenAI TTS</option>
+          <option value="elevenlabs">ElevenLabs</option>
+          <option value="murf">Murf</option>
+          <option value="fish">Fish Audio</option>
+          <option value="local">Sistema local</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Fallback TTS (ordem, separado por vÃ­rgulas)</label>
+        <input type="text" id="cfgTtsFallbackOrder" placeholder="edge,kokoro,rvc,piper,local">
+      </div>
+      <div style="display:flex; gap:10px;">
+        <button class="btn-primary" id="btnSaveTtsConfig" style="flex:1;">Aplicar TTS agora</button>
+        <button class="btn-secondary" id="btnInstallEdgeTts" style="flex:1;">Instalar Edge TTS</button>
+      </div>
+      <div style="font-size:12px; color:var(--text-dim); margin-top:10px;">
+        A troca de TTS global aplica no serviÃ§o em execuÃ§Ã£o. A voz por agente fica em Meus Agentes e tambÃ©m muda na prÃ³xima fala.
+      </div>
+    </div>
+  </div>
+
+  <!-- LIXEIRA -->
+  <div id="page-trash" class="page">
+    <h2>Lixeira</h2>
+    <div class="trash-grid">
+      <div class="trash-col">
+        <h2>🤖 Agentes Deletados (<span id="trashAgentCount">0</span>)</h2>
+        <div class="trash-list" id="trashAgentList"></div>
+      </div>
+      <div class="trash-col">
+        <h2>🧠 Memórias Deletadas (<span id="trashMemCount">0</span>)</h2>
+        <div class="trash-list" id="trashMemList"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CHAT HISTORY -->
+  <div id="page-chat" class="page">
+    <h2>Histórico de Chat</h2>
+    <div class="chat-container" id="chatContainer">
+      <!-- Chat messages injected here -->
+    </div>
+  </div>
+
+  <!-- SYSTEM LOGS -->
+  <div id="page-logs" class="page">
+    <h2>Logs do Sistema (Terminal)</h2>
+    <div class="logs-container" id="logsContainer">
+      <!-- Log lines injected here -->
+    </div>
+  </div>
+
+  </div>
+
+  <script src="panel.js"></script>
+  </div> <!-- Fim app-wrapper -->
+  
+
+  <!-- MEMORY MANAGER SCRIPT -->
+  
+
+</body>
+
+</html>

@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nexus HUD</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --accent:       #00d4ff;
+    --accent-glow:  rgba(0, 212, 255, 0.35);
+    --accent-dim:   rgba(0, 212, 255, 0.12);
+    --success:      #22d672;
+    --warning:      #f5a623;
+    --danger:       #ff4b6e;
+    --xp:           #a78bfa;
+    --text:         #e2e8f0;
+    --text-dim:     #94a3b8;
+    --bg:           rgba(8, 12, 22, 0.92);
+    --surface:      rgba(15, 23, 42, 0.96);
+    --border:       rgba(0, 212, 255, 0.18);
+    --radius:       16px;
+    --shadow:       0 8px 40px rgba(0,0,0,0.7), 0 0 0 1px var(--border);
+  }
+
+  html, body {
+    width: 100%;
+    height: 100%;
+    background: transparent;
+    overflow: hidden;
+    font-family: 'Inter', 'Segoe UI', sans-serif;
+  }
+
+  /* ── HUD Container ── */
+  #hud {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    width: 360px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    overflow: hidden;
+    opacity: 0;
+    transform: translateY(20px) scale(0.96);
+    transition: opacity 0.35s cubic-bezier(.22,.68,0,1.2),
+                transform 0.35s cubic-bezier(.22,.68,0,1.2),
+                height 0.5s cubic-bezier(.22,.68,0,1.2);
+    pointer-events: none;
+  }
+
+  #hud.visible {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    pointer-events: none;
+  }
+
+  #hud.fade-out {
+    opacity: 0;
+    transform: translateY(10px) scale(0.97);
+    transition: opacity 0.5s ease, transform 0.5s ease;
+  }
+
+  /* ── Header ── */
+  .hud-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 16px 10px;
+    border-bottom: 1px solid var(--border);
+    position: relative;
+  }
+
+  .hud-orb {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #60efff, #00d4ff 50%, #0070a8);
+    box-shadow: 0 0 12px var(--accent-glow), 0 0 24px rgba(0,180,255,0.2);
+    flex-shrink: 0;
+    animation: orbPulse 2.5s ease-in-out infinite;
+  }
+
+  @keyframes orbPulse {
+    0%, 100% { box-shadow: 0 0 10px var(--accent-glow), 0 0 20px rgba(0,180,255,0.2); }
+    50% { box-shadow: 0 0 18px var(--accent-glow), 0 0 35px rgba(0,180,255,0.3); }
+  }
+
+  .hud-title {
+    flex: 1;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    letter-spacing: 0.02em;
+  }
+
+  .hud-subtitle {
+    font-size: 11px;
+    color: var(--text-dim);
+    font-weight: 400;
+  }
+
+  .hud-timer {
+    font-size: 11px;
+    color: var(--text-dim);
+    font-variant-numeric: tabular-nums;
+    min-width: 24px;
+    text-align: right;
+  }
+
+  /* ── Progress bar ── */
+  .hud-progress {
+    height: 2px;
+    background: var(--accent-dim);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .hud-progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    width: 40%;
+    animation: progressSlide 1.4s ease-in-out infinite;
+  }
+
+  @keyframes progressSlide {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(350%); }
+  }
+
+  .hud-progress.done .hud-progress-bar {
+    animation: none;
+    width: 100%;
+    background: var(--success);
+    transition: width 0.4s ease;
+  }
+
+  /* ── Items list ── */
+  #hud-items {
+    padding: 8px 0;
+    max-height: 420px;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  #hud-items::-webkit-scrollbar { width: 3px; }
+  #hud-items::-webkit-scrollbar-track { background: transparent; }
+  #hud-items::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  /* ── Single Item ── */
+  .hud-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 16px;
+    opacity: 0;
+    transform: translateX(32px);
+    transition: opacity 0.4s ease, transform 0.4s cubic-bezier(.22,.68,0,1.15);
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+
+  .hud-item:last-child { border-bottom: none; }
+
+  .hud-item.in {
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  .hud-item-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    flex-shrink: 0;
+    position: relative;
+  }
+
+  .hud-item-icon.type-habit    { background: rgba(0,212,255,0.12); }
+  .hud-item-icon.type-task     { background: rgba(34,214,114,0.12); }
+  .hud-item-icon.type-note     { background: rgba(245,166,35,0.12); }
+  .hud-item-icon.type-finance  { background: rgba(167,139,250,0.12); }
+  .hud-item-icon.type-goal     { background: rgba(255,75,110,0.12); }
+  .hud-item-icon.type-default  { background: rgba(148,163,184,0.10); }
+
+  /* ring animation on icon */
+  .hud-item-icon::after {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border-radius: 10px;
+    border: 1.5px solid currentColor;
+    opacity: 0;
+    animation: ringFade 0.6s ease forwards;
+  }
+  .hud-item.in .hud-item-icon::after { opacity: 0.3; }
+
+  @keyframes ringFade {
+    0% { transform: scale(0.7); opacity: 0.5; }
+    100% { transform: scale(1); opacity: 0; }
+  }
+
+  .hud-item-body { flex: 1; min-width: 0; }
+
+  .hud-item-label {
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .hud-item-meta {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-top: 1px;
+  }
+
+  .hud-badge {
+    font-size: 10.5px;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 20px;
+    flex-shrink: 0;
+    letter-spacing: 0.01em;
+  }
+
+  .hud-badge.xp      { background: rgba(167,139,250,0.18); color: var(--xp); }
+  .hud-badge.ok      { background: rgba(34,214,114,0.18);  color: var(--success); }
+  .hud-badge.warn    { background: rgba(245,166,35,0.18);  color: var(--warning); }
+  .hud-badge.err     { background: rgba(255,75,110,0.18);  color: var(--danger); }
+
+  /* ── Footer summary ── */
+  .hud-footer {
+    padding: 9px 16px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    opacity: 0;
+    transform: translateY(6px);
+    transition: opacity 0.4s ease 0.2s, transform 0.4s ease 0.2s;
+  }
+
+  .hud-footer.show { opacity: 1; transform: translateY(0); }
+
+  .hud-footer-text {
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  .hud-footer-xp {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--xp);
+  }
+
+  /* ── Section label (grouping) ── */
+  .hud-section-label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--accent);
+    padding: 8px 16px 4px;
+    opacity: 0;
+    animation: fadeUp 0.3s ease forwards;
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+</style>
+<!-- Google Font -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<div id="hud">
+  <!-- Header -->
+  <div class="hud-header">
+    <div class="hud-orb"></div>
+    <div>
+      <div class="hud-title" id="hud-title">Nexus</div>
+      <div class="hud-subtitle" id="hud-subtitle">Processando...</div>
+    </div>
+    <div class="hud-timer" id="hud-timer"></div>
+  </div>
+
+  <!-- Progress bar -->
+  <div class="hud-progress" id="hud-progress">
+    <div class="hud-progress-bar"></div>
+  </div>
+
+  <!-- Items list -->
+  <div id="hud-items"></div>
+
+  <!-- Footer summary -->
+  <div class="hud-footer" id="hud-footer">
+    <span class="hud-footer-text" id="hud-footer-text">0 itens adicionados</span>
+    <span class="hud-footer-xp" id="hud-footer-xp"></span>
+  </div>
+</div>
+
+<script>
+// ── Icons per type ──
+const TYPE_ICONS = {
+  habit:   '⚡',
+  task:    '✅',
+  note:    '📝',
+  finance: '💰',
+  goal:    '🎯',
+  xp:      '✨',
+  default: '➕',
+};
+
+// ── Dismiss timer ──
+let _dismissTimer = null;
+let _countdown    = 0;
+let _countInterval = null;
+let _totalXP = 0;
+let _itemCount = 0;
+
+function resetDismissTimer(seconds) {
+  clearTimeout(_dismissTimer);
+  clearInterval(_countInterval);
+  _countdown = seconds;
+
+  const timerEl = document.getElementById('hud-timer');
+  timerEl.textContent = _countdown + 's';
+
+  _countInterval = setInterval(() => {
+    _countdown--;
+    timerEl.textContent = _countdown > 0 ? _countdown + 's' : '';
+    if (_countdown <= 0) clearInterval(_countInterval);
+  }, 1000);
+
+  _dismissTimer = setTimeout(() => {
+    hideHud();
+  }, seconds * 1000);
+}
+
+// ── Show HUD with title and items ──
+window.hudShow = function(config) {
+  const hud = document.getElementById('hud');
+  const itemsEl = document.getElementById('hud-items');
+  const titleEl = document.getElementById('hud-title');
+  const subtitleEl = document.getElementById('hud-subtitle');
+  const progressEl = document.getElementById('hud-progress');
+  const footerEl = document.getElementById('hud-footer');
+  const footerText = document.getElementById('hud-footer-text');
+  const footerXp = document.getElementById('hud-footer-xp');
+
+  // Reset state
+  itemsEl.innerHTML = '';
+  footerEl.classList.remove('show');
+  progressEl.classList.remove('done');
+  _totalXP = 0;
+  _itemCount = 0;
+
+  titleEl.textContent = config.title || 'Nexus';
+  subtitleEl.textContent = config.subtitle || 'Processando...';
+
+  // Show HUD
+  hud.classList.remove('fade-out');
+  hud.classList.add('visible');
+
+  const items = config.items || [];
+  const stagger = config.stagger_ms || 220;
+  const autoDismiss = config.auto_dismiss_s || 6;
+
+  // Group items by section if needed
+  let lastSection = null;
+
+  items.forEach((item, i) => {
+    setTimeout(() => {
+      // Section label
+      if (item.section && item.section !== lastSection) {
+        lastSection = item.section;
+        const secLabel = document.createElement('div');
+        secLabel.className = 'hud-section-label';
+        secLabel.textContent = item.section;
+        itemsEl.appendChild(secLabel);
+      }
+
+      const el = createItemEl(item);
+      itemsEl.appendChild(el);
+
+      // Scroll to bottom
+      itemsEl.scrollTop = itemsEl.scrollHeight;
+
+      // Trigger slide-in animation
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => el.classList.add('in'));
+      });
+
+      // Accumulate XP
+      if (item.xp) _totalXP += item.xp;
+      _itemCount++;
+
+      // Last item
+      if (i === items.length - 1) {
+        setTimeout(() => {
+          progressEl.classList.add('done');
+          subtitleEl.textContent = config.done_subtitle || 'Concluído';
+          footerText.textContent = `${_itemCount} ${_itemCount === 1 ? 'item adicionado' : 'itens adicionados'}`;
+          if (_totalXP > 0) footerXp.textContent = `+${_totalXP} XP`;
+          footerEl.classList.add('show');
+          resetDismissTimer(autoDismiss);
+        }, 300);
+      }
+    }, i * stagger);
+  });
+
+  // If no items, show a brief confirmation
+  if (items.length === 0) {
+    subtitleEl.textContent = config.done_subtitle || 'Feito';
+    progressEl.classList.add('done');
+    resetDismissTimer(3);
+  }
+};
+
+// ── Append items to existing HUD (for streaming additions) ──
+window.hudAppendItems = function(items, stagger_ms) {
+  const itemsEl = document.getElementById('hud-items');
+  const stagger = stagger_ms || 220;
+  items.forEach((item, i) => {
+    setTimeout(() => {
+      const el = createItemEl(item);
+      itemsEl.appendChild(el);
+      itemsEl.scrollTop = itemsEl.scrollHeight;
+      requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('in')));
+      if (item.xp) {
+        _totalXP += item.xp;
+        const footerXp = document.getElementById('hud-footer-xp');
+        if (footerXp) footerXp.textContent = `+${_totalXP} XP`;
+      }
+    }, i * stagger);
+  });
+};
+
+// ── Hide HUD ──
+window.hideHud = function() {
+  clearTimeout(_dismissTimer);
+  clearInterval(_countInterval);
+  const hud = document.getElementById('hud');
+  hud.classList.add('fade-out');
+  setTimeout(() => {
+    hud.classList.remove('visible', 'fade-out');
+    document.getElementById('hud-items').innerHTML = '';
+    document.getElementById('hud-footer').classList.remove('show');
+    document.getElementById('hud-timer').textContent = '';
+    if (window.pywebview && window.pywebview.api && typeof window.pywebview.api.notify_hud_hidden === 'function') {
+      try {
+        window.pywebview.api.notify_hud_hidden();
+      } catch (error) {
+        console.warn('HUD hide callback falhou:', error);
+      }
+    }
+  }, 550);
+};
+
+// ── Create a single item element ──
+function createItemEl(item) {
+  const type = item.type || 'default';
+  const icon = item.icon || TYPE_ICONS[type] || TYPE_ICONS.default;
+  const label = item.label || item.name || '—';
+  const meta = item.meta || '';
+  const badge = item.badge || null;
+  const badgeClass = item.badge_class || (item.xp ? 'xp' : 'ok');
+
+  const el = document.createElement('div');
+  el.className = 'hud-item';
+
+  const iconEl = document.createElement('div');
+  iconEl.className = `hud-item-icon type-${type}`;
+  iconEl.textContent = icon;
+
+  const bodyEl = document.createElement('div');
+  bodyEl.className = 'hud-item-body';
+
+  const labelEl = document.createElement('div');
+  labelEl.className = 'hud-item-label';
+  labelEl.textContent = label;
+
+  bodyEl.appendChild(labelEl);
+
+  if (meta) {
+    const metaEl = document.createElement('div');
+    metaEl.className = 'hud-item-meta';
+    metaEl.textContent = meta;
+    bodyEl.appendChild(metaEl);
+  }
+
+  el.appendChild(iconEl);
+  el.appendChild(bodyEl);
+
+  if (badge) {
+    const badgeEl = document.createElement('div');
+    badgeEl.className = `hud-badge ${badgeClass}`;
+    badgeEl.textContent = badge;
+    el.appendChild(badgeEl);
+  } else if (item.xp) {
+    const xpEl = document.createElement('div');
+    xpEl.className = 'hud-badge xp';
+    xpEl.textContent = `+${item.xp} XP`;
+    el.appendChild(xpEl);
+  }
+
+  return el;
+}
+</script>
+</body>
+</html>

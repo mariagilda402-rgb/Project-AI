@@ -1,0 +1,273 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Nexus Vision</title>
+    <link rel="stylesheet" href="nexus_theme.css?v=2">
+    <style>
+        .page-container {
+            padding: 24px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .header-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        .videos-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 24px;
+        }
+
+        .video-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-glass);
+            border-radius: 16px;
+            overflow: hidden;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .video-card:hover {
+            transform: translateY(-5px);
+            border-color: var(--accent-purple);
+            box-shadow: 0 10px 20px rgba(108, 92, 231, 0.1);
+        }
+
+        .video-thumbnail {
+            width: 100%;
+            height: 180px;
+            background-color: #000;
+            background-size: cover;
+            background-position: center;
+            position: relative;
+        }
+        
+        .play-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 50px;
+            height: 50px;
+            background: rgba(108, 92, 231, 0.8);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            color: #fff;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        
+        .video-card:hover .play-overlay {
+            opacity: 1;
+        }
+
+        .video-info {
+            padding: 16px;
+        }
+
+        .video-title {
+            font-weight: 600;
+            font-size: 1.1rem;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .video-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+        
+        .badge {
+            background: rgba(0, 206, 201, 0.2);
+            color: var(--accent-blue);
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-weight: 600;
+        }
+        
+        .badge.watched {
+            background: rgba(0, 184, 148, 0.2);
+            color: var(--accent-green);
+        }
+
+        /* Modal specific */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.9);
+            z-index: 1000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            width: 90%;
+            max-width: 900px;
+            background: var(--bg-base);
+            border: 1px solid var(--border-glass);
+            border-radius: 16px;
+            padding: 24px;
+            position: relative;
+        }
+
+        .iframe-container {
+            width: 100%;
+            aspect-ratio: 16/9;
+            background: #000;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="page-container">
+    <div class="header-actions">
+        <h1>Nexus Vision (Watch to Earn)</h1>
+        <button class="btn btn-primary" onclick="addVideoPrompt()"><i class="fa-solid fa-plus"></i> Adicionar Vídeo</button>
+    </div>
+
+    <div class="videos-grid" id="videos-grid">
+        <!-- Rendered via JS -->
+    </div>
+</div>
+
+<!-- Player Modal -->
+<div class="modal-overlay" id="player-modal">
+    <div class="modal-content">
+        <h2 id="player-title" style="margin-bottom:16px;">Assistindo...</h2>
+        <div class="iframe-container" id="iframe-container"></div>
+        <div class="modal-actions">
+            <button class="btn btn-secondary" onclick="closePlayer()">Fechar</button>
+            <button class="btn btn-primary" id="btn-resgatar" onclick="resgatarXP()"><i class="fa-solid fa-gift"></i> Resgatar XP</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let currentVideoId = null;
+
+    async function loadVideos() {
+        const grid = document.getElementById('videos-grid');
+        grid.innerHTML = '<p>Carregando vídeos...</p>';
+        
+        const res = await callBackend('list_videos');
+        if (!res.ok) return;
+
+        const videos = res.data;
+        if(videos.length === 0) {
+            grid.innerHTML = '<p style="color:var(--text-secondary)">Nenhum vídeo adicionado. Cole um link do YouTube para começar!</p>';
+            return;
+        }
+
+        grid.innerHTML = '';
+        videos.forEach(v => {
+            // Extrair ID do Youtube para Thumbnail
+            let thumb = 'https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=800&q=80'; // Fallback
+            let ytMatch = v.url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/);
+            if (ytMatch) {
+                thumb = `https://img.youtube.com/vi/${ytMatch[1]}/hqdefault.jpg`;
+            }
+
+            const card = document.createElement('div');
+            card.className = 'video-card';
+            card.onclick = () => openPlayer(v.id, v.title, v.url, ytMatch ? ytMatch[1] : null, v.is_watched);
+            
+            const badgeClass = v.is_watched ? 'badge watched' : 'badge';
+            const badgeText = v.is_watched ? 'Assistido' : `+${v.xp_reward} XP`;
+
+            card.innerHTML = `
+                <div class="video-thumbnail" style="background-image: url('${thumb}')">
+                    <div class="play-overlay"><i class="fa-solid fa-play"></i></div>
+                </div>
+                <div class="video-info">
+                    <div class="video-title">${v.title}</div>
+                    <div class="video-meta">
+                        <span style="text-transform: capitalize"><i class="fa-brands fa-${v.platform}"></i> ${v.platform}</span>
+                        <span class="${badgeClass}">${badgeText}</span>
+                    </div>
+                </div>
+            `;
+            grid.appendChild(card);
+        });
+    }
+
+    async function addVideoPrompt() {
+        const url = prompt("Cole o link do Vídeo (YouTube/TikTok):");
+        if (!url) return;
+        const title = prompt("Dê um título curto para este vídeo:") || "Vídeo Salvo";
+        
+        await callBackend('add_video', { url, title });
+        loadVideos();
+    }
+
+    function openPlayer(id, title, url, ytId, isWatched) {
+        currentVideoId = id;
+        document.getElementById('player-title').innerText = title;
+        document.getElementById('player-modal').style.display = 'flex';
+        
+        const iframeContainer = document.getElementById('iframe-container');
+        if (ytId) {
+            iframeContainer.innerHTML = `<iframe width="100%" height="100%" src="https://www.youtube.com/embed/${ytId}?autoplay=1" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>`;
+        } else {
+            iframeContainer.innerHTML = `<p style="padding:20px; color:#fff">Vídeo não suporta embed direto. <a href="${url}" target="_blank" style="color:var(--accent-blue)">Abrir no navegador original</a>.</p>`;
+        }
+
+        const btnResgatar = document.getElementById('btn-resgatar');
+        if (isWatched) {
+            btnResgatar.innerHTML = 'Já Assistido';
+            btnResgatar.disabled = true;
+            btnResgatar.style.opacity = '0.5';
+        } else {
+            btnResgatar.innerHTML = '<i class="fa-solid fa-gift"></i> Resgatar XP';
+            btnResgatar.disabled = false;
+            btnResgatar.style.opacity = '1';
+        }
+    }
+
+    function closePlayer() {
+        document.getElementById('player-modal').style.display = 'none';
+        document.getElementById('iframe-container').innerHTML = ''; // Para o audio
+    }
+
+    async function resgatarXP() {
+        if (!currentVideoId) return;
+        await callBackend('watch_video', { video_id: currentVideoId });
+        closePlayer();
+        loadVideos(); // Atualiza a label para Assistido
+    }
+
+    // Inicialização
+    if (window.pywebview) {
+        loadVideos();
+    } else {
+        window.addEventListener('pywebviewready', loadVideos);
+    }
+</script>
+
+</body>
+</html>
+

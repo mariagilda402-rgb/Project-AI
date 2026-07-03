@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Nexus · Flashcards</title>
+  <style>
+    @keyframes flipIn { from { transform:rotateY(90deg); opacity:0; } to { transform:rotateY(0); opacity:1; } }
+    #nx-app-wrapper .nx-chrome-inner > header { padding:14px 24px !important; }
+    #nx-app-wrapper .nx-chrome-inner > header h1 { font-size:18px !important; font-weight:700 !important; }
+    #nx-app-wrapper .nx-chrome-inner > main { padding:20px 24px 40px !important; }
+
+    #nx-app-wrapper .stats-bar { display:flex; gap:12px; margin-bottom:16px; }
+    #nx-app-wrapper .stat-pill { padding:10px 16px; border-radius:10px; background:var(--bg-panel); border:1px solid var(--border); text-align:center; flex:1; }
+    #nx-app-wrapper .stat-pill .val { font-size:18px; font-weight:800; color:#a78bfa; }
+    #nx-app-wrapper .stat-pill .lbl { font-size:10px; color:var(--text-dim); text-transform:uppercase; letter-spacing:1px; font-weight:600; margin-top:2px; }
+
+    #nx-app-wrapper .study-receipt {
+      display:block; margin:0 0 16px; padding:14px 16px; border-radius:14px;
+      background:linear-gradient(135deg, rgba(139,92,246,0.18), rgba(34,211,238,0.08));
+      border:1px solid rgba(167,139,250,0.42); box-shadow:0 0 24px rgba(139,92,246,0.14);
+      animation:flipIn 0.35s ease;
+    }
+    #nx-app-wrapper .study-receipt[hidden] { display:none; }
+    #nx-app-wrapper .receipt-kicker { font-size:10px; color:#a78bfa; text-transform:uppercase; letter-spacing:1px; font-weight:800; margin-bottom:4px; }
+    #nx-app-wrapper .receipt-title { color:var(--text); font-size:15px; font-weight:800; }
+    #nx-app-wrapper .receipt-body { color:var(--text-dim); font-size:12px; margin-top:4px; line-height:1.5; }
+
+    #nx-app-wrapper .fc-card {
+      padding:20px; border-radius:14px; background:var(--bg-panel); border:1px solid var(--border);
+      margin-bottom:12px; animation:flipIn 0.4s ease; box-shadow:0 14px 34px rgba(0,0,0,0.18);
+    }
+    #nx-app-wrapper .fc-subject { font-size:10px; color:var(--text-dim); text-transform:uppercase; letter-spacing:1px; font-weight:600; margin-bottom:8px; }
+    #nx-app-wrapper .fc-front { font-size:16px; font-weight:700; color:var(--text); margin-bottom:12px; line-height:1.4; }
+    #nx-app-wrapper .fc-back { font-size:14px; color:var(--text-dim); margin:0 0 16px; padding:12px; background:rgba(255,255,255,0.03); border-radius:8px; border:1px dashed var(--border); line-height:1.5; }
+    #nx-app-wrapper .fc-back.answerHidden {
+      color:transparent; user-select:none; min-height:46px;
+      background:repeating-linear-gradient(135deg, rgba(139,92,246,0.09), rgba(139,92,246,0.09) 8px, rgba(255,255,255,0.025) 8px, rgba(255,255,255,0.025) 16px);
+      border-style:solid;
+    }
+    #nx-app-wrapper .fc-back.answerHidden::before { content:"Resposta oculta"; color:var(--text-dim); }
+    #nx-app-wrapper .fc-actions { display:flex; gap:10px; align-items:center; justify-content:space-between; flex-wrap:wrap; }
+    #nx-app-wrapper .reveal-btn {
+      border-radius:10px; border:1px solid rgba(167,139,250,0.42); background:rgba(139,92,246,0.12);
+      color:#c4b5fd; font-size:12px; font-weight:800; padding:10px 12px; cursor:pointer;
+    }
+    #nx-app-wrapper .reveal-btn:hover { border-color:#a78bfa; background:rgba(139,92,246,0.2); }
+    #nx-app-wrapper .fc-quality { display:flex; gap:6px; justify-content:center; flex-wrap:wrap; }
+    #nx-app-wrapper .q-btn {
+      width:54px; min-height:44px; border-radius:10px; border:1px solid var(--border);
+      background:transparent; color:var(--text-dim); font-size:14px; font-weight:700;
+      cursor:pointer; transition:all 0.2s; display:flex; align-items:center; justify-content:center;
+      flex-direction:column; padding:5px 4px;
+    }
+    #nx-app-wrapper .q-btn:hover:not(:disabled) { border-color:#8b5cf6; color:#a78bfa; background:rgba(139,92,246,0.1); }
+    #nx-app-wrapper .q-btn:disabled { opacity:0.42; cursor:not-allowed; filter:saturate(0.5); }
+    #nx-app-wrapper .q-btn.easy { border-color:rgba(34,197,94,0.3); }
+    #nx-app-wrapper .q-btn.easy:hover:not(:disabled) { border-color:#22c55e; color:#22c55e; background:rgba(34,197,94,0.1); }
+    #nx-app-wrapper .q-btn.hard { border-color:rgba(239,68,68,0.3); }
+    #nx-app-wrapper .q-btn.hard:hover:not(:disabled) { border-color:#ef4444; color:#ef4444; background:rgba(239,68,68,0.1); }
+    #nx-app-wrapper .q-label { font-size:8px; text-transform:uppercase; letter-spacing:0.5px; margin-top:2px; display:block; }
+    #nx-app-wrapper .empty-state { text-align:center; padding:50px; color:var(--text-dim); font-size:14px; }
+    #nx-app-wrapper .empty-state .empty-icon { font-size:48px; margin-bottom:12px; }
+
+    #nx-app-wrapper .manual-add-form {
+      background: var(--bg-panel); border: 1px solid var(--border); border-radius: 14px;
+      padding: 16px; margin-bottom: 16px; display: none; animation: flipIn 0.3s ease;
+    }
+    #nx-app-wrapper .manual-add-form.active { display: block; }
+    #nx-app-wrapper .form-group { margin-bottom: 12px; }
+    #nx-app-wrapper .form-group label { display: block; font-size: 11px; font-weight: 600; color: var(--text-dim); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+    #nx-app-wrapper .form-control { width: 100%; background: rgba(0,0,0,0.2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); padding: 10px; font-family: inherit; font-size: 14px; resize: vertical; }
+    #nx-app-wrapper .form-control:focus { outline: none; border-color: #a78bfa; box-shadow: 0 0 0 2px rgba(139,92,246,0.2); }
+    #nx-app-wrapper .form-actions { display: flex; gap: 8px; justify-content: flex-end; }
+  </style>
+</head>
+<body>
+  <header style="display: flex; justify-content: space-between; align-items: center;">
+    <div><h1># Flashcards</h1><span>SRS · Repetição espaçada</span></div>
+    <div style="display: flex; gap: 8px;">
+      <button type="button" class="btn btn-ghost" onclick="toggleAddForm()" style="border: 1px solid var(--border-accent); color: #a78bfa;">+ Manual</button>
+      <button type="button" class="btn btn-ghost" onclick="pywebview.api.jump('overview','{}')">Visão geral</button>
+    </div>
+  </header>
+  <main>
+    <div id="addForm" class="manual-add-form">
+      <div class="form-group">
+        <label for="fcFront">Frente (Pergunta)</label>
+        <textarea id="fcFront" class="form-control" rows="2" placeholder="Ex: Qual a fórmula da água?"></textarea>
+      </div>
+      <div class="form-group">
+        <label for="fcBack">Verso (Resposta)</label>
+        <textarea id="fcBack" class="form-control" rows="3" placeholder="Ex: H2O"></textarea>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-ghost" onclick="toggleAddForm()">Cancelar</button>
+        <button type="button" class="reveal-btn" onclick="addManualCard()">Salvar Card</button>
+      </div>
+    </div>
+    <div class="stats-bar">
+      <div class="stat-pill"><div class="val" id="sDue">0</div><div class="lbl">Pendentes</div></div>
+      <div class="stat-pill"><div class="val" id="sReviewed">0</div><div class="lbl">Revisados Hoje</div></div>
+    </div>
+    <div id="studyReceipt" class="study-receipt" hidden></div>
+    <div id="list"></div>
+  </main>
+  <script src="nexus_boot.js"></script>
+  <script>
+    let reviewed = 0;
+    const LABELS = ['Esqueci','Difícil','Quase','Ok','Fácil','Perfeito'];
+    const CLASSES = ['hard','hard','','','easy','easy'];
+
+    function toggleAddForm() {
+      const form = document.getElementById('addForm');
+      form.classList.toggle('active');
+    }
+
+    async function addManualCard() {
+      const front = document.getElementById('fcFront').value.trim();
+      const back = document.getElementById('fcBack').value.trim();
+      if (!front || !back) {
+        if(typeof showToastBanner === 'function') showToastBanner('Preencha frente e verso.');
+        return;
+      }
+      const r = await nxBridge('srs_add_card_manual', { front: front, back: back });
+      if (r.ok) {
+        document.getElementById('fcFront').value = '';
+        document.getElementById('fcBack').value = '';
+        toggleAddForm();
+        if(typeof showToastBanner === 'function') showToastBanner('Flashcard adicionado!');
+        load();
+      } else {
+        if(typeof showToastBanner === 'function') showToastBanner('Erro: ' + r.error);
+      }
+    }
+
+    function esc(value) {
+      return String(value || '').replace(/[&<>"']/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#039;' }[ch]));
+    }
+
+    function renderStudyReceipt(boot) {
+      const payload = (boot && boot.receipt) ? boot.receipt : (boot || {});
+      const animate = payload.animate || (boot && boot.animate) || '';
+      if (!payload || (animate !== 'flashcards_generate' && animate !== 'quiz_flashcards_generate')) return;
+      const created = Number(payload.created || (boot && boot.created) || 0);
+      const fromQuiz = animate === 'quiz_flashcards_generate';
+      const receipt = document.getElementById('studyReceipt');
+      receipt.hidden = false;
+      receipt.innerHTML =
+        '<div class="receipt-kicker">' + (fromQuiz ? 'Quiz ENEM sincronizado' : 'MindPalace sincronizado') + '</div>' +
+        '<div class="receipt-title">' + created + ' flashcards prontos para revisão</div>' +
+        '<div class="receipt-body">' + esc((boot && boot.toast) || (fromQuiz ? 'Os erros do simulado viraram cartões SRS. Revele a resposta antes de avaliar.' : 'A IA transformou sua nota em cartões SRS. Revele a resposta antes de avaliar.')) + '</div>';
+      if (typeof showToastBanner === 'function' && boot && boot.toast) showToastBanner(boot.toast);
+    }
+
+    function cardSourceLabel(card) {
+      const subject = String((card && card.subject) || '').trim();
+      const noteTitle = String((card && card.note_title) || '').trim();
+      if (subject || noteTitle) return (subject || 'MindPalace') + ' · ' + (noteTitle || 'Nota');
+      const front = String((card && card.front) || '');
+      if (front.indexOf('Quiz ENEM') === 0 || front.indexOf('Quiz') >= 0) return 'Quiz ENEM · Erros do simulado';
+      return 'MindPalace · Revisão livre';
+    }
+
+    function revealAnswer(button) {
+      const card = button.closest('.fc-card');
+      const answer = card.querySelector('[data-answer]');
+      answer.textContent = answer.dataset.answer || '';
+      answer.classList.remove('answerHidden');
+      button.textContent = 'Resposta revelada';
+      button.disabled = true;
+      button.setAttribute('aria-expanded', 'true');
+      card.querySelectorAll('[data-review]').forEach(btn => { btn.disabled = false; });
+    }
+
+    async function load() {
+      const r = await nxBridge('flashcards_due', { limit: 25 });
+      const list = document.getElementById('list');
+      document.getElementById('sReviewed').textContent = reviewed;
+      if (!r.ok) { list.innerHTML = '<div class="empty-state">' + esc(r.error || 'Erro') + '</div>'; return; }
+      const cards = r.data || [];
+      document.getElementById('sDue').textContent = cards.length;
+      if (!cards.length) {
+        list.innerHTML = '<div class="empty-state"><div class="empty-icon">OK</div>Nenhum card pendente. Volte mais tarde.</div>';
+        return;
+      }
+      list.innerHTML = cards.map(c => (
+        '<div class="fc-card" data-cid="' + c.id + '">' +
+          '<div class="fc-subject">' + esc(cardSourceLabel(c)) + '</div>' +
+          '<div class="fc-front">' + esc(c.front) + '</div>' +
+          '<div class="fc-back answerHidden" data-answer="' + esc(c.back) + '"></div>' +
+          '<div class="fc-actions">' +
+            '<button type="button" class="reveal-btn" onclick="revealAnswer(this)" aria-expanded="false">Revelar resposta</button>' +
+            '<div class="fc-quality">' +
+              [0,1,2,3,4,5].map(q => '<button type="button" class="q-btn ' + CLASSES[q] + ' qbtn" data-q="' + q + '" disabled data-review title="' + LABELS[q] + '">' + q + '<span class="q-label">' + LABELS[q] + '</span></button>').join('') +
+            '</div>' +
+          '</div>' +
+        '</div>'
+      )).join('');
+      list.querySelectorAll('.qbtn').forEach(b => {
+        b.onclick = async () => {
+          const card = b.closest('.fc-card');
+          const id = parseInt(card.dataset.cid, 10);
+          const q = parseInt(b.dataset.q, 10);
+          await nxBridge('flashcard_review', { card_id: id, quality: q });
+          reviewed++;
+          load();
+        };
+      });
+    }
+
+    renderStudyReceipt(typeof readBoot === 'function' ? readBoot() : {});
+    load();
+
+    window.addEventListener('message', (e) => {
+      if (e.data === 'nexus-tab-focus') {
+        load();
+      }
+    });
+  </script>
+</body>
+</html>

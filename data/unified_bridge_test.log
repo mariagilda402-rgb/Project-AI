@@ -1,0 +1,3 @@
+[UnifiedJarvis] Local bridge em http://127.0.0.1:5124
+ * Serving Flask app 'src.jarvis_unified.local_server'
+ * Debug mode: off

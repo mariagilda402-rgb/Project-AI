@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Jarvis - Minimalist Wave Visualizer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #060812;
+      overflow: hidden;
+      font-family: 'Inter', sans-serif;
+      color: #fff;
+    }
+
+    /* THEMES */
+    body.theme-cyan { --primary: #00f2fe; --secondary: #4facfe; }
+    body.theme-red { --primary: #ff0844; --secondary: #ffb199; }
+    body.theme-green { --primary: #00b09b; --secondary: #96c93d; }
+    body.theme-purple { --primary: #c471ed; --secondary: #f64f59; }
+    body.theme-orange { --primary: #f12711; --secondary: #f5af19; }
+    body { --primary: #00f2fe; --secondary: #4facfe; } /* default cyan */
+
+    #waveCanvas {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      z-index: 1;
+    }
+
+    #overlay-container {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      pointer-events: none;
+      background: radial-gradient(circle at center, transparent 30%, rgba(0,0,0,0.6) 100%);
+    }
+
+    /* Subtitles */
+    #subtitle-container {
+      text-align: center;
+      margin-top: 15vh;
+      min-height: 80px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    #subtitle {
+      font-size: 2rem;
+      font-weight: 300;
+      max-width: 80%;
+      line-height: 1.4;
+      text-shadow: 0 0 20px rgba(0,0,0,0.8);
+      opacity: 0.9;
+    }
+
+    /* Chat input */
+    #chat-box {
+      background: rgba(20, 20, 30, 0.4);
+      backdrop-filter: blur(10px);
+      border-top: 1px solid rgba(255,255,255,0.1);
+      padding: 20px;
+      pointer-events: auto;
+      display: flex;
+      gap: 15px;
+      align-items: center;
+      justify-content: center;
+    }
+    #chat-input {
+      width: 50%;
+      background: rgba(0,0,0,0.3);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 30px;
+      padding: 15px 25px;
+      color: white;
+      font-size: 1.1rem;
+      outline: none;
+      transition: all 0.3s ease;
+    }
+    #chat-input:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 15px rgba(0,242,254,0.3);
+    }
+    #chat-submit {
+      background: linear-gradient(135deg, var(--primary), var(--secondary));
+      border: none;
+      border-radius: 30px;
+      padding: 15px 30px;
+      color: white;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s, opacity 0.2s;
+    }
+    #chat-submit:hover {
+      transform: scale(1.05);
+      opacity: 0.9;
+    }
+
+    /* Audio Context Starter */
+    #audio-overlay {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.8);
+      z-index: 100;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      pointer-events: auto;
+      cursor: pointer;
+      color: white;
+      font-size: 1.5rem;
+      font-weight: 300;
+      transition: opacity 0.5s;
+    }
+    #audio-overlay.hidden { opacity: 0; pointer-events: none; }
+  </style>
+</head>
+<body class="theme-cyan">
+
+  <div id="audio-overlay">
+    Clique para iniciar o visualizador minimalista
+  </div>
+
+  <canvas id="waveCanvas"></canvas>
+
+  <div id="overlay-container">
+    <div id="subtitle-container">
+      <div id="subtitle"></div>
+    </div>
+
+    <div id="chat-box">
+      <input type="text" id="chat-input" placeholder="Converse com Jarvis..." autocomplete="off">
+      <button id="chat-submit">Enviar</button>
+    </div>
+  </div>
+
+  <script>
+    /* THEME SYNC */
+    function applyThemeClass(theme) {
+      if(!theme) return;
+      document.body.className = document.body.className.replace(/\btheme-[a-z]+\b/g, '');
+      document.body.classList.add('theme-' + theme);
+    }
+
+    /* AUDIO ENGINE */
+    let audioContext = null;
+    let analyser = null;
+    let dataArray = null;
+    let audioSource = null;
+    let audioReady = false;
+    let currentVolume = 0;
+
+    function ensureAudioContext() {
+      if (!audioContext) {
+        try {
+          audioContext = new (window.AudioContext || window.webkitAudioContext)();
+          analyser = audioContext.createAnalyser();
+          analyser.fftSize = 256;
+          analyser.smoothingTimeConstant = 0.8;
+          analyser.connect(audioContext.destination);
+          dataArray = new Uint8Array(analyser.frequencyBinCount);
+          audioReady = true;
+          console.log('[Audio] AudioContext criado');
+        } catch (e) {
+          console.error(e);
+        }
+      }
+      if (audioContext && audioContext.state === 'suspended') {
+        audioContext.resume().then(() => { audioReady = true; });
+      }
+    }
+
+    document.getElementById('audio-overlay').addEventListener('click', function() {
+      ensureAudioContext();
+      this.classList.add('hidden');
+      setTimeout(() => this.style.display = 'none', 600);
+    });
+
+    async function playAudio(url) {
+      ensureAudioContext();
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('fetch error');
+        const buffer = await res.arrayBuffer();
+        if(!audioContext) return;
+        const decoded = await audioContext.decodeAudioData(buffer);
+        if(audioSource) { try { audioSource.stop(); }catch(e){} }
+        audioSource = audioContext.createBufferSource();
+        audioSource.buffer = decoded;
+        audioSource.connect(analyser);
+        audioSource.onended = () => {
+          audioSource = null;
+          fetch('/api/audio_finished', { method: 'POST' }).catch(()=>{});
+        };
+        audioSource.start(0);
+      } catch(e) {
+        console.error(e);
+      }
+    }
+
+    /* WAVE VISUALIZER */
+    const canvas = document.getElementById('waveCanvas');
+    const ctx = canvas.getContext('2d');
+    let width, height;
+    function resize() {
+      width = canvas.width = window.innerWidth;
+      height = canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    let time = 0;
+    let currentState = 'idle';
+
+    function drawWaves() {
+      requestAnimationFrame(drawWaves);
+
+      // Update volume
+      if (analyser && audioSource) {
+        analyser.getByteFrequencyData(dataArray);
+        let sum = 0;
+        for(let i=0; i<dataArray.length; i++) sum += dataArray[i];
+        let avg = sum / dataArray.length;
+        currentVolume = currentVolume * 0.8 + (avg / 255.0) * 0.2;
+      } else {
+        currentVolume *= 0.9;
+      }
+
+      ctx.clearRect(0, 0, width, height);
+
+      const themeColor = getComputedStyle(document.body).getPropertyValue('--primary').trim();
+      const secondaryColor = getComputedStyle(document.body).getPropertyValue('--secondary').trim();
+
+      // State modifiers
+      let waveSpeed = 0.02;
+      let waveCount = 3;
+      let baseAmplitude = 30;
+
+      if(currentState === 'thinking') { waveSpeed = 0.04; waveCount = 5; baseAmplitude = 60; }
+      if(currentState === 'speaking') { waveSpeed = 0.06; waveCount = 4; baseAmplitude = 50 + (currentVolume * 150); }
+      if(currentState === 'listening') { waveSpeed = 0.03; waveCount = 2; baseAmplitude = 40; }
+
+      time += waveSpeed;
+
+      for(let i=0; i<waveCount; i++) {
+        ctx.beginPath();
+        ctx.moveTo(0, height / 2);
+
+        let freq = 0.005 + (i * 0.002);
+        let phase = time + (i * 100);
+        let amp = baseAmplitude * (1 - (i * 0.1));
+
+        for(let x=0; x<=width; x+=10) {
+          let y = Math.sin(x * freq + phase) * amp;
+          // dampen at edges
+          let damp = Math.sin((x / width) * Math.PI);
+          ctx.lineTo(x, (height / 2) + y * damp);
+        }
+
+        ctx.strokeStyle = i % 2 === 0 ? themeColor : secondaryColor;
+        ctx.lineWidth = 2 + (currentVolume * 5);
+        ctx.globalAlpha = 0.4 + (currentVolume * 0.4) - (i * 0.1);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1.0;
+    }
+    drawWaves();
+
+    /* WEBSOCKET */
+    function connectWS() {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+      ws.onmessage = (e) => {
+        try {
+          const d = JSON.parse(e.data);
+          if (d.type === 'state') {
+            currentState = d.status || 'idle';
+            if(d.subtitle) document.getElementById('subtitle').innerText = d.subtitle;
+            else if(currentState !== 'speaking') document.getElementById('subtitle').innerText = '';
+          } else if (d.type === 'theme_update' && d.theme) {
+            applyThemeClass(d.theme);
+          } else if (d.type === 'play_audio' && d.url) {
+            playAudio(d.url);
+          } else if (d.type === 'stop_audio') {
+            if(audioSource) { try{ audioSource.stop(); }catch(err){} audioSource=null; }
+          }
+        } catch(err){}
+      };
+      ws.onclose = () => setTimeout(connectWS, 3000);
+    }
+    connectWS();
+
+    /* CHAT LOGIC */
+    const chatInput = document.getElementById('chat-input');
+    const chatBtn = document.getElementById('chat-submit');
+    function sendChat() {
+      const text = chatInput.value.trim();
+      if(!text) return;
+      fetch('/api/chat', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({text})
+      });
+      chatInput.value = '';
+    }
+    chatBtn.addEventListener('click', sendChat);
+    chatInput.addEventListener('keypress', (e) => { if(e.key === 'Enter') sendChat(); });
+
+  </script>
+</body>
+</html>

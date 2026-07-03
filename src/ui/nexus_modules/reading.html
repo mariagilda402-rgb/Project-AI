@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Nexus · Leitura</title>
+  <link rel="stylesheet" href="health.css" />
+  <link rel="stylesheet" href="nexus_theme.css?v=2" />
+</head>
+<body>
+  <header>
+    <div><h1>📖 Leitura</h1><span>Livros, páginas e consistência</span></div>
+    <div style="display:flex; gap:8px; align-items:center;">
+      <button type="button" class="btn btn-ghost" onclick="pywebview.api.jump('overview','{}')">Voltar</button>
+    </div>
+  </header>
+  <main>
+    <div class="health-grid">
+      <div class="card">
+        <div class="card-title">Livro ativo</div>
+        <input id="bookTitle" placeholder="Título do livro" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:rgba(0,0,0,0.25);color:var(--text);margin-bottom:8px" />
+        <div style="display:flex;gap:8px">
+          <input id="bookPages" type="number" placeholder="Pág. atual" style="flex:1;padding:10px;border-radius:8px;border:1px solid var(--border);background:rgba(0,0,0,0.25);color:var(--text)" />
+          <input id="bookTotal" type="number" placeholder="Total págs" style="flex:1;padding:10px;border-radius:8px;border:1px solid var(--border);background:rgba(0,0,0,0.25);color:var(--text)" />
+        </div>
+        <button class="btn-record" onclick="saveBook()">Salvar Livro</button>
+      </div>
+      <div class="card">
+        <div class="card-title">Sessão de hoje</div>
+        <input id="sessionPages" type="number" placeholder="Páginas lidas hoje" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:rgba(0,0,0,0.25);color:var(--text);margin-bottom:8px" />
+        <button class="btn-record" style="background:linear-gradient(135deg,#06b6d4,#3b82f6)" onclick="logSession()">Registrar Leitura</button>
+        <div id="readingStats" style="margin-top:16px;font-size:13px;color:var(--text-dim)"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Biblioteca</div>
+      <div id="booksList"></div>
+    </div>
+  </main>
+  <script src="nexus_boot.js"></script>
+  <script>
+    const LS_BOOKS = 'nexus_reading_books_local';
+    const LS_SESSIONS = 'nexus_reading_sessions_local';
+
+    function loadLocal(key) {
+      try { return JSON.parse(localStorage.getItem(key) || '[]'); } catch (_) { return []; }
+    }
+    function saveLocal(key, data) { localStorage.setItem(key, JSON.stringify(data)); }
+
+    function render() {
+      const books = loadLocal(LS_BOOKS);
+      const sessions = loadLocal(LS_SESSIONS);
+      const today = new Date().toISOString().split('T')[0];
+      const todayPages = sessions.filter(s => s.session_date === today).reduce((a, s) => a + (s.pages_read || 0), 0);
+      document.getElementById('readingStats').textContent = `Hoje: ${todayPages} páginas · ${sessions.length} sessões no total`;
+      const list = document.getElementById('booksList');
+      if (!books.length) {
+        list.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-dim)">Adicione seu primeiro livro.</div>';
+        return;
+      }
+      list.innerHTML = books.map(b => {
+        const pct = b.total_pages ? Math.round((b.current_page / b.total_pages) * 100) : 0;
+        return `<div class="row-item"><div class="row-info"><strong>${b.title}</strong><small>${b.current_page || 0}/${b.total_pages || '?'} págs · ${pct}%</small></div></div>`;
+      }).join('');
+    }
+
+    function saveBook() {
+      const title = document.getElementById('bookTitle').value.trim();
+      if (!title) return;
+      const books = loadLocal(LS_BOOKS);
+      const existing = books.find(b => b.title.toLowerCase() === title.toLowerCase());
+      const current = parseInt(document.getElementById('bookPages').value || '0', 10);
+      const total = parseInt(document.getElementById('bookTotal').value || '0', 10);
+      if (existing) {
+        existing.current_page = current;
+        existing.total_pages = total || existing.total_pages;
+      } else {
+        books.push({ id: Date.now(), title, current_page: current, total_pages: total, status: 'reading' });
+      }
+      saveLocal(LS_BOOKS, books);
+      render();
+      showToastBanner({ type: 'success', msg: 'Livro salvo!' });
+    }
+
+    function logSession() {
+      const pages = parseInt(document.getElementById('sessionPages').value || '0', 10);
+      if (!pages) return;
+      const sessions = loadLocal(LS_SESSIONS);
+      const today = new Date().toISOString().split('T')[0];
+      sessions.unshift({ id: Date.now(), pages_read: pages, session_date: today });
+      saveLocal(LS_SESSIONS, sessions);
+      const books = loadLocal(LS_BOOKS);
+      if (books.length) books[0].current_page = (books[0].current_page || 0) + pages;
+      saveLocal(LS_BOOKS, books);
+      document.getElementById('sessionPages').value = '';
+      render();
+      showToastBanner({ type: 'success', msg: `+${pages} páginas registradas!` });
+    }
+
+    render();
+    window.addEventListener('message', (e) => { if (e.data === 'nexus-tab-focus') render(); });
+  </script>
+</body>
+</html>

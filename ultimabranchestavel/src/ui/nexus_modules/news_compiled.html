@@ -1,0 +1,693 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <title>Nexus · Noticias</title>
+  <style>
+    @keyframes deckPulse {
+      0%, 100% { transform:scale(1); box-shadow:0 0 0 rgba(6,182,212,0); }
+      50% { transform:scale(1.015); box-shadow:0 0 34px var(--accent-glow); }
+    }
+    @keyframes stageScan {
+      0% { transform:translateX(-120%); opacity:0; }
+      24% { opacity:.75; }
+      100% { transform:translateX(120%); opacity:0; }
+    }
+    @keyframes receiptLift {
+      from { opacity:0; transform:translateY(8px) scale(.985); }
+      to { opacity:1; transform:translateY(0) scale(1); }
+    }
+    body { color:var(--text); }
+    header {
+      display:flex; align-items:center; justify-content:space-between; gap:16px;
+      padding:18px 22px; background:var(--bg-panel); border-bottom:1px solid var(--border);
+    }
+    .title-cluster { display:flex; align-items:center; gap:14px; min-width:0; }
+    .title-block h1 { font-size:20px; margin:0 0 4px; font-weight:800; }
+    .title-block p { margin:0; color:var(--text-dim); font-size:12px; }
+    .deck-pulse {
+      width:58px; height:58px; border-radius:50%; flex:0 0 auto;
+      border:1px solid var(--border-accent); background:
+        radial-gradient(circle at 50% 50%, var(--accent), transparent 20%),
+        radial-gradient(circle at 50% 50%, var(--accent-subtle), transparent 54%),
+        rgba(0,0,0,.18);
+      position:relative; overflow:hidden; animation:deckPulse 3.2s ease-in-out infinite;
+    }
+    .deck-pulse::before,
+    .deck-pulse::after {
+      content:""; position:absolute; inset:10px; border-radius:50%;
+      border:1px solid rgba(255,255,255,.18);
+    }
+    .deck-pulse::after { inset:19px; border-color:var(--accent); opacity:.82; }
+    .deck-pulse[data-state="loading"],
+    .deck-pulse[data-state="playing"] { animation-duration:1.35s; }
+    .deck-metrics {
+      margin-top:9px; display:flex; gap:7px; flex-wrap:wrap;
+    }
+    .deck-metric {
+      display:inline-flex; align-items:center; gap:5px;
+      border:1px solid var(--border); border-radius:8px; padding:5px 8px;
+      background:var(--surface); color:var(--text-dim); font-size:10px; font-weight:850;
+      text-transform:uppercase; letter-spacing:.6px;
+    }
+    .deck-metric strong { color:var(--text); font-size:11px; }
+    .cache-status {
+      margin-top:7px; display:inline-flex; align-items:center; min-height:22px;
+      border:1px solid var(--border); border-radius:8px; padding:4px 8px;
+      color:var(--text-dim); background:var(--surface); font-size:11px; font-weight:800;
+    }
+    .cache-status[data-state="cached"] { color:var(--warning); border-color:rgba(245,158,11,.36); }
+    .cache-status[data-state="saved"] { color:var(--success); border-color:rgba(34,197,94,.34); }
+    .cache-status[data-state="error"] { color:var(--danger); border-color:rgba(239,68,68,.34); }
+    .news-controls { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .news-input {
+      min-width:260px; height:38px; border-radius:8px; border:1px solid var(--border);
+      background:var(--surface); color:var(--text); padding:0 12px; outline:none;
+      font:inherit; font-size:13px;
+    }
+    .news-btn {
+      height:38px; border-radius:8px; border:1px solid var(--border-accent);
+      background:var(--accent-subtle); color:var(--accent); padding:0 12px;
+      font-weight:800; cursor:pointer; transition:.2s ease;
+    }
+    .news-btn:hover { background:var(--surface-hover); transform:translateY(-1px); }
+    main {
+      flex:1; min-height:0; padding:18px; display:grid;
+      grid-template-columns:minmax(0, 1.7fr) minmax(280px, .85fr);
+      gap:14px; overflow:hidden;
+    }
+    .studio {
+      min-width:0; display:grid; grid-template-rows:minmax(250px, 1fr) auto auto auto;
+      gap:12px; overflow:hidden;
+    }
+    .video-stage {
+      position:relative; overflow:hidden; border:1px solid var(--border-accent);
+      border-radius:10px; background:
+        radial-gradient(circle at 30% 20%, var(--accent-subtle), transparent 38%),
+        linear-gradient(135deg, rgba(0,0,0,.34), var(--bg-panel));
+      display:flex; align-items:flex-end; min-height:260px; box-shadow:var(--shadow);
+    }
+    .video-stage::after {
+      content:""; position:absolute; top:0; bottom:0; width:42%;
+      background:linear-gradient(90deg, transparent, rgba(255,255,255,.12), transparent);
+      transform:translateX(-120%); pointer-events:none;
+    }
+    .video-stage.is-refreshing::after,
+    .video-stage.is-playing::after { animation:stageScan 1.8s ease-out 1; }
+    .video-grid {
+      position:absolute; inset:0; opacity:.28;
+      background-image:
+        linear-gradient(var(--border) 1px, transparent 1px),
+        linear-gradient(90deg, var(--border) 1px, transparent 1px);
+      background-size:34px 34px;
+    }
+    .video-content {
+      position:relative; z-index:1; padding:24px; display:grid; gap:10px; max-width:760px;
+    }
+    .video-kicker { font-size:11px; letter-spacing:1.3px; text-transform:uppercase; color:var(--accent); font-weight:900; }
+    .video-title { font-size:28px; line-height:1.08; font-weight:900; margin:0; }
+    .video-meta { color:var(--text-dim); font-size:12px; }
+    .video-actions { display:flex; gap:8px; flex-wrap:wrap; }
+    .video-link {
+      color:var(--text); text-decoration:none; border:1px solid var(--border);
+      border-radius:8px; padding:9px 11px; background:rgba(0,0,0,.16);
+      font-size:12px; font-weight:800;
+    }
+    .action-receipt {
+      margin-top:2px; border:1px solid var(--border-accent); border-radius:10px;
+      background:linear-gradient(135deg, var(--accent-subtle), rgba(0,0,0,.16));
+      padding:10px 12px; display:grid; grid-template-columns:auto 1fr; gap:10px;
+      align-items:center; animation:receiptLift .24s ease-out both;
+    }
+    .action-receipt[hidden] { display:none !important; }
+    .receipt-dot {
+      width:30px; height:30px; border-radius:50%; display:grid; place-items:center;
+      color:var(--accent); border:1px solid var(--border-accent); background:rgba(0,0,0,.18);
+      font-weight:900; font-size:10px;
+    }
+    .receipt-copy strong { display:block; color:var(--text); font-size:12px; }
+    .receipt-copy span { display:block; color:var(--text-dim); font-size:11px; margin-top:2px; }
+    .spotlight-panel {
+      border:1px solid var(--border); border-radius:10px; background:var(--bg-panel);
+      padding:12px; display:grid; grid-template-columns:minmax(0, 1fr) minmax(210px, .75fr);
+      gap:12px; min-height:118px;
+    }
+    .spotlight-panel h3 {
+      margin:0 0 7px; color:var(--accent); font-size:11px; letter-spacing:1px;
+      text-transform:uppercase;
+    }
+    .spotlight-panel p { margin:0; color:var(--text); font-size:13px; line-height:1.5; }
+    .impact-tags { display:flex; flex-wrap:wrap; gap:6px; margin-top:9px; }
+    .impact-tag {
+      border:1px solid var(--border-accent); border-radius:8px; background:var(--accent-subtle);
+      color:var(--accent); padding:5px 7px; font-size:10px; font-weight:900;
+      text-transform:uppercase; letter-spacing:.7px;
+    }
+    .timeline-list { display:grid; gap:7px; }
+    .timeline-item {
+      border:1px solid var(--border); border-radius:8px; background:var(--surface);
+      padding:8px; display:grid; gap:3px;
+    }
+    .timeline-item strong { color:var(--text); font-size:11px; }
+    .timeline-item span { color:var(--text-dim); font-size:11px; line-height:1.35; }
+    .transcript-lane {
+      display:grid; gap:7px; border:1px solid var(--border); border-radius:10px;
+      background:var(--surface); padding:10px;
+    }
+    .transcript-row {
+      display:grid; grid-template-columns:72px minmax(0, 1fr); gap:10px; align-items:center;
+      min-height:34px; border-radius:8px; padding:8px 10px; background:rgba(0,0,0,.12);
+      color:var(--text-dim); font-size:12px;
+    }
+    .transcript-row strong { color:var(--accent); font-size:10px; letter-spacing:.9px; text-transform:uppercase; }
+    .transcript-row.present { color:var(--text); background:var(--accent-subtle); border:1px solid var(--border-accent); }
+    .narration-shell {
+      border:1px solid var(--border); border-radius:10px; background:var(--bg-panel);
+      overflow:hidden; min-height:132px;
+    }
+    .narration-head {
+      display:flex; justify-content:space-between; align-items:center; gap:12px;
+      padding:10px 12px; border-bottom:1px solid var(--border); background:var(--surface);
+    }
+    .narration-head strong {
+      color:var(--accent); font-size:11px; letter-spacing:1px; text-transform:uppercase;
+    }
+    .narration {
+      padding:12px; color:var(--text-dim); line-height:1.55; font-size:13px; max-height:96px; overflow:auto;
+    }
+    .narration-segments {
+      display:grid; gap:7px; padding:0 12px 12px; max-height:112px; overflow:auto;
+    }
+    .narration-segment {
+      border:1px solid var(--border); border-radius:8px; background:var(--surface);
+      padding:8px 10px; display:grid; grid-template-columns:72px minmax(0,1fr) auto;
+      gap:9px; align-items:center; color:var(--text-dim); font-size:11px;
+    }
+    .narration-segment strong { color:var(--accent); font-size:10px; letter-spacing:.8px; text-transform:uppercase; }
+    .narration-segment.active {
+      border-color:var(--border-accent); background:var(--accent-subtle); color:var(--text);
+      box-shadow:0 0 20px var(--accent-glow);
+    }
+    .side-panel {
+      min-width:0; min-height:0; overflow:hidden; display:flex; flex-direction:column; gap:10px;
+    }
+    .history-panel {
+      border:1px solid var(--border); border-radius:10px; background:var(--bg-panel);
+      padding:10px; display:grid; gap:8px;
+    }
+    .history-panel h2 {
+      margin:0; font-size:11px; color:var(--accent); letter-spacing:1px;
+      text-transform:uppercase;
+    }
+    .history-list { display:grid; gap:7px; max-height:116px; overflow:auto; }
+    .history-chip {
+      border:1px solid var(--border); border-radius:8px; background:var(--surface);
+      color:var(--text); padding:8px; text-align:left; cursor:pointer; display:grid; gap:3px;
+      font:inherit; transition:.2s ease;
+    }
+    .history-chip:hover { border-color:var(--border-accent); background:var(--accent-subtle); }
+    .history-chip strong { font-size:12px; line-height:1.25; }
+    .history-chip span { color:var(--text-dim); font-size:10px; }
+    .story-rail {
+      min-width:0; flex:1; overflow:auto; display:flex; flex-direction:column; gap:10px; padding-right:2px;
+    }
+    .story-card {
+      text-align:left; border:1px solid var(--border); border-radius:10px; background:var(--surface);
+      color:var(--text); padding:12px; cursor:pointer; display:grid; gap:7px; transition:.2s ease;
+    }
+    .story-card:hover, .story-card.active { border-color:var(--border-accent); background:var(--accent-subtle); }
+    .story-card small { color:var(--accent); font-weight:900; text-transform:uppercase; letter-spacing:.8px; }
+    .story-card h3 { margin:0; font-size:14px; line-height:1.25; }
+    .story-card p { margin:0; color:var(--text-dim); font-size:12px; line-height:1.45; }
+    .empty-state {
+      border:1px dashed var(--border); border-radius:10px; padding:18px;
+      color:var(--text-dim); background:var(--surface);
+    }
+    @media (max-width: 820px) {
+      header { align-items:flex-start; flex-direction:column; }
+      .title-cluster { align-items:flex-start; }
+      .news-input { min-width:0; width:100%; }
+      .news-controls { width:100%; }
+      main { grid-template-columns:1fr; overflow:auto; }
+      .spotlight-panel { grid-template-columns:1fr; }
+      .narration-segment { grid-template-columns:1fr; }
+      .story-rail { max-height:340px; }
+      .video-title { font-size:22px; }
+    }
+  </style>
+<base href="file:///C:/Users/jamil/Documents/Projeto%20AI/src/ui/nexus_modules/"><script>window.__NEXUS_BOOT__={"module": "news", "theme": "dark", "theme_preset": "dark-neon", "theme_name": "Dark Neon", "theme_tokens": {"--accent": "#8b5cf6", "--accent-glow": "rgba(139,92,246,0.30)", "--accent-hover": "#7c3aed", "--accent-subtle": "rgba(139,92,246,0.08)", "--bg": "#0a0a0a", "--bg-panel": "#111111", "--border": "rgba(255,255,255,0.08)", "--border-accent": "rgba(139,92,246,0.35)", "--muted": "#71717a", "--shadow": "0 0 25px rgba(0,0,0,0.80)", "--sidebar": "#080808", "--surface": "rgba(255,255,255,0.04)", "--surface-hover": "rgba(255,255,255,0.08)", "--text": "#e4e4e7", "--text-dim": "#71717a", "--text-muted": "#52525b"}};</script><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"><link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet"><link rel="stylesheet" href="nexus_frame.css" /><style>html, body { background: transparent !important; }</style></head>
+<body><div id="nx-app-wrapper" class="neon-enabled" data-theme="dark" data-theme-preset="dark-neon" style="--accent: #8b5cf6; --accent-glow: rgba(139,92,246,0.30); --accent-hover: #7c3aed; --accent-subtle: rgba(139,92,246,0.08); --bg: #0a0a0a; --bg-panel: #111111; --border: rgba(255,255,255,0.08); --border-accent: rgba(139,92,246,0.35); --muted: #71717a; --shadow: 0 0 25px rgba(0,0,0,0.80); --sidebar: #080808; --surface: rgba(255,255,255,0.04); --surface-hover: rgba(255,255,255,0.08); --text: #e4e4e7; --text-dim: #71717a; --text-muted: #52525b"><div class="nx-chrome-bar"><div class="nx-chrome-title"><span class="nx-dot"></span><span>Nexus Life OS</span></div><div class="nx-chrome-actions"><button type="button" class="nx-theme-toggle" onclick="if(window.pywebview&&pywebview.api)pywebview.api.toggle_always_on_top().then(r => this.style.color = r ? 'var(--accent)' : 'inherit');" title="Fixar no Topo">📌</button><button type="button" class="nx-theme-toggle" data-nx-theme-toggle onclick="if(window.nxToggleTheme)window.nxToggleTheme();" title="Alternar tema" aria-label="Alternar tema">◐</button><button type="button" class="nx-chrome-close" onclick="if(window.pywebview&&pywebview.api)pywebview.api.minimize_module();" title="Minimizar">_</button><button type="button" class="nx-chrome-close" onclick="if(window.pywebview&&pywebview.api)pywebview.api.maximize_module();" title="Maximizar">□</button><button type="button" class="nx-chrome-close" onclick="if(window.pywebview&&pywebview.api)pywebview.api.close_module();" title="Fechar">✕</button></div></div><div class="nx-chrome-inner">
+  <header>
+    <div class="title-cluster">
+      <div class="deck-pulse" id="newsDeckPulse" data-state="idle" aria-hidden="true"></div>
+      <div class="title-block">
+        <h1>Ultimas noticias</h1>
+        <p>Briefing verificavel com fonte, spotlight, roteiro narravel e acoes rapidas.</p>
+        <div class="cache-status" id="newsCacheStatus" data-state="idle">Pronto para buscar noticias recentes.</div>
+        <div class="deck-metrics" id="newsDeckMetrics">
+          <span class="deck-metric"><strong>0</strong> noticias</span>
+          <span class="deck-metric"><strong>0</strong> fontes</span>
+          <span class="deck-metric"><strong>0s</strong> roteiro</span>
+        </div>
+      </div>
+    </div>
+    <div class="news-controls">
+      <input class="news-input" id="newsQuery" value="top news Brasil" />
+      <button class="news-btn" type="button" onclick="refreshNewsBriefing()">Atualizar</button>
+      <button class="news-btn" type="button" onclick="playNewsBriefing()">Narrar deck</button>
+      <button class="news-btn" type="button" onclick="moveNews(-1)">Anterior</button>
+      <button class="news-btn" type="button" onclick="moveNews(1)">Proxima</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="studio">
+      <div class="video-stage" id="newsVideoStage">
+        <div class="video-grid"></div>
+        <div class="video-content">
+          <div class="video-kicker" id="newsVideoKicker">Aguardando briefing</div>
+          <h2 class="video-title" id="newsVideoTitle">Atualize para carregar noticias recentes</h2>
+          <div class="video-meta" id="newsVideoMeta">Fonte e data aparecem aqui.</div>
+          <div class="video-actions">
+            <a class="video-link" id="newsVideoLink" href="#" target="_blank" rel="noreferrer">Buscar video</a>
+            <a class="video-link" id="newsSourceLink" href="#" target="_blank" rel="noreferrer">Abrir fonte</a>
+            <button class="news-btn" type="button" data-news-action="save_note" onclick="saveCurrentNewsToNote()">Salvar no MindPalace</button>
+            <button class="news-btn" type="button" data-news-action="flashcards" onclick="createNewsFlashcards()">Criar flashcards</button>
+            <button class="news-btn" type="button" data-news-action="follow_up" onclick="createNewsFollowupTask()">Criar tarefa</button>
+            <button class="news-btn" type="button" data-news-action="deep_dive" onclick="expandCurrentNews()">Fale mais</button>
+          </div>
+          <div class="action-receipt" id="newsActionReceipt" hidden>
+            <div class="receipt-dot">IA</div>
+            <div class="receipt-copy">
+              <strong id="newsActionReceiptTitle">Acao pronta</strong>
+              <span id="newsActionReceiptBody">A resposta do Jarvis aparece aqui.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="spotlight-panel" id="newsSpotlightPanel">
+        <section>
+          <h3>Por que importa</h3>
+          <p id="newsWhyItMatters">O impacto da noticia selecionada aparece aqui.</p>
+          <div class="impact-tags" id="newsImpactTags"></div>
+        </section>
+        <section>
+          <h3>Linha do tempo</h3>
+          <div class="timeline-list" id="newsTimeline"></div>
+        </section>
+      </div>
+
+      <div class="transcript-lane" id="newsTranscriptLane">
+        <div class="transcript-row"><strong>Passado</strong><span id="pastLine">Contexto anterior do briefing.</span></div>
+        <div class="transcript-row present"><strong>Agora</strong><span id="presentLine">Frase atual.</span></div>
+        <div class="transcript-row"><strong>Proximo</strong><span id="futureLine">Proxima frase prevista.</span></div>
+      </div>
+
+      <div class="narration-shell">
+        <div class="narration-head">
+          <strong>Briefing narravel</strong>
+          <button class="news-btn" type="button" onclick="playNewsBriefing()">Reproduzir roteiro</button>
+        </div>
+        <div class="narration" id="newsNarration">O resumo narravel do Jarvis aparece aqui.</div>
+        <div class="narration-segments" id="newsNarrationSegments"></div>
+      </div>
+    </section>
+
+    <aside class="side-panel">
+      <section class="history-panel">
+        <h2>Historico local</h2>
+        <div class="history-list" id="newsBriefingHistory">
+          <div class="empty-state">Sem briefings salvos ainda.</div>
+        </div>
+      </section>
+      <div class="story-rail" id="newsStoryRail">
+        <div class="empty-state">Sem noticias carregadas.</div>
+      </div>
+    </aside>
+  </main>
+
+  <script src="nexus_boot.js"></script>
+  <script>
+    const boot = readBoot();
+    let newsBriefing = boot.briefing || null;
+    let newsBriefingHistory = [];
+    let currentNewsIndex = 0;
+    let newsBriefingPlaying = false;
+    let newsBriefingTimer = null;
+    let newsSegmentCursor = 0;
+
+    function escapeHtml(value) {
+      return String(value || '').replace(/[&<>"']/g, ch => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[ch]));
+    }
+
+    function setText(id, value) {
+      const el = document.getElementById(id);
+      if (el) el.textContent = value || '';
+    }
+
+    function setLink(id, href) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      if (href) {
+        el.href = href;
+        el.style.pointerEvents = 'auto';
+        el.style.opacity = '1';
+      } else {
+        el.href = '#';
+        el.style.pointerEvents = 'none';
+        el.style.opacity = '.5';
+      }
+    }
+
+    function setNewsStatus(message, state) {
+      const el = document.getElementById('newsCacheStatus');
+      if (!el) return;
+      el.textContent = message || '';
+      el.dataset.state = state || 'idle';
+    }
+
+    function setDeckPulse(state) {
+      const pulse = document.getElementById('newsDeckPulse');
+      const stage = document.getElementById('newsVideoStage');
+      if (pulse) pulse.dataset.state = state || 'idle';
+      if (stage) {
+        stage.classList.toggle('is-refreshing', state === 'loading');
+        stage.classList.toggle('is-playing', state === 'playing');
+      }
+    }
+
+    function renderNewsDeckMetrics() {
+      const el = document.getElementById('newsDeckMetrics');
+      if (!el) return;
+      const deck = (newsBriefing && newsBriefing.deck) || {};
+      const items = (newsBriefing && newsBriefing.items) || [];
+      const count = Number(deck.item_count || items.length || 0);
+      const sources = Number(deck.source_count || new Set(items.map(item => item.source || '').filter(Boolean)).size || 0);
+      const duration = Number(deck.estimated_duration_sec || 0);
+      el.innerHTML =
+        '<span class="deck-metric"><strong>' + count + '</strong> noticias</span>' +
+        '<span class="deck-metric"><strong>' + sources + '</strong> fontes</span>' +
+        '<span class="deck-metric"><strong>' + duration + 's</strong> roteiro</span>';
+    }
+
+    function renderNewsActionReceipt(title, body) {
+      const receipt = document.getElementById('newsActionReceipt');
+      if (!receipt) return;
+      document.getElementById('newsActionReceiptTitle').textContent = title || 'Acao pronta';
+      document.getElementById('newsActionReceiptBody').textContent = body || 'Comando aplicado na noticia selecionada.';
+      receipt.hidden = false;
+    }
+
+    function renderNewsNarrationSegments(activeIndex) {
+      const wrap = document.getElementById('newsNarrationSegments');
+      if (!wrap) return;
+      const deck = (newsBriefing && newsBriefing.deck) || {};
+      const segments = Array.isArray(deck.segments) ? deck.segments : [];
+      if (!segments.length) {
+        wrap.innerHTML = '<div class="empty-state">O roteiro por blocos aparece aqui depois do briefing.</div>';
+        return;
+      }
+      const current = Number.isFinite(Number(activeIndex)) ? Number(activeIndex) : -1;
+      wrap.innerHTML = segments.map((segment, idx) => (
+        '<button class="narration-segment ' + (idx === current ? 'active' : '') + '" type="button" onclick="selectNewsNarrationSegment(' + idx + ')">' +
+          '<strong>' + escapeHtml(segment.cue || ('Noticia ' + (idx + 1))) + '</strong>' +
+          '<span>' + escapeHtml(segment.title || segment.script || '') + '</span>' +
+          '<span>' + Number(segment.duration_sec || 0) + 's</span>' +
+        '</button>'
+      )).join('');
+    }
+
+    function selectNewsNarrationSegment(index) {
+      const deck = (newsBriefing && newsBriefing.deck) || {};
+      const segments = Array.isArray(deck.segments) ? deck.segments : [];
+      if (!segments.length) return;
+      const idx = Math.max(0, Math.min(segments.length - 1, Number(index) || 0));
+      const segment = segments[idx];
+      newsSegmentCursor = idx;
+      const itemIndex = Math.max(0, Number(segment.item_index || idx + 1) - 1);
+      selectNewsItem(itemIndex);
+      setText('newsNarration', segment.script || deck.briefing_script || '');
+      renderNewsNarrationSegments(idx);
+    }
+
+    function stopNewsBriefingPlayback() {
+      newsBriefingPlaying = false;
+      if (newsBriefingTimer) {
+        clearTimeout(newsBriefingTimer);
+        newsBriefingTimer = null;
+      }
+      setDeckPulse('idle');
+    }
+
+    function playNewsBriefing() {
+      const deck = (newsBriefing && newsBriefing.deck) || {};
+      const segments = Array.isArray(deck.segments) ? deck.segments : [];
+      if (!segments.length) {
+        renderNewsActionReceipt('Roteiro indisponivel', 'Atualize o briefing antes de narrar o deck.');
+        return;
+      }
+      if (newsBriefingPlaying) {
+        stopNewsBriefingPlayback();
+        renderNewsActionReceipt('Briefing pausado', 'O roteiro ficou pronto para continuar manualmente.');
+        return;
+      }
+      newsBriefingPlaying = true;
+      setDeckPulse('playing');
+      renderNewsActionReceipt('Briefing narravel iniciado', 'O Jarvis destacou os blocos na ordem do roteiro.');
+
+      const tick = () => {
+        if (!newsBriefingPlaying) return;
+        const idx = newsSegmentCursor % segments.length;
+        selectNewsNarrationSegment(idx);
+        newsSegmentCursor = idx + 1;
+        if (newsSegmentCursor >= segments.length) {
+          newsBriefingTimer = setTimeout(() => {
+            stopNewsBriefingPlayback();
+            newsSegmentCursor = 0;
+            renderNewsNarrationSegments(-1);
+            setText('newsNarration', deck.briefing_script || '');
+            renderNewsActionReceipt('Briefing concluido', deck.next_action || 'Escolha uma noticia para aprofundar.');
+          }, 1200);
+          return;
+        }
+        newsBriefingTimer = setTimeout(tick, Math.min(5200, Math.max(1600, Number(segments[idx].duration_sec || 10) * 260)));
+      };
+      tick();
+    }
+
+    function renderNewsHistory() {
+      const wrap = document.getElementById('newsBriefingHistory');
+      if (!wrap) return;
+      if (!newsBriefingHistory.length) {
+        wrap.innerHTML = '<div class="empty-state">Sem briefings salvos ainda.</div>';
+        return;
+      }
+      wrap.innerHTML = newsBriefingHistory.map((item, idx) => (
+        '<button class="history-chip" type="button" onclick="reuseNewsQueryByIndex(' + idx + ')">' +
+          '<strong>' + escapeHtml(item.top_title || item.query || 'Briefing') + '</strong>' +
+          '<span>' + escapeHtml(item.query || 'noticias') + ' · ' + escapeHtml(item.generated_at || '') + ' · ' + Number(item.item_count || 0) + ' itens</span>' +
+        '</button>'
+      )).join('');
+    }
+
+    async function loadNewsHistory() {
+      const response = await nxBridge('news_history', { limit: 6 });
+      if (!response.ok) return;
+      newsBriefingHistory = Array.isArray(response.data) ? response.data : [];
+      renderNewsHistory();
+    }
+
+    function reuseNewsQuery(query) {
+      const input = document.getElementById('newsQuery');
+      if (input && query) input.value = query;
+      refreshNewsBriefing();
+    }
+
+    function reuseNewsQueryByIndex(index) {
+      const item = newsBriefingHistory[Number(index) || 0];
+      reuseNewsQuery(item && item.query || 'top news Brasil');
+    }
+
+    function renderStoryRail() {
+      const rail = document.getElementById('newsStoryRail');
+      const items = (newsBriefing && newsBriefing.items) || [];
+      if (!rail) return;
+      if (!items.length) {
+        rail.innerHTML = '<div class="empty-state">Nenhuma noticia encontrada agora.</div>';
+        return;
+      }
+      rail.innerHTML = items.map((item, idx) => (
+        '<button class="story-card ' + (idx === currentNewsIndex ? 'active' : '') + '" onclick="selectNewsItem(' + idx + ')">' +
+          '<small>Noticia ' + item.index + ' · ' + escapeHtml(item.source) + '</small>' +
+          '<h3>' + escapeHtml(item.title) + '</h3>' +
+          '<p>' + escapeHtml(item.summary) + '</p>' +
+        '</button>'
+      )).join('');
+    }
+
+    function renderSpotlightDeck(item) {
+      if (!item) return;
+      setText('newsWhyItMatters', item.why_it_matters || item.summary || 'Acompanhe os desdobramentos pela fonte original.');
+      const tagsEl = document.getElementById('newsImpactTags');
+      if (tagsEl) {
+        const tags = Array.isArray(item.impact_tags) ? item.impact_tags : [];
+        tagsEl.innerHTML = tags.length
+          ? tags.map(tag => '<span class="impact-tag">' + escapeHtml(tag) + '</span>').join('')
+          : '<span class="impact-tag">atualidades</span>';
+      }
+      const timelineEl = document.getElementById('newsTimeline');
+      if (timelineEl) {
+        const rows = Array.isArray(item.timeline) ? item.timeline : [];
+        timelineEl.innerHTML = rows.length
+          ? rows.map(row => (
+              '<div class="timeline-item">' +
+                '<strong>' + escapeHtml(row.label || 'Etapa') + '</strong>' +
+                '<span>' + escapeHtml(row.text || '') + '</span>' +
+              '</div>'
+            )).join('')
+          : '<div class="timeline-item"><strong>Proximo passo</strong><span>Abrir a fonte e acompanhar atualizacoes.</span></div>';
+      }
+    }
+
+    function selectNewsItem(index) {
+      const items = (newsBriefing && newsBriefing.items) || [];
+      if (!items.length) return;
+      currentNewsIndex = Math.max(0, Math.min(items.length - 1, index));
+      const item = items[currentNewsIndex];
+      const deck = (newsBriefing && newsBriefing.deck) || {};
+      const segments = Array.isArray(deck.segments) ? deck.segments : [];
+      const segment = segments.find(row => Number(row.item_index || 0) === Number(item.index || currentNewsIndex + 1));
+      setText('newsVideoKicker', 'Clip slot · ' + (item.video && item.video.provider || 'video'));
+      setText('newsVideoTitle', item.title);
+      setText('newsVideoMeta', (item.source || 'Fonte') + (item.published_at ? ' · ' + item.published_at : ''));
+      setText('pastLine', item.transcript && item.transcript.past);
+      setText('presentLine', item.transcript && item.transcript.present);
+      setText('futureLine', item.transcript && item.transcript.future);
+      setText('newsNarration', (segment && segment.script) || item.summary || (newsBriefing && newsBriefing.narration) || '');
+      setLink('newsVideoLink', item.video && item.video.url);
+      setLink('newsSourceLink', item.url);
+      renderSpotlightDeck(item);
+      renderNewsNarrationSegments(currentNewsIndex);
+      renderStoryRail();
+    }
+
+    function renderNewsBriefing(data) {
+      newsBriefing = data || newsBriefing || { items: [], narration: '' };
+      currentNewsIndex = 0;
+      newsSegmentCursor = 0;
+      const items = newsBriefing.items || [];
+      renderNewsDeckMetrics();
+      if (!items.length) {
+        setText('newsVideoTitle', newsBriefing.error || 'Nenhuma noticia encontrada agora');
+        setText('newsVideoMeta', 'Tente outro tema ou atualize novamente.');
+        setText('newsNarration', newsBriefing.error || '');
+        setNewsStatus(newsBriefing.error || 'Nenhuma noticia encontrada agora.', 'error');
+        setDeckPulse('idle');
+        renderNewsNarrationSegments(-1);
+        renderStoryRail();
+        return;
+      }
+      if (newsBriefing.from_cache) {
+        setNewsStatus('Mostrando ultimo briefing salvo: ' + (newsBriefing.cached_generated_at || newsBriefing.generated_at || ''), 'cached');
+      } else {
+        setNewsStatus('Briefing atualizado agora e salvo no historico local.', 'live');
+      }
+      setDeckPulse('idle');
+      setText('newsNarration', (newsBriefing.deck && newsBriefing.deck.briefing_script) || newsBriefing.narration || '');
+      renderNewsNarrationSegments(-1);
+      selectNewsItem(0);
+    }
+
+    async function refreshNewsBriefing() {
+      const query = document.getElementById('newsQuery').value.trim() || 'top news Brasil';
+      setNewsStatus('Pesquisando fontes recentes...', 'loading');
+      setDeckPulse('loading');
+      setText('newsVideoTitle', 'Pesquisando noticias recentes...');
+      const response = await nxBridge('news_briefing', { query, limit: 3 });
+      if (!response.ok) {
+        renderNewsBriefing({ ok:false, items:[], error:response.error || 'Falha ao buscar noticias.' });
+        return;
+      }
+      renderNewsBriefing(response.data);
+      loadNewsHistory();
+    }
+
+    function moveNews(delta) {
+      const items = (newsBriefing && newsBriefing.items) || [];
+      if (!items.length) return;
+      selectNewsItem((currentNewsIndex + delta + items.length) % items.length);
+    }
+
+    function expandCurrentNews() {
+      const item = newsBriefing && newsBriefing.items && newsBriefing.items[currentNewsIndex];
+      if (!item) return;
+      setText('newsNarration', (item.deep_dive || item.summary || '') + '\n\nFonte: ' + (item.source || '') + '\nVideo sugerido: ' + ((item.video && item.video.query) || item.title));
+      renderNewsActionReceipt('Spotlight expandido', 'Resumo detalhado carregado para a noticia selecionada.');
+    }
+
+    async function saveCurrentNewsToNote() {
+      const item = newsBriefing && newsBriefing.items && newsBriefing.items[currentNewsIndex];
+      if (!item) {
+        setNewsStatus('Carregue uma noticia antes de salvar.', 'error');
+        return;
+      }
+      setNewsStatus('Salvando noticia no MindPalace...', 'loading');
+      renderNewsActionReceipt('Salvando no MindPalace', item.title || 'Noticia selecionada');
+      const response = await nxBridge('news_save_note', { item, subject: 'Noticias' });
+      if (!response.ok) {
+        setNewsStatus(response.error || 'Nao consegui salvar a noticia.', 'error');
+        renderNewsActionReceipt('Falha ao salvar', response.error || 'Nao consegui salvar a noticia.');
+        return;
+      }
+      setNewsStatus('Noticia salva no MindPalace: #' + response.data.note_id, 'saved');
+      renderNewsActionReceipt('Noticia salva', 'MindPalace recebeu a nota #' + response.data.note_id + '.');
+    }
+
+    async function createNewsFollowupTask() {
+      const item = newsBriefing && newsBriefing.items && newsBriefing.items[currentNewsIndex];
+      if (!item) {
+        setNewsStatus('Carregue uma noticia antes de criar tarefa.', 'error');
+        return;
+      }
+      setNewsStatus('Criando tarefa de acompanhamento...', 'loading');
+      renderNewsActionReceipt('Criando tarefa', item.title || 'Noticia selecionada');
+      const response = await nxBridge('news_followup_task', { item });
+      if (!response.ok) {
+        setNewsStatus(response.error || 'Nao consegui criar a tarefa.', 'error');
+        renderNewsActionReceipt('Falha na tarefa', response.error || 'Nao consegui criar a tarefa.');
+        return;
+      }
+      setNewsStatus('Tarefa criada: #' + response.data.task_id, 'saved');
+      renderNewsActionReceipt('Tarefa criada', 'Acompanhamento registrado para amanha: #' + response.data.task_id + '.');
+    }
+
+    async function createNewsFlashcards() {
+      const item = newsBriefing && newsBriefing.items && newsBriefing.items[currentNewsIndex];
+      if (!item) {
+        setNewsStatus('Carregue uma noticia antes de criar flashcards.', 'error');
+        return;
+      }
+      setNewsStatus('Criando nota e flashcards SRS...', 'loading');
+      renderNewsActionReceipt('Gerando flashcards', item.title || 'Noticia selecionada');
+      const response = await nxBridge('news_flashcards_generate', { item, max_cards: 4 });
+      if (!response.ok) {
+        setNewsStatus(response.error || 'Nao consegui criar flashcards.', 'error');
+        renderNewsActionReceipt('Falha nos flashcards', response.error || 'Nao consegui criar flashcards.');
+        return;
+      }
+      setNewsStatus('Flashcards criados: ' + response.data.created + ' · nota #' + response.data.note_id, 'saved');
+      renderNewsActionReceipt('Flashcards prontos', response.data.created + ' cartoes SRS criados a partir da noticia.');
+    }
+
+    if (newsBriefing && newsBriefing.items) {
+      renderNewsBriefing(newsBriefing);
+    } else {
+      refreshNewsBriefing();
+    }
+    loadNewsHistory();
+  </script>
+</div></div></body>
+</html>

@@ -1,0 +1,1463 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Assistente — Visualizador</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *,
+    *::before,
+    *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --bg: #060812;
+      --surface: rgba(255, 255, 255, 0.04);
+      --border: rgba(255, 255, 255, 0.08);
+      --text: #e0e4f0;
+      --text-dim: #6b7280;
+
+      /* State accent colors */
+      --c-idle: #6d28d9;
+      --c-thinking: #7c3aed;
+      --c-speaking: #0891b2;
+      --c-listening: #059669;
+      --c-error: #dc2626;
+
+      --radius: 20px;
+      --transition: 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    body {
+      background: transparent;
+      font-family: 'Inter', system-ui, sans-serif;
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* ─── Ambient background gradient (disabled for transparent orb) ─── */
+    body::before {
+      display: none;
+    }
+
+    /* ─── Header ─── */
+    header {
+      display: none;
+    }
+
+    /* ─── Connection indicator ─── */
+    .connection-status {
+      display: none;
+    }
+
+    /* ─── Main layout ─── */
+    main {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0;
+    }
+
+    /* ─── Orb ring wrapper ─── */
+    .orb-wrapper {
+      position: relative;
+      width: 178px;
+      height: 178px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Animated status ring */
+    .status-ring {
+      z-index: 6;
+      display: none;
+      position: absolute;
+      inset: -16px;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      background:
+        linear-gradient(var(--bg), var(--bg)) padding-box,
+        conic-gradient(var(--ring-color, #6d28d9) var(--ring-fill, 25%), transparent 0%) border-box;
+      transition: --ring-color .6s;
+      animation: ring-spin 4s linear infinite;
+    }
+
+    @keyframes ring-spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    /* Outer glow halo */
+    .orb-halo {
+      position: absolute;
+      inset: -20px;
+      border-radius: 50%;
+      background: radial-gradient(circle, var(--halo-color, rgba(109, 40, 217, .15)) 0%, transparent 70%);
+      transition: background .6s;
+      filter: blur(8px);
+      animation: halo-breathe 3s ease-in-out infinite;
+    }
+
+    @keyframes halo-breathe {
+
+      0%,
+      100% {
+        transform: scale(1);
+        opacity: .7;
+      }
+
+      50% {
+        transform: scale(1.08);
+        opacity: 1;
+      }
+    }
+
+    /* Actual orb container */
+    #orb-container {
+      opacity: .16;
+      display: none;
+      width: 132px;
+      height: 132px;
+      border-radius: 50%;
+      overflow: hidden;
+      position: relative;
+      z-index: 1;
+      transition: transform .4s cubic-bezier(.34, 1.56, .64, 1), box-shadow .5s;
+      box-shadow:
+        0 0 40px rgba(109, 40, 217, .25),
+        0 0 80px rgba(109, 40, 217, .12),
+        inset 0 0 40px rgba(0, 0, 0, .4);
+    }
+
+    #orb-container[data-orb-state="thinking"] {
+      box-shadow: 0 0 50px rgba(124, 58, 237, .35), 0 0 100px rgba(124, 58, 237, .15), inset 0 0 40px rgba(0, 0, 0, .4);
+    }
+
+    #orb-container[data-orb-state="speaking"] {
+      box-shadow: 0 0 60px rgba(8, 145, 178, .4), 0 0 120px rgba(8, 145, 178, .18), inset 0 0 40px rgba(0, 0, 0, .4);
+    }
+
+    #orb-container[data-orb-state="listening"] {
+      box-shadow: 0 0 50px rgba(5, 150, 105, .35), 0 0 100px rgba(5, 150, 105, .15), inset 0 0 40px rgba(0, 0, 0, .4);
+    }
+
+    #orb-container[data-orb-state="executing"] {
+      box-shadow: 0 0 58px rgba(245, 158, 11, .42), 0 0 118px rgba(245, 158, 11, .18), inset 0 0 40px rgba(0, 0, 0, .4);
+    }
+
+    #orb-container[data-orb-state="alert"] {
+      box-shadow: 0 0 64px rgba(244, 63, 94, .52), 0 0 130px rgba(244, 63, 94, .22), inset 0 0 40px rgba(0, 0, 0, .4);
+      animation: alert-surge .9s ease-in-out infinite;
+    }
+
+    #orb-container[data-orb-state="error"] {
+      box-shadow: 0 0 60px rgba(220, 38, 38, .5), 0 0 120px rgba(220, 38, 38, .2), inset 0 0 40px rgba(0, 0, 0, .4);
+      animation: error-shake .08s linear infinite;
+    }
+
+    .particle-neural-core {
+      position: relative;
+      border-radius: 50%;
+      isolation: isolate;
+    }
+
+    #neural-particle-canvas {
+      position: absolute;
+      inset: -36px;
+      width: calc(100% + 72px);
+      height: calc(100% + 72px);
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 5;
+      mix-blend-mode: normal;
+      opacity: 1;
+      filter: drop-shadow(0 0 16px rgba(56, 189, 248, .58)) drop-shadow(0 0 38px rgba(139, 92, 246, .34));
+    }
+
+    .orb-halo,
+    #orb-container {
+      z-index: 1;
+    }
+
+    @keyframes alert-surge {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.035); }
+    }
+
+    @keyframes error-shake {
+
+      0%,
+      100% {
+        transform: translateX(0);
+      }
+
+      25% {
+        transform: translateX(-1.5px);
+      }
+
+      75% {
+        transform: translateX(1.5px);
+      }
+    }
+
+    /* ─── Subtitle bar ─── */
+    .subtitle-bar {
+      display: none;
+    }
+
+    .subtitle-text {
+      display: none;
+    }
+
+    /* ─── State info (small, bottom-left) ─── */
+    .state-info {
+      display: none;
+    }
+
+    /* ─── Audio activation overlay ─── */
+    .audio-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(6, 8, 18, .85);
+      backdrop-filter: blur(12px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      cursor: pointer;
+      transition: opacity .5s ease;
+    }
+
+    .audio-overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .audio-overlay .audio-icon {
+      font-size: 4rem;
+      margin-bottom: 20px;
+      animation: audio-pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes audio-pulse {
+
+      0%,
+      100% {
+        transform: scale(1);
+        opacity: 1;
+      }
+
+      50% {
+        transform: scale(1.1);
+        opacity: .7;
+      }
+    }
+
+    .audio-overlay .audio-text {
+      font-size: 1.2rem;
+      font-weight: 500;
+      color: var(--text);
+      margin-bottom: 8px;
+    }
+
+    .audio-overlay .audio-sub {
+      font-size: .85rem;
+      color: var(--text-dim);
+    }
+
+    /* ─── Error subtitle styling ─── */
+    .subtitle-text.error-subtitle {
+      border-color: rgba(220, 38, 38, .4);
+      background: rgba(220, 38, 38, .1);
+      color: #fca5a5;
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- Debug console (oculto por padrão — habilite com VISUALIZER_DEBUG=true no .env) -->
+  <div id="debug-console" style="display:none; position: absolute; top: 10px; left: 10px; font-family: monospace; font-size: 10px; color: #0f0; background: rgba(0,0,0,0.5); padding: 5px; z-index: 9999; pointer-events: none;">
+    [Orb Debug Mode]<br>
+    <div id="debug-logs"></div>
+  </div>
+
+  <script>
+    var _debugEnabled = false;
+    function logDebug(msg) {
+        if (!_debugEnabled) return;
+        var logs = document.getElementById('debug-logs');
+        if(logs) logs.innerHTML += "> " + msg + "<br>";
+        console.log("[OrbDebug]", msg);
+    }
+    window.onerror = function(m, u, l) { logDebug("ERR: " + m + " (L" + l + ")"); };
+
+    /* Verifica se debug está habilitado via .env */
+    fetch('/api/state').then(function(r){ return r.json(); }).then(function(data){
+      if (data && data.debug === true) {
+        _debugEnabled = true;
+        document.getElementById('debug-console').style.display = 'block';
+        logDebug("Debug ativado via .env");
+      }
+    }).catch(function(){});
+  </script>
+
+  <div class="audio-overlay hidden" id="audio-overlay" style="display: none;">
+    <div class="audio-icon">🔊</div>
+    <div class="audio-text">Clique para ativar o áudio</div>
+    <div class="audio-sub">Necessário para animação reativa à voz da IA</div>
+  </div>
+
+  <header>
+    <div class="dot" id="header-dot"></div>
+    <span>AI Assistente &nbsp;·&nbsp; <span id="state-label">idle</span></span>
+  </header>
+
+  <div class="connection-status" id="conn-status">
+    <div class="conn-dot"></div>
+    <span id="conn-label">Desconectado</span>
+  </div>
+
+  <main>
+    <div class="orb-wrapper particle-neural-core" id="particle-neural-core" data-core-state="idle">
+      <canvas id="neural-particle-canvas" aria-hidden="true"></canvas>
+      <div class="orb-halo" id="orb-halo"></div>
+      <div class="status-ring" id="status-ring"></div>
+      <div id="orb-container"></div>
+    </div>
+  </main>
+
+  <div class="state-info" id="state-info">WebSocket: aguardando...</div>
+
+  <script>
+    /* ================================================================
+       AI Orb Renderer v2.1 — Stark Edition (Inline)
+       ================================================================ */
+    logDebug("Definindo OrbRenderer inline...");
+
+    var OrbRenderer = (function(){
+
+      var STATES = {
+        idle: {
+          speed: 0.12, pulseAmt: 0.15, pulseFreq: 0.35, waveAmt: 0.05,
+          brightness: 1.15, saturation: 0.8, hueShift: 0.0, noiseScale: 0.50,
+          innerR: 0.55, glowSize: 1.40, rotation: 0.04, chromaAber: 0.0,
+          flicker: 0.0, sparks: 0.02
+        },
+        thinking: {
+          speed: 0.25, pulseAmt: 0.20, pulseFreq: 0.6, waveAmt: 0.10,
+          brightness: 1.2, saturation: 0.9, hueShift: -10.0, noiseScale: 0.65,
+          innerR: 0.52, glowSize: 1.45, rotation: 0.15, chromaAber: 0.002,
+          flicker: 0.0, sparks: 0.15
+        },
+        speaking: {
+          speed: 0.30, pulseAmt: 0.12, pulseFreq: 0.8, waveAmt: 0.08,
+          brightness: 1.25, saturation: 1.0, hueShift: 15.0, noiseScale: 0.60,
+          innerR: 0.60, glowSize: 1.50, rotation: 0.10, chromaAber: 0.001,
+          flicker: 0.0, sparks: 0.10
+        },
+        listening: {
+          speed: 0.15, pulseAmt: 0.18, pulseFreq: 0.45, waveAmt: 0.05,
+          brightness: 1.20, saturation: 0.85, hueShift: 30.0, noiseScale: 0.45,
+          innerR: 0.58, glowSize: 1.35, rotation: -0.05, chromaAber: 0.0,
+          flicker: 0.0, sparks: 0.05
+        },
+        executing: {
+          speed: 0.40, pulseAmt: 0.25, pulseFreq: 1.0, waveAmt: 0.15,
+          brightness: 1.30, saturation: 1.05, hueShift: -30.0, noiseScale: 0.70,
+          innerR: 0.50, glowSize: 1.55, rotation: 0.25, chromaAber: 0.004,
+          flicker: 0.0, sparks: 0.30
+        },
+        alert: {
+          speed: 0.60, pulseAmt: 0.30, pulseFreq: 1.5, waveAmt: 0.20,
+          brightness: 1.35, saturation: 1.15, hueShift: -140.0, noiseScale: 0.80,
+          innerR: 0.45, glowSize: 1.60, rotation: 0.40, chromaAber: 0.010,
+          flicker: 0.05, sparks: 0.50
+        },
+        error: {
+          speed: 0.70, pulseAmt: 0.35, pulseFreq: 2.0, waveAmt: 0.25,
+          brightness: 1.30, saturation: 1.10, hueShift: -130.0, noiseScale: 0.90,
+          innerR: 0.48, glowSize: 1.50, rotation: 0.35, chromaAber: 0.015,
+          flicker: 0.15, sparks: 0.60
+        },
+        loading: {
+          speed: 0.20, pulseAmt: 0.10, pulseFreq: 0.5, waveAmt: 0.03,
+          brightness: 1.0, saturation: 0.75, hueShift: 10.0, noiseScale: 0.50,
+          innerR: 0.54, glowSize: 1.30, rotation: 0.20, chromaAber: 0.0,
+          flicker: 0.0, sparks: 0.08
+        },
+        success: {
+          speed: 0.25, pulseAmt: 0.25, pulseFreq: 0.7, waveAmt: 0.04,
+          brightness: 1.35, saturation: 1.0, hueShift: 40.0, noiseScale: 0.55,
+          innerR: 0.60, glowSize: 1.60, rotation: 0.05, chromaAber: 0.0,
+          flicker: 0.0, sparks: 0.20
+        },
+        sleeping: {
+          speed: 0.05, pulseAmt: 0.05, pulseFreq: 0.15, waveAmt: 0.0,
+          brightness: 0.60, saturation: 0.5, hueShift: 0.0, noiseScale: 0.40,
+          innerR: 0.52, glowSize: 1.15, rotation: 0.01, chromaAber: 0.0,
+          flicker: 0.0, sparks: 0.0
+        },
+        warning: {
+          speed: 0.40, pulseAmt: 0.20, pulseFreq: 1.2, waveAmt: 0.12,
+          brightness: 1.20, saturation: 1.0, hueShift: -80.0, noiseScale: 0.65,
+          innerR: 0.50, glowSize: 1.45, rotation: 0.15, chromaAber: 0.005,
+          flicker: 0.05, sparks: 0.25
+        }
+      };
+
+      var VERT = 'precision highp float;'
+        + 'attribute vec2 position;'
+        + 'attribute vec2 uv;'
+        + 'varying vec2 vUv;'
+        + 'void main(){ vUv=uv; gl_Position=vec4(position,0.0,1.0); }';
+
+      var FRAG = 'precision highp float;'
+        + 'uniform float iTime;'
+        + 'uniform vec3  iResolution;'
+        + 'uniform float hue;'
+        + 'uniform float uSpeed;'
+        + 'uniform float uPulseAmt;'
+        + 'uniform float uPulsePhase;'
+        + 'uniform float uWaveAmt;'
+        + 'uniform float uBrightness;'
+        + 'uniform float uSaturation;'
+        + 'uniform float uHueShift;'
+        + 'uniform float uNoiseScale;'
+        + 'uniform float uInnerR;'
+        + 'uniform float uGlowSize;'
+        + 'uniform float uRotation;'
+        + 'uniform float uChromaAber;'
+        + 'uniform float uFlicker;'
+        + 'uniform float uSparks;'
+        + 'uniform float uVolume;'
+        + 'uniform vec3  backgroundColor;'
+        + 'varying vec2  vUv;'
+        // Color helpers
+        + 'vec3 rgb2yiq(vec3 c){ return vec3(dot(c,vec3(.299,.587,.114)),dot(c,vec3(.596,-.274,-.322)),dot(c,vec3(.211,-.523,.312))); }'
+        + 'vec3 yiq2rgb(vec3 c){ return vec3(c.x+.956*c.y+.621*c.z,c.x-.272*c.y-.647*c.z,c.x-1.106*c.y+1.703*c.z); }'
+        + 'vec3 adjustHue(vec3 color, float hDeg){'
+        + '  float h=hDeg*3.14159265/180.0;'
+        + '  vec3 yiq=rgb2yiq(color);'
+        + '  float c2=cos(h); float s2=sin(h);'
+        + '  float i2=yiq.y*c2-yiq.z*s2;'
+        + '  float q2=yiq.y*s2+yiq.z*c2;'
+        + '  yiq.y=i2; yiq.z=q2;'
+        + '  return clamp(yiq2rgb(yiq),0.0,1.0);'
+        + '}'
+        // Hash & Noise
+        + 'vec3 hash33(vec3 p){'
+        + '  p=fract(p*vec3(.1031,.11369,.13787));'
+        + '  p+=dot(p,p.yxz+19.19);'
+        + '  return -1.0+2.0*fract(vec3(p.x+p.y,p.x+p.z,p.y+p.z)*p.zyx);'
+        + '}'
+        + 'float snoise3(vec3 p){'
+        + '  const float K1=.333333333; const float K2=.166666667;'
+        + '  vec3 i=floor(p+(p.x+p.y+p.z)*K1);'
+        + '  vec3 d0=p-(i-(i.x+i.y+i.z)*K2);'
+        + '  vec3 e=step(vec3(0.0),d0-d0.yzx);'
+        + '  vec3 i1=e*(1.0-e.zxy); vec3 i2=1.0-e.zxy*(1.0-e);'
+        + '  vec3 d1=d0-(i1-K2); vec3 d2=d0-(i2-K1); vec3 d3=d0-0.5;'
+        + '  vec4 h=max(0.6-vec4(dot(d0,d0),dot(d1,d1),dot(d2,d2),dot(d3,d3)),0.0);'
+        + '  vec4 n=h*h*h*h*vec4(dot(d0,hash33(i)),dot(d1,hash33(i+i1)),dot(d2,hash33(i+i2)),dot(d3,hash33(i+1.0)));'
+        + '  return dot(vec4(31.316),n);'
+        + '}'
+        + 'float hash21(vec2 p){ p=fract(p*vec2(127.1,311.7)); p+=dot(p,p+19.19); return fract(p.x*p.y); }'
+        // Light helpers
+        + 'float light1(float i,float a,float d){return i/(1.0+d*a);}'
+        + 'float light2(float i,float a,float d){return i/(1.0+d*d*a);}'
+        + 'vec4 extractAlpha(vec3 c){ float a=max(max(c.r,c.g),c.b); return vec4(c/(a+1e-5),a); }'
+        // Original palette
+        + 'const vec3 baseColor1=vec3(0.95,0.98,1.0);'   // bright white/cyan
+        + 'const vec3 baseColor2=vec3(0.06,0.72,0.51);'   // emerald green
+        + 'const vec3 baseColor3=vec3(0.02,0.15,0.12);'   // dark emerald
+        // Spark helper
+        + 'float spark(vec2 uv, vec2 pos, float size){'
+        + '  float d=length(uv-pos);'
+        + '  return smoothstep(size,0.0,d)*light2(1.0,800.0,d);'
+        + '}'
+        // Main draw
+        + 'vec4 draw(vec2 uv){'
+        + '  float totalHue = hue + uHueShift;'
+        + '  vec3 c1=adjustHue(baseColor1,totalHue);'
+        + '  vec3 c2=adjustHue(baseColor2,totalHue);'
+        + '  vec3 c3=adjustHue(baseColor3,totalHue);'
+        + '  float ang = atan(uv.y, uv.x);'
+        + '  float len = length(uv);'
+        + '  float invLen = len > 0.0 ? 1.0/len : 0.0;'
+        + '  float bgLum = dot(backgroundColor, vec3(.299,.587,.114));'
+        + '  float pulse = sin(uPulsePhase * 6.2832) * uPulseAmt;'
+        + '  pulse += uVolume * uPulseAmt * 2.0;'
+        + '  float n0 = snoise3(vec3(uv*uNoiseScale, iTime*uSpeed))*0.5+0.5;'
+        + '  float innerR = uInnerR + pulse;'
+        + '  float r0 = mix(mix(innerR,1.0,0.4), mix(innerR,1.0,0.6), n0);'
+        // Core glow
+        + '  float d0 = distance(uv, (r0*invLen)*uv);'
+        + '  float v0 = light1(1.0, 10.0, d0);'
+        + '  v0 *= smoothstep(r0*1.05, r0, len);'
+        + '  float innerFade = smoothstep(r0*0.75, r0*0.92, len);'
+        + '  v0 *= mix(innerFade, 1.0, bgLum*0.7);'
+        // Orbiting highlight 1
+        + '  float a2 = iTime * uSpeed * -1.5;'
+        + '  vec2 hPos = vec2(cos(a2), sin(a2)) * r0;'
+        + '  float d1 = distance(uv, hPos);'
+        + '  float v1 = light2(1.5, 5.0, d1) * light1(1.0, 50.0, d0);'
+        // Orbiting highlight 2
+        + '  float a3 = iTime * uSpeed * 0.8 + 1.5;'
+        + '  vec2 hPos2 = vec2(cos(a3)*0.8, sin(a3)*0.8) * r0;'
+        + '  float d2b = distance(uv, hPos2);'
+        + '  float v1b = light2(0.8, 8.0, d2b) * light1(1.0, 60.0, d0);'
+        // Fade masks
+        + '  float v2 = smoothstep(uGlowSize*0.92, mix(innerR, 1.0, n0*0.5), len);'
+        + '  float v3 = smoothstep(innerR*0.9, mix(innerR, 1.0, 0.5), len);'
+        // Sparks
+        + '  float sparkVal = 0.0;'
+        + '  if(uSparks > 0.05){'
+        + '    for(int i=0;i<6;i++){'
+        + '      float fi=float(i);'
+        + '      float angle = iTime*uSpeed*1.3 + fi*1.047 + sin(iTime*0.7+fi)*0.5;'
+        + '      float radius = r0*(0.85+0.15*sin(iTime*1.2+fi*2.3));'
+        + '      vec2 sPos = vec2(cos(angle), sin(angle)) * radius;'
+        + '      float sz = 0.04 * (0.5+0.5*sin(iTime*2.0+fi));'
+        + '      sparkVal += spark(uv, sPos, sz) * uSparks;'
+        + '    }'
+        + '  }'
+        // Flicker
+        + '  float flickerMult = 1.0;'
+        + '  if(uFlicker > 0.01){'
+        + '    float ft = floor(iTime*18.0);'
+        + '    flickerMult = 1.0 - uFlicker * hash21(vec2(ft, 3.7));'
+        + '  }'
+        // Angular color blend
+        + '  float cl = cos(ang + iTime*uSpeed*1.5)*0.5+0.5;'
+        // Compose
+        + '  vec3 colBase = mix(c1, c2, cl) * uSaturation;'
+        + '  colBase = mix(colBase, colBase * 1.3, uBrightness - 1.0);'
+        + '  float fadeAmt = mix(1.0, 0.1, bgLum);'
+        + '  vec3 darkCol = mix(c3, colBase, v0);'
+        + '  darkCol = (darkCol + v1 + v1b) * v2 * v3;'
+        + '  darkCol += vec3(sparkVal) * colBase;'
+        + '  darkCol = clamp(darkCol * uBrightness * flickerMult, 0.0, 1.0);'
+        + '  vec3 lightCol = (colBase + v1 + v1b) * mix(1.0, v2*v3, fadeAmt);'
+        + '  lightCol = mix(backgroundColor, lightCol, v0);'
+        + '  lightCol += vec3(sparkVal) * colBase;'
+        + '  lightCol = clamp(lightCol * uBrightness * flickerMult, 0.0, 1.0);'
+        + '  vec3 fc = mix(darkCol, lightCol, bgLum);'
+        + '  return extractAlpha(fc);'
+        + '}'
+        // Entry point
+        + 'vec4 mainImage(vec2 fragCoord){'
+        + '  vec2 center = iResolution.xy * 0.5;'
+        + '  float sz = min(iResolution.x, iResolution.y);'
+        + '  vec2 uv = (fragCoord - center) / sz * 2.0;'
+        + '  float s2=sin(uRotation); float c2=cos(uRotation);'
+        + '  uv = vec2(c2*uv.x-s2*uv.y, s2*uv.x+c2*uv.y);'
+        + '  float ph = uPulsePhase * 6.2832;'
+        + '  float volWave = uVolume * 0.7;'
+        + '  float baseWave = uWaveAmt * 0.06;'
+        + '  float wave = baseWave + volWave * uWaveAmt;'
+        + '  float t1 = iTime * uSpeed * 2.5;'
+        + '  uv.x += wave * 0.55 * sin(uv.y * 4.5 + t1 + ph * 0.3);'
+        + '  uv.y += wave * 0.55 * sin(uv.x * 4.5 + t1 * 1.1 + ph * 0.4);'
+        + '  uv.x += wave * 0.30 * sin(uv.y * 11.0 + t1 * 1.7 + 2.0);'
+        + '  uv.y += wave * 0.30 * sin(uv.x * 9.5  + t1 * 1.5 + 3.1);'
+        + '  float fineWave = wave * volWave * 0.6;'
+        + '  uv.x += fineWave * sin(uv.y * 22.0 + t1 * 3.0 + 5.0);'
+        + '  uv.y += fineWave * sin(uv.x * 18.0 + t1 * 2.8 + 7.0);'
+        + '  return draw(uv);'
+        + '}'
+        + 'void main(){'
+        + '  vec2 fc = vUv * iResolution.xy;'
+        + '  vec4 col = mainImage(fc);'
+        + '  gl_FragColor = vec4(col.rgb * col.a, col.a);'
+        + '}';
+
+      var UNIFORM_NAMES = ['iTime','iResolution','hue','uSpeed','uPulseAmt','uPulsePhase','uWaveAmt','uBrightness','uSaturation','uHueShift','uNoiseScale','uInnerR','uGlowSize','uRotation','uChromaAber','uFlicker','uSparks','uVolume','backgroundColor'];
+
+      function Renderer(container, opts) {
+        opts = opts || {};
+        this.container = container;
+        this.hue = opts.hue || 0;
+        this.bgColor = opts.backgroundColor || [0.024, 0.031, 0.071];
+        this._current = {};
+        this._target = {};
+        var idle = STATES.idle;
+        for (var k in idle) { this._current[k] = idle[k]; this._target[k] = idle[k]; }
+        this._rot = 0;
+        this._lastTs = 0;
+        this._pulsePhase = 0;
+        this._volume = 0;
+        this.canvas = document.createElement('canvas');
+        this.canvas.style.cssText = 'width:100%;height:100%;display:block;';
+        container.appendChild(this.canvas);
+        this.gl = this.canvas.getContext('webgl', { alpha: true });
+        if (!this.gl) { logDebug("ERRO: WebGL indisponível!"); return; }
+        this._build();
+        this._resize();
+        var self = this;
+        window.addEventListener('resize', function(){ self._resize(); });
+        this._loop(0);
+        logDebug("WebGL render loop iniciado.");
+      }
+
+      Renderer.prototype.setState = function(name) {
+        var def = STATES[name];
+        if (def) {
+          for (var k in def) this._target[k] = def[k];
+          this.container.dataset.orbState = name;
+        }
+      };
+
+      Renderer.prototype.setVolume = function(v) { this._volume = v; };
+
+      Renderer.prototype._compile = function(type, src) {
+        var gl = this.gl;
+        var s = gl.createShader(type);
+        gl.shaderSource(s, src);
+        gl.compileShader(s);
+        if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+          logDebug("Shader erro: " + gl.getShaderInfoLog(s));
+          return null;
+        }
+        return s;
+      };
+
+      Renderer.prototype._build = function() {
+        var gl = this.gl;
+        var vs = this._compile(gl.VERTEX_SHADER, VERT);
+        var fs = this._compile(gl.FRAGMENT_SHADER, FRAG);
+        if (!vs || !fs) { logDebug("ERRO: Shaders falharam!"); return; }
+        this.pgm = gl.createProgram();
+        gl.attachShader(this.pgm, vs);
+        gl.attachShader(this.pgm, fs);
+        gl.linkProgram(this.pgm);
+        if (!gl.getProgramParameter(this.pgm, gl.LINK_STATUS)) {
+          logDebug("ERRO Link: " + gl.getProgramInfoLog(this.pgm));
+          return;
+        }
+        gl.useProgram(this.pgm);
+        var posBuf = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, posBuf);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
+        var posLoc = gl.getAttribLocation(this.pgm, 'position');
+        gl.enableVertexAttribArray(posLoc);
+        gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
+        var uvBuf = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, uvBuf);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0,0, 2,0, 0,2]), gl.STATIC_DRAW);
+        var uvLoc = gl.getAttribLocation(this.pgm, 'uv');
+        gl.enableVertexAttribArray(uvLoc);
+        gl.vertexAttribPointer(uvLoc, 2, gl.FLOAT, false, 0, 0);
+        this.u = {};
+        for (var i = 0; i < UNIFORM_NAMES.length; i++) {
+          this.u[UNIFORM_NAMES[i]] = gl.getUniformLocation(this.pgm, UNIFORM_NAMES[i]);
+        }
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+        logDebug("Shaders compilados OK.");
+      };
+
+      Renderer.prototype._resize = function() {
+        var dpr = window.devicePixelRatio || 1;
+        this.canvas.width = this.container.clientWidth * dpr;
+        this.canvas.height = this.container.clientHeight * dpr;
+        this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+      };
+
+      Renderer.prototype._loop = function(ts) {
+        var self = this;
+        requestAnimationFrame(function(t){ self._loop(t); });
+        if (!this.pgm) return;
+        var t = ts * 0.001;
+        var dt = this._lastTs ? t - this._lastTs : 0.016;
+        this._lastTs = t;
+        var k = Math.min(dt * 4.0, 1.0);
+        for (var key in this._target) {
+          this._current[key] += (this._target[key] - this._current[key]) * k;
+        }
+        this._rot += this._current.rotation * dt;
+        this._pulsePhase += this._current.pulseFreq * dt;
+        var gl = this.gl;
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.uniform1f(this.u.iTime, t);
+        gl.uniform3f(this.u.iResolution, this.canvas.width, this.canvas.height, 1.0);
+        gl.uniform1f(this.u.hue, this.hue);
+        gl.uniform1f(this.u.uSpeed, this._current.speed);
+        gl.uniform1f(this.u.uPulseAmt, this._current.pulseAmt);
+        gl.uniform1f(this.u.uPulsePhase, this._pulsePhase);
+        gl.uniform1f(this.u.uWaveAmt, this._current.waveAmt);
+        gl.uniform1f(this.u.uBrightness, this._current.brightness);
+        gl.uniform1f(this.u.uSaturation, this._current.saturation);
+        gl.uniform1f(this.u.uHueShift, this._current.hueShift);
+        gl.uniform1f(this.u.uNoiseScale, this._current.noiseScale);
+        gl.uniform1f(this.u.uInnerR, this._current.innerR);
+        gl.uniform1f(this.u.uGlowSize, this._current.glowSize);
+        gl.uniform1f(this.u.uRotation, this._rot);
+        gl.uniform1f(this.u.uChromaAber, this._current.chromaAber);
+        gl.uniform1f(this.u.uFlicker, this._current.flicker);
+        gl.uniform1f(this.u.uSparks, this._current.sparks);
+        gl.uniform1f(this.u.uVolume, this._volume);
+        gl.uniform3f(this.u.backgroundColor, this.bgColor[0], this.bgColor[1], this.bgColor[2]);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+      };
+
+      return Renderer;
+    })();
+
+    logDebug("OrbRenderer definido: " + (typeof OrbRenderer));
+
+    /* ── Orb init ── */
+    var orb;
+    try {
+        var container = document.getElementById('orb-container');
+        orb = new OrbRenderer(container, {
+          hue: 0
+        });
+        logDebug("Orb Stark inicializado!");
+    } catch(e) {
+        logDebug("ERRO init: " + e.message);
+    }
+
+    /* Ativa o estado idle imediatamente para mostrar o ring neon */
+    function setOrbStateEarly(name) {
+      if (!orb) return;
+      orb.setState(name);
+      var meta = {
+        idle:    { accent:'#10b981', halo:'rgba(16,185,129,.20)', ring:'#10b981', ringFill:'25%' },
+        thinking:{ accent:'#059669', halo:'rgba(5,150,105,.25)', ring:'#34d399', ringFill:'60%' },
+        speaking:{ accent:'#06b6d4', halo:'rgba(6,182,212,.25)',  ring:'#67e8f9', ringFill:'80%' },
+        listening:{ accent:'#3b82f6', halo:'rgba(59,130,246,.22)', ring:'#60a5fa', ringFill:'45%' },
+        executing:{ accent:'#f59e0b', halo:'rgba(245,158,11,.24)', ring:'#fbbf24', ringFill:'72%' },
+        alert:{ accent:'#f43f5e', halo:'rgba(244,63,94,.32)', ring:'#fb7185', ringFill:'100%' }
+      };
+      var m = meta[name] || meta.idle;
+      var ring = document.getElementById('status-ring');
+      if (ring) {
+        ring.style.setProperty('--ring-color', m.ring);
+        ring.style.setProperty('--ring-fill', m.ringFill);
+      }
+      var halo = document.getElementById('orb-halo');
+      if (halo) halo.style.background = 'radial-gradient(circle, ' + m.halo + ' 0%, transparent 70%)';
+    }
+    setOrbStateEarly('idle');
+  </script>
+  <script>
+    /* ── State metadata ── */
+    const STATE_META = {
+      idle: {
+        accent: '#10b981',
+        halo: 'rgba(16,185,129,.20)',
+        ring: '#10b981',
+        ringFill: '25%',
+      },
+      thinking: {
+        accent: '#059669',
+        halo: 'rgba(5,150,105,.25)',
+        ring: '#34d399',
+        ringFill: '60%',
+      },
+      speaking: {
+        accent: '#06b6d4',
+        halo: 'rgba(6,182,212,.25)',
+        ring: '#67e8f9',
+        ringFill: '80%',
+      },
+      listening: {
+        accent: '#3b82f6',
+        halo: 'rgba(59,130,246,.22)',
+        ring: '#60a5fa',
+        ringFill: '45%',
+      },
+      executing: {
+        accent: '#f59e0b',
+        halo: 'rgba(245,158,11,.24)',
+        ring: '#fbbf24',
+        ringFill: '72%',
+      },
+      alert: {
+        accent: '#f43f5e',
+        halo: 'rgba(244,63,94,.32)',
+        ring: '#fb7185',
+        ringFill: '100%',
+      },
+      error: {
+        accent: '#dc2626',
+        halo: 'rgba(220,38,38,.30)',
+        ring: '#ef4444',
+        ringFill: '100%',
+      },
+      loading: {
+        accent: '#3b82f6',
+        halo: 'rgba(59,130,246,.22)',
+        ring: '#60a5fa',
+        ringFill: '50%',
+      },
+      success: {
+        accent: '#22c55e',
+        halo: 'rgba(34,197,94,.28)',
+        ring: '#4ade80',
+        ringFill: '100%',
+      },
+      sleeping: {
+        accent: '#6366f1',
+        halo: 'rgba(99,102,241,.12)',
+        ring: '#818cf8',
+        ringFill: '10%',
+      },
+      warning: {
+        accent: '#f59e0b',
+        halo: 'rgba(245,158,11,.25)',
+        ring: '#fbbf24',
+        ringFill: '70%',
+      },
+    };
+
+    /* ── Map backend states to orb states ── */
+    function mapState(backendStatus) {
+      const mapping = {
+        'idle': 'idle',
+        'speaking': 'speaking',
+        'thinking': 'thinking',
+        'listening': 'listening',
+        'executing': 'executing',
+        'alert': 'alert',
+        'error': 'alert',
+        'loading': 'loading',
+        'success': 'success',
+        'sleeping': 'sleeping',
+        'warning': 'warning',
+      };
+      return mapping[backendStatus] || 'idle';
+    }
+
+    let currentState = 'idle';
+
+    /* State name translations for display */
+    const STATE_LABELS = {
+      idle: 'Inativo',
+      thinking: 'Pensando',
+      speaking: 'Falando',
+      listening: 'Escutando',
+      executing: 'Executando',
+      alert: 'Alerta',
+      error: 'Erro',
+      loading: 'Carregando',
+      success: 'Sucesso',
+      sleeping: 'Dormindo',
+      warning: 'Aviso',
+    };
+
+    class ParticleNeuralCore {
+      constructor(canvas, stateMeta) {
+        this.canvas = canvas;
+        this.ctx = canvas ? canvas.getContext('2d') : null;
+        this.stateMeta = stateMeta || {};
+        this.state = 'idle';
+        this.emotion = 'neutral';
+        this.volume = 0;
+        this.frame = 0;
+        this.particles = [];
+        this.reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        this.config = this.configForState('idle');
+        this.initParticles();
+        this.resize();
+        window.addEventListener('resize', () => this.resize());
+        this.loop();
+      }
+
+      configForState(name) {
+        const defaults = {
+          hue: 196,
+          accent: '#38bdf8',
+          density: 132,
+          speed: 0.36,
+          spin: 0.55,
+          link: 24,
+          radius: 0.74,
+          depth: 0.22,
+          lattice: 0.62,
+          scan: 0.42,
+          jitter: 0.22,
+          pulse: 0.18,
+          brightness: 0.52,
+          alpha: 0.58,
+        };
+        const stateConfig = {
+          idle: { hue: 260, accent: '#8b5cf6', density: 118, speed: 0.16, spin: 0.32, link: 22, radius: 0.70, depth: 0.18, lattice: 0.46, scan: 0.12, jitter: 0.10, pulse: 0.10, brightness: 0.38, alpha: 0.42 },
+          listening: { hue: 156, accent: '#34d399', density: 136, speed: 0.30, spin: 0.50, link: 25, radius: 0.74, depth: 0.22, lattice: 0.60, scan: 0.48, jitter: 0.18, pulse: 0.42, brightness: 0.66, alpha: 0.56 },
+          thinking: { hue: 276, accent: '#a855f7', density: 148, speed: 0.46, spin: 0.72, link: 27, radius: 0.76, depth: 0.25, lattice: 0.76, scan: 0.40, jitter: 0.25, pulse: 0.56, brightness: 0.72, alpha: 0.64 },
+          speaking: { hue: 194, accent: '#38bdf8', density: 146, speed: 0.40, spin: 0.58, link: 28, radius: 0.75, depth: 0.24, lattice: 0.70, scan: 0.56, jitter: 0.24, pulse: 0.64, brightness: 0.78, alpha: 0.68 },
+          executing: { hue: 42, accent: '#fbbf24', density: 156, speed: 0.62, spin: 0.86, link: 29, radius: 0.78, depth: 0.26, lattice: 0.84, scan: 0.72, jitter: 0.32, pulse: 0.76, brightness: 1.08, alpha: 0.86 },
+          alert: { hue: 348, accent: '#fb7185', density: 164, speed: 0.78, spin: 1.04, link: 30, radius: 0.80, depth: 0.28, lattice: 0.88, scan: 0.86, jitter: 0.40, pulse: 0.92, brightness: 1.16, alpha: 0.9 },
+          loading: { hue: 215, accent: '#60a5fa', density: 134, speed: 0.38, spin: 0.56, link: 25, radius: 0.74, depth: 0.22, lattice: 0.58, scan: 0.62, jitter: 0.20, pulse: 0.44, brightness: 0.62, alpha: 0.54 },
+          success: { hue: 132, accent: '#4ade80', density: 132, speed: 0.28, spin: 0.46, link: 26, radius: 0.74, depth: 0.21, lattice: 0.60, scan: 0.36, jitter: 0.16, pulse: 0.36, brightness: 0.64, alpha: 0.56 },
+          warning: { hue: 42, accent: '#fbbf24', density: 152, speed: 0.58, spin: 0.82, link: 29, radius: 0.78, depth: 0.25, lattice: 0.80, scan: 0.72, jitter: 0.30, pulse: 0.72, brightness: 0.80, alpha: 0.70 },
+          sleeping: { hue: 236, accent: '#818cf8', density: 86, speed: 0.08, spin: 0.16, link: 20, radius: 0.60, depth: 0.12, lattice: 0.28, scan: 0.04, jitter: 0.04, pulse: 0.04, brightness: 0.22, alpha: 0.24 },
+        };
+        return Object.assign({}, defaults, stateConfig[name] || {});
+      }
+
+      emotionConfig(emotion) {
+        const table = {
+          neutral: { hueShift: 0, warmth: 0 },
+          happy: { hueShift: -18, warmth: 0.12 },
+          sad: { hueShift: 24, warmth: -0.08 },
+          surprised: { hueShift: -38, warmth: 0.18 },
+        };
+        return table[emotion] || table.neutral;
+      }
+
+      initParticles() {
+        this.particles = [];
+        const count = Math.max(40, this.config.density || 72);
+        const GOLDEN_ANGLE = 2.399963229728653;
+        for (let i = 0; i < count; i++) {
+          const seed = (i + 0.5) / count;
+          const lane = (i % 17) / 17;
+          this.particles.push({
+            seed,
+            lon: i * GOLDEN_ANGLE,
+            lane,
+            shell: 0.93 + (i % 5) * 0.018,
+            drift: 0.78 + (i % 7) * 0.045,
+            pulse: (i % 11) * 0.57,
+            size: 0.72 + (i % 13) * 0.035,
+            x: 0,
+            y: 0,
+            z: 0,
+            sx: 0,
+            sy: 0,
+            glow: 0,
+          });
+        }
+      }
+
+      resize() {
+        if (!this.canvas || !this.ctx) return;
+        const rect = this.canvas.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+        this.width = Math.max(1, Math.round(rect.width * dpr));
+        this.height = Math.max(1, Math.round(rect.height * dpr));
+        this.canvas.width = this.width;
+        this.canvas.height = this.height;
+        this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        this.cssWidth = rect.width;
+        this.cssHeight = rect.height;
+      }
+
+      setState(name) {
+        this.state = this.configForState(name) ? name : 'idle';
+        this.config = this.configForState(this.state);
+        const root = document.getElementById('particle-neural-core');
+        if (root) root.setAttribute('data-core-state', this.state);
+        this.initParticles();
+      }
+
+      setEmotion(emotion) {
+        this.emotion = emotion || 'neutral';
+      }
+
+      setVolume(v) {
+        this.volume = Math.max(0, Math.min(1, Number.isFinite(v) ? v : 0));
+      }
+
+      hsla(h, s, l, a) {
+        const hue = ((h % 360) + 360) % 360;
+        return `hsla(${hue}, ${s}%, ${l}%, ${a})`;
+      }
+
+      projectPoint(p, t, cx, cy, r, statePulse, volumeBoost) {
+        const speed = this.reducedMotion ? 0.08 : this.config.speed;
+        const baseY = 1 - 2 * p.seed;
+        const baseR = Math.sqrt(Math.max(0, 1 - baseY * baseY));
+        const lon = p.lon + t * this.config.spin * p.drift;
+        const x0 = Math.cos(lon) * baseR;
+        const z0 = Math.sin(lon) * baseR;
+
+        const latLine = Math.pow(Math.max(0, 1 - Math.abs(Math.sin(baseY * 42 + t * 0.55))), 18);
+        const meridianLine = Math.pow(Math.max(0, 1 - Math.abs(Math.sin(lon * 10 + t * 0.85 + baseY * 2))), 15);
+        const diagonalLine = Math.pow(Math.max(0, 1 - Math.abs(Math.sin(lon * 7 - baseY * 24 - t * 1.15))), 16);
+        const scanBand = Math.pow(Math.max(0, 1 - Math.abs(Math.sin((baseY * 3.2 + t * 0.52) * Math.PI * 2))), 13);
+        const equator = Math.pow(Math.max(0, 1 - Math.abs(baseY) * 8), 5);
+        const spark = Math.pow(Math.max(0, Math.sin(p.lane * 31 + t * 4.2 + lon * 0.4)), 22);
+        const grid = Math.min(1, latLine * 0.65 + meridianLine * 0.75 + diagonalLine * 0.45);
+        const ripple = Math.sin(lon * 5 + baseY * 15 + t * 1.8) * 0.55 + Math.cos(lon * 8 - baseY * 9 - t * 1.3) * 0.45;
+        const shell = p.shell - this.config.depth * 0.12 + this.config.depth * p.lane * 0.08;
+        const radius = r * this.config.radius * shell
+          + ripple * this.config.jitter * (1.3 + statePulse * 0.45)
+          + grid * this.config.lattice * 2.6
+          + scanBand * this.config.scan * 2.2
+          + equator * this.config.lattice * 1.4
+          + spark * (1.4 + volumeBoost * 3.2);
+
+        let x = x0 * radius;
+        let y = baseY * radius;
+        let z = z0 * radius;
+        const flow = (grid * this.config.lattice * 1.6 + scanBand * this.config.scan * 1.2 + spark * 2.0) * Math.sin(t * 1.7 + lon * 0.2 + p.pulse);
+        x += -z0 * flow;
+        z += x0 * flow;
+        y += (latLine - diagonalLine) * this.config.lattice * 0.85 + scanBand * this.config.scan * Math.sin(t * 2.4) * 0.75;
+
+        const rot = t * this.config.spin + baseY * 0.95;
+        const ca = Math.cos(rot);
+        const sa = Math.sin(rot);
+        const xA = x * ca - z * sa;
+        const zA = x * sa + z * ca;
+        const tilt = Math.sin(t * 0.22) * 0.18;
+        const ct = Math.cos(tilt);
+        const st = Math.sin(tilt);
+        const yB = y * ct - zA * st;
+        const zB = y * st + zA * ct;
+        const perspective = 1 / (1 + (zB / Math.max(1, r)) * 0.38);
+
+        p.x = xA;
+        p.y = yB;
+        p.z = zB;
+        p.sx = cx + xA * perspective;
+        p.sy = cy + yB * perspective;
+        p.glow = Math.min(1, grid * this.config.lattice * 0.72 + scanBand * this.config.scan * 0.62 + equator * 0.28 + spark + volumeBoost * 0.56);
+      }
+
+      drawSphereShell(ctx, cx, cy, r, t, brightness, hue, statePulse) {
+        const shellR = r * this.config.radius * 0.98;
+        const rimAlpha = Math.min(0.58, 0.12 + brightness * 0.18 + statePulse * 0.12);
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.strokeStyle = this.hsla(hue, 88, 66, rimAlpha);
+        ctx.lineWidth = 0.8 + statePulse * 0.6;
+        ctx.beginPath();
+        ctx.arc(cx, cy, shellR, 0, Math.PI * 2);
+        ctx.stroke();
+
+        for (let k = -2; k <= 2; k++) {
+          const y = k * shellR * 0.22;
+          const w = shellR * Math.sqrt(Math.max(0.08, 1 - (y / shellR) * (y / shellR)));
+          ctx.globalAlpha = 0.09 + Math.abs(k) * 0.012 + statePulse * 0.03;
+          ctx.beginPath();
+          ctx.ellipse(cx, cy + y, w, Math.max(2, w * 0.16), Math.sin(t * 0.18) * 0.15, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
+        for (let k = 0; k < 3; k++) {
+          ctx.globalAlpha = 0.10 + statePulse * 0.03;
+          ctx.beginPath();
+          ctx.ellipse(cx, cy, shellR * (0.42 + k * 0.20), shellR, t * 0.24 + k * Math.PI / 3, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
+        const scanY = Math.sin(t * 1.15) * shellR * 0.68;
+        ctx.globalAlpha = Math.min(0.42, 0.12 + this.config.scan * brightness * 0.22);
+        ctx.lineWidth = 1.1 + statePulse * 1.2;
+        ctx.beginPath();
+        ctx.ellipse(cx, cy + scanY, shellR * Math.sqrt(Math.max(0.04, 1 - (scanY / shellR) * (scanY / shellR))), Math.max(2, shellR * 0.035), 0, 0, Math.PI * 2);
+        ctx.stroke();
+
+        const neuralAnchorCount = 72;
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.shadowColor = this.hsla(hue, 98, 70, 0.78);
+        ctx.shadowBlur = 5 + statePulse * 8;
+        for (let i = 0; i < neuralAnchorCount; i++) {
+          const a = i * 2.399963229728653 + t * (0.18 + this.config.spin * 0.16);
+          const yNorm = Math.sin(i * 1.73 + t * 0.34) * 0.86;
+          const xNorm = Math.cos(a) * Math.sqrt(Math.max(0.08, 1 - yNorm * yNorm));
+          const zNorm = Math.sin(a) * Math.sqrt(Math.max(0.08, 1 - yNorm * yNorm));
+          const front = 0.58 + zNorm * 0.42;
+          const anchorAlpha = Math.min(0.95, 0.28 + front * 0.34 + statePulse * 0.16);
+          ctx.globalAlpha = anchorAlpha;
+          ctx.fillStyle = this.hsla(hue + zNorm * 32, 96, 58 + front * 20, anchorAlpha);
+          ctx.beginPath();
+          ctx.arc(cx + xNorm * shellR * 0.95, cy + yNorm * shellR * 0.95, 1.25 + front * 1.35 + statePulse * 0.55, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.shadowBlur = 0;
+        ctx.restore();
+      }
+
+      draw() {
+        if (!this.ctx) return;
+        const ctx = this.ctx;
+        const w = this.cssWidth || this.canvas.clientWidth || 190;
+        const h = this.cssHeight || this.canvas.clientHeight || 190;
+        const cx = w / 2;
+        const cy = h / 2;
+        const r = Math.min(w, h) * 0.43;
+        const t = this.frame * 0.016;
+        const emotion = this.emotionConfig(this.emotion);
+        const name = this.state;
+        const statePulse = name === 'idle' ? 0.16 : 0.9;
+        const volumeBoost = this.state === 'speaking' ? this.volume : 0;
+        const pulseWave = Math.max(0, Math.sin(t * (1.4 + this.config.speed) + this.config.spin));
+        const brightness = this.config.brightness + pulseWave * this.config.pulse * statePulse + volumeBoost * 0.72 + emotion.warmth;
+        const hue = this.config.hue + emotion.hueShift + Math.sin(t * 0.32) * 8 * statePulse;
+
+        ctx.clearRect(0, 0, w, h);
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+
+        const core = ctx.createRadialGradient(cx, cy, 2, cx, cy, r * 0.72);
+        core.addColorStop(0, this.hsla(hue, 94, Math.min(78, 48 + brightness * 22), 0.22 + brightness * 0.12));
+        core.addColorStop(0.42, this.hsla(hue + 24, 88, 44, 0.08 + brightness * 0.08));
+        core.addColorStop(1, this.hsla(hue + 42, 92, 34, 0));
+        ctx.fillStyle = core;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r * 0.78, 0, Math.PI * 2);
+        ctx.fill();
+
+        this.drawSphereShell(ctx, cx, cy, r, t, brightness, hue, statePulse);
+
+        for (let i = 0; i < this.particles.length; i++) {
+          this.projectPoint(this.particles[i], t, cx, cy, r, statePulse, volumeBoost);
+        }
+
+        const linkLimit = this.config.link + brightness * 7;
+        for (let i = 0; i < this.particles.length; i++) {
+          const a = this.particles[i];
+          const next = this.particles[(i + 1) % this.particles.length];
+          const jump = this.particles[(i + 17) % this.particles.length];
+          for (let pass = 0; pass < 2; pass++) {
+            const b = pass === 0 ? next : jump;
+            const d = Math.hypot(a.sx - b.sx, a.sy - b.sy);
+            if (d > linkLimit) continue;
+            const alpha = (1 - d / linkLimit) * this.config.alpha * (pass === 0 ? 0.30 : 0.18) * (0.8 + brightness);
+            const linkAlpha = Math.min(0.55, Math.max(0.04, alpha + statePulse * 0.035));
+            ctx.beginPath();
+            ctx.moveTo(a.sx, a.sy);
+            ctx.lineTo(b.sx, b.sy);
+            ctx.strokeStyle = this.hsla(hue + (a.glow + b.glow) * -42, 92, 66, linkAlpha);
+            ctx.lineWidth = 0.35 + (a.glow + b.glow) * 0.28 + statePulse * 0.12;
+            ctx.stroke();
+          }
+        }
+
+        for (let i = 0; i < this.particles.length; i++) {
+          const p = this.particles[i];
+          const depth = Math.max(0.2, Math.min(1, 0.52 + p.z / Math.max(1, r * 1.7)));
+          const glow = p.glow;
+          const lit = Math.min(86, 38 + depth * 18 + glow * 28 + brightness * 18);
+          const alpha = Math.min(0.95, this.config.alpha * (0.36 + depth * 0.42 + glow * 0.62));
+          const particleAlpha = Math.min(1, 0.44 + alpha + glow * 0.2 + statePulse * 0.18);
+          ctx.globalCompositeOperation = 'source-over';
+          ctx.shadowBlur = 6 + glow * 10 + statePulse * 4;
+          ctx.shadowColor = this.hsla(hue - glow * 54 + depth * 16, 98, 72, 0.75);
+          ctx.beginPath();
+          ctx.globalAlpha = particleAlpha;
+          ctx.fillStyle = this.hsla(hue - glow * 54 + depth * 16, 98, Math.min(96, lit + 18), particleAlpha);
+          ctx.arc(p.sx, p.sy, p.size * (2.2 + depth * 1.7 + glow * 2.1 + volumeBoost * 1.6), 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.shadowBlur = 0;
+        ctx.restore();
+
+        if (this.frame === 1 && window && window.console) {
+          console.log('[ParticleCore] Ordered Neural Sphere active');
+        }
+      }
+
+      loop() {
+        this.frame += 1;
+        this.draw();
+        requestAnimationFrame(() => this.loop());
+      }
+    }
+
+    window.ParticleNeuralCore = ParticleNeuralCore;
+
+    const particleCore = new ParticleNeuralCore(
+      document.getElementById('neural-particle-canvas'),
+      STATE_META
+    );
+
+    function setOrbState(name) {
+      if (name === currentState) return;
+      currentState = name;
+
+      /* Update orb */
+      orb.setState(name);
+      particleCore.setState(name);
+      if (name !== 'speaking') {
+        orb.setVolume(0);
+        particleCore.setVolume(0);
+      }
+
+      const meta = STATE_META[name] || STATE_META.idle;
+
+      /* Update header */
+      document.getElementById('state-label').textContent = STATE_LABELS[name] || name;
+      const dot = document.getElementById('header-dot');
+      dot.style.setProperty('--accent', meta.accent);
+      dot.style.background = meta.accent;
+      dot.style.boxShadow = `0 0 8px ${meta.accent}`;
+
+      /* Update halo */
+      document.getElementById('orb-halo').style.background =
+        `radial-gradient(circle, ${meta.halo} 0%, transparent 70%)`;
+
+      /* Update ring */
+      const ring = document.getElementById('status-ring');
+      ring.style.setProperty('--ring-color', meta.ring);
+      ring.style.setProperty('--ring-fill', meta.ringFill);
+    }
+
+    /* ── Subtitle ── */
+    function setSubtitle(text, isError = false) {
+      const el = document.getElementById('subtitle');
+      if (!el) return;
+      if (text && text.trim()) {
+        el.textContent = text;
+        el.classList.add('visible');
+        el.classList.toggle('error-subtitle', isError);
+      } else {
+        el.classList.remove('visible');
+        el.classList.remove('error-subtitle');
+      }
+    }
+
+    /* ── Audio Context for analyzing audio and driving animation ── */
+    let audioContext = null;
+    let audioAnalyser = null;
+    let audioDataArray = null;
+    let currentAudioSource = null;
+    let audioAnimFrame = null;
+    let audioReady = false;
+
+    function ensureAudioContext() {
+      if (!audioContext) {
+        try {
+          audioContext = new (window.AudioContext || window.webkitAudioContext)();
+          audioAnalyser = audioContext.createAnalyser();
+          audioAnalyser.fftSize = 256;
+          audioAnalyser.smoothingTimeConstant = 0.7;
+          audioAnalyser.connect(audioContext.destination);
+          audioDataArray = new Uint8Array(audioAnalyser.frequencyBinCount);
+          audioReady = true;
+          console.log('[Audio] AudioContext criado com sucesso');
+        } catch (e) {
+          console.error('[Audio] Falha ao criar AudioContext:', e);
+        }
+      }
+      if (audioContext && audioContext.state === 'suspended') {
+        audioContext.resume().then(() => {
+          audioReady = true;
+          console.log('[Audio] AudioContext resumido');
+        });
+      }
+    }
+
+    /* Audio overlay activation */
+    const audioOverlay = document.getElementById('audio-overlay');
+    audioOverlay.addEventListener('click', () => {
+      ensureAudioContext();
+      audioOverlay.classList.add('hidden');
+      setTimeout(() => { audioOverlay.style.display = 'none'; }, 600);
+    });
+
+    function startVolumeAnimation() {
+      if (audioAnimFrame) return;
+      function animate() {
+        if (!audioAnalyser || currentState !== 'speaking') {
+          orb.setVolume(0);
+          particleCore.setVolume(0);
+          audioAnimFrame = null;
+          return;
+        }
+        audioAnalyser.getByteFrequencyData(audioDataArray);
+        let sum = 0;
+        for (let i = 0; i < audioDataArray.length; i++) sum += audioDataArray[i];
+        let amplitude = (sum / audioDataArray.length) / 255.0;
+        // Boost para ficar mais reativo
+        amplitude = Math.min(1.0, amplitude * 2.0);
+        orb.setVolume(amplitude);
+        particleCore.setVolume(amplitude);
+        audioAnimFrame = requestAnimationFrame(animate);
+      }
+      audioAnimFrame = requestAnimationFrame(animate);
+    }
+
+    async function playAudioFromUrl(url) {
+      if (!audioReady) {
+        console.warn('[Audio] AudioContext não está pronto — clique na página primeiro');
+        // Tenta ativar mesmo sem gesto
+        ensureAudioContext();
+      }
+
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('Fetch failed: ' + res.status);
+        const arrayBuffer = await res.arrayBuffer();
+
+        if (!audioContext) {
+          console.error('[Audio] AudioContext não disponível');
+          fetch('/api/audio_finished', { method: 'POST' }).catch(() => { });
+          return;
+        }
+
+        const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+        // Stop previous if still playing
+        if (currentAudioSource) {
+          try { currentAudioSource.stop(); } catch (e) { }
+        }
+
+        const source = audioContext.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(audioAnalyser);
+        currentAudioSource = source;
+
+        source.onended = () => {
+          currentAudioSource = null;
+          orb.setVolume(0);
+          particleCore.setVolume(0);
+          // Notifica o backend que o audio terminou
+          fetch('/api/audio_finished', { method: 'POST' }).catch(() => { });
+        };
+
+        source.start(0);
+        startVolumeAnimation();
+        console.log('[Audio] Reproduzindo áudio...');
+      } catch (e) {
+        console.error('[Audio] Erro ao tocar:', e);
+        orb.setVolume(0);
+        particleCore.setVolume(0);
+        fetch('/api/audio_finished', { method: 'POST' }).catch(() => { });
+      }
+    }
+
+    /* ── WebSocket Connection ── */
+    let ws = null;
+    let wsReconnectTimer = null;
+    const connStatus = document.getElementById('conn-status');
+    const connLabel = document.getElementById('conn-label');
+    const stateInfo = document.getElementById('state-info');
+
+    function connectWebSocket() {
+      const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${location.host}/ws`;
+
+      try {
+        ws = new WebSocket(wsUrl);
+      } catch (e) {
+        scheduleReconnect();
+        return;
+      }
+
+      ws.onopen = () => {
+        connStatus.classList.add('connected');
+        connLabel.textContent = 'Conectado';
+        stateInfo.textContent = 'WebSocket: conectado ✓';
+        // Ensure audio context is ready (needs user gesture first time)
+        document.addEventListener('click', () => ensureAudioContext(), { once: true });
+        document.addEventListener('keydown', () => ensureAudioContext(), { once: true });
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+
+          if (data.type === 'state') {
+            const orbState = mapState(data.status || 'idle');
+            setOrbState(orbState);
+            particleCore.setEmotion(data.emotion || 'neutral');
+
+            // Subtitle
+            if (data.subtitle) {
+              setSubtitle(data.subtitle, orbState === 'error');
+            } else if (orbState !== 'speaking') {
+              setSubtitle('');
+            }
+
+            const label = STATE_LABELS[orbState] || orbState;
+            stateInfo.textContent = `Estado: ${label} | ${new Date().toLocaleTimeString()}`;
+          }
+
+          if (data.type === 'play_audio' && data.url) {
+            ensureAudioContext();
+            playAudioFromUrl(data.url);
+          }
+
+          if (data.type === 'stop_audio') {
+            if (currentAudioSource) {
+              try { currentAudioSource.stop(); } catch (e) { }
+              currentAudioSource = null;
+            }
+            orb.setVolume(0);
+            particleCore.setVolume(0);
+          }
+
+          if (data.type === 'ping') {
+            // keep alive
+          }
+
+        } catch (e) {
+          console.error('[WS] Parse error:', e);
+        }
+      };
+
+      ws.onclose = () => {
+        connStatus.classList.remove('connected');
+        connLabel.textContent = 'Desconectado';
+        stateInfo.textContent = 'WebSocket: desconectado';
+        scheduleReconnect();
+      };
+
+      ws.onerror = () => {
+        connStatus.classList.remove('connected');
+        connLabel.textContent = 'Erro';
+      };
+    }
+
+    function scheduleReconnect() {
+      if (wsReconnectTimer) return;
+      wsReconnectTimer = setTimeout(() => {
+        wsReconnectTimer = null;
+        connectWebSocket();
+      }, 2000);
+    }
+
+    /* ── Fallback polling (when WS is down) ── */
+    let lastPolledState = '';
+    async function pollFallback() {
+      if (ws && ws.readyState === WebSocket.OPEN) return;
+      try {
+        const res = await fetch('/api/state');
+        if (res.ok) {
+          const data = await res.json();
+          const stateStr = JSON.stringify(data);
+          if (stateStr !== lastPolledState) {
+            lastPolledState = stateStr;
+            const orbState = mapState(data.status || 'idle');
+            setOrbState(orbState);
+            particleCore.setEmotion(data.emotion || 'neutral');
+            if (data.subtitle) setSubtitle(data.subtitle);
+            else if (orbState !== 'speaking') setSubtitle('');
+
+            if (data.audio_ready && data.audio_file) {
+              ensureAudioContext();
+              playAudioFromUrl('/api/audio?t=' + Date.now());
+            }
+          }
+        }
+      } catch (e) { }
+    }
+    setInterval(pollFallback, 300);
+
+    /* ── Start WS connection ── */
+    connectWebSocket();
+  </script>
+</body>
+
+</html>

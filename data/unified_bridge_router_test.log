@@ -1,0 +1,8 @@
+[UnifiedJarvis] Bridge starting.
+[UnifiedJarvis] USB/ADB reverse URL: ws://127.0.0.1:5138/jarvis/ws
+[UnifiedJarvis] LAN URL: ws://192.168.0.44:5138/jarvis/ws
+[UnifiedJarvis] LAN URL: ws://26.137.71.75:5138/jarvis/ws
+[UnifiedJarvis] Events: data\unified_bridge_router_test.jsonl
+[UnifiedJarvis] Local bridge em http://127.0.0.1:5138
+ * Serving Flask app 'src.jarvis_unified.local_server'
+ * Debug mode: off

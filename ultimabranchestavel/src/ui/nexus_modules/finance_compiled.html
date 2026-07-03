@@ -1,0 +1,770 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Nexus · Finanças</title>
+  <link rel="stylesheet" href="finance.css?v=2" />
+  <link rel="stylesheet" href="nexus_theme.css?v=2" />
+<base href="file:///D:/Documentos/Projeto%20AI/src/ui/nexus_modules/"><script>window.__NEXUS_BOOT__={"module": "overview", "theme": "dark", "theme_preset": "dark-neon", "theme_name": "Dark Neon", "theme_tokens": {"--accent": "#8b5cf6", "--accent-glow": "rgba(139,92,246,0.30)", "--accent-hover": "#7c3aed", "--accent-subtle": "rgba(139,92,246,0.08)", "--bg": "#0a0a0a", "--bg-panel": "#111111", "--border": "rgba(255,255,255,0.08)", "--border-accent": "rgba(139,92,246,0.35)", "--muted": "#71717a", "--shadow": "0 0 25px rgba(0,0,0,0.80)", "--sidebar": "#080808", "--surface": "rgba(255,255,255,0.04)", "--surface-hover": "rgba(255,255,255,0.08)", "--text": "#e4e4e7", "--text-dim": "#71717a", "--text-muted": "#52525b"}, "section": "overview"};</script><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"><link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet"><link rel="stylesheet" href="nexus_frame.css" /><style>html, body { background: transparent !important; }</style></head>
+<body><div id="nx-app-wrapper" class="neon-enabled" data-theme="dark" data-theme-preset="dark-neon" style="--accent: #8b5cf6; --accent-glow: rgba(139,92,246,0.30); --accent-hover: #7c3aed; --accent-subtle: rgba(139,92,246,0.08); --bg: #0a0a0a; --bg-panel: #111111; --border: rgba(255,255,255,0.08); --border-accent: rgba(139,92,246,0.35); --muted: #71717a; --shadow: 0 0 25px rgba(0,0,0,0.80); --sidebar: #080808; --surface: rgba(255,255,255,0.04); --surface-hover: rgba(255,255,255,0.08); --text: #e4e4e7; --text-dim: #71717a; --text-muted: #52525b"><div class="nx-chrome-inner" style="border-radius: 0;">
+  <header>
+    <div>
+      <h1># Finanças</h1>
+      <span id="ymLabel">Carregando mês...</span>
+    </div>
+    <div class="nav-row">
+      <button type="button" class="nav-btn" id="prevM" aria-label="Mês anterior">&lt;</button>
+      <button type="button" class="nav-btn" id="nextM" aria-label="Próximo mês">&gt;</button>
+      <button type="button" class="btn btn-ghost" onclick="pywebview.api.jump('overview','{}')">Visão geral</button>
+    </div>
+  </header>
+  <main>
+    <div class="finance-shell">
+      <div id="banner"></div>
+      <div class="nexus-flow-badge" id="nexusFlowBadge" hidden></div>
+
+      <div class="command-receipt" id="commandReceipt" hidden>
+        <div class="receipt-orb">IA</div>
+        <div>
+          <div class="receipt-label">Registro da IA</div>
+          <div class="receipt-main" id="receiptFinanceMain">Movimento registrado</div>
+          <div class="receipt-meta" id="receiptFinanceMeta">Sincronizando janela financeira...</div>
+        </div>
+        <div class="receipt-amount" id="receiptFinanceAmount">R$ 0,00</div>
+      </div>
+
+      <section class="summary-grid" aria-label="Resumo financeiro mensal">
+        <article class="sum-card">
+          <div class="sum-label">Saldo do mês</div>
+          <div class="sum-value" id="sNet">R$ 0,00</div>
+          <div class="sum-note">Receitas menos gastos.</div>
+        </article>
+        <article class="sum-card">
+          <div class="sum-label">Saldo após dívidas</div>
+          <div class="sum-value" id="financeFreeCash">R$ 0,00</div>
+          <div class="sum-note">Receitas menos dívidas marcadas.</div>
+        </article>
+        <article class="sum-card">
+          <div class="sum-label">Receitas</div>
+          <div class="sum-value income" id="sIncome">R$ 0,00</div>
+          <div class="sum-note">Entradas registradas.</div>
+        </article>
+        <article class="sum-card">
+          <div class="sum-label">Gastos</div>
+          <div class="sum-value negative" id="sExpense">R$ 0,00</div>
+          <div class="sum-note">Saídas do mês.</div>
+        </article>
+        <article class="sum-card">
+          <div class="sum-label">Dívidas</div>
+          <div class="sum-value debt" id="sDebt">R$ 0,00</div>
+          <div class="sum-note">Gastos marcados como dívida.</div>
+        </article>
+      </section>
+
+
+
+      <button class="fab-add" onclick="openFinanceModal()">+</button>
+
+      <section>
+        <div class="section-head">
+          <p class="section-title">Movimentos do mês</p>
+          <div class="finance-filter-bar" id="financeFilterBar" aria-label="Filtro de movimentos">
+            <button type="button" class="filter-chip active" data-filter="all">Todos</button>
+            <button type="button" class="filter-chip" data-filter="income">Receitas</button>
+            <button type="button" class="filter-chip" data-filter="expense">Gastos</button>
+            <button type="button" class="filter-chip" data-filter="debt">Dívidas</button>
+          </div>
+        </div>
+        <div class="tx-list" id="txlist"></div>
+      </section>
+
+      <section class="finance-chart-grid">
+        <div class="chart-card">
+          <div class="chart-head">
+            <div>
+              <div class="panel-kicker">Fluxo diário</div>
+              <div class="chart-title">Receitas e gastos por dia</div>
+            </div>
+            <div class="chart-legend">
+              <span><i class="dot-income"></i>Receita</span>
+              <span><i class="dot-expense"></i>Gasto</span>
+            </div>
+          </div>
+          <div class="trend-chart telemetry-canvas-shell" id="financeTrendChart">
+            <canvas id="financeTrendCanvas" aria-label="Fluxo financeiro diario"></canvas>
+            <div class="telemetry-readout" id="financeTrendReadout"></div>
+          </div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-head">
+            <div>
+              <div class="panel-kicker">Categorias</div>
+              <div class="chart-title">Onde o dinheiro saiu</div>
+            </div>
+          </div>
+          <div class="category-chart telemetry-canvas-shell" id="financeCategoryChart">
+            <canvas id="financeCategoryCanvas" aria-label="Pressao por categoria financeira"></canvas>
+            <div class="telemetry-readout" id="financeCategoryReadout"></div>
+          </div>
+        </div>
+      </section>
+
+
+    </div>
+  <section class="finance-grid" style="display:block; margin-top: 14px;">
+<div class="finance-panel" id="financeInsightPanel">
+          <div class="panel-head">
+            <div>
+              <div class="panel-kicker">Aether</div>
+              <h2 class="panel-title">## Leitura financeira do mês</h2>
+            </div>
+          </div>
+</section>
+
+  <div id="financeModal" class="modal-overlay">
+<div class="add-card" style="position:relative;">
+<button type="button" class="modal-close" onclick="closeFinanceModal()">✕</button>
+          <div class="panel-head">
+            <div>
+              <div class="panel-kicker">Entrada rápida</div>
+              <h2 class="panel-title">## Registro rápido</h2>
+            </div>
+          </div>
+          <div class="finance-form-mode" id="financeFormMode">Novo movimento</div>
+          <div class="type-tabs">
+            <button type="button" class="type-tab active-expense" id="tabExpense" onclick="setType('expense')">Gasto</button>
+            <button type="button" class="type-tab" id="tabIncome" onclick="setType('income')">Receita</button>
+          </div>
+          <div class="form-grid">
+            <div class="form-field">
+              <label class="field-label" for="fa">Valor em R$</label>
+              <input id="fa" type="text" inputmode="decimal" placeholder="0,00" />
+            </div>
+            <div class="form-field">
+              <label class="field-label" for="fc">Categoria</label>
+              <input id="fc" type="text" value="Geral" />
+            </div>
+            <div class="form-field">
+              <label class="field-label" for="fd">Descrição</label>
+              <input id="fd" type="text" placeholder="O que foi?" />
+            </div>
+            <div class="form-field">
+              <label class="field-label" for="fdate">Data</label>
+              <input id="fdate" type="date" />
+            </div>
+            <label class="debt-toggle">
+              <input id="financeDebtToggle" type="checkbox" />
+              Marcar como dívida
+            </label>
+            <div class="form-field">
+              <label class="field-label" for="fnote">Observação</label>
+              <input id="fnote" type="text" placeholder="Contexto opcional para lembrar depois" />
+            </div>
+          </div>
+          <div class="finance-form-actions">
+            <button type="button" class="btn-save" id="btnFin">Registrar</button>
+            <button type="button" class="btn-cancel" id="btnFinCancel" hidden>Cancelar</button>
+          </div>
+        </div>
+</div>
+  </main>
+
+  <script src="nexus_boot.js"></script>
+  <script>
+    const boot = readBoot();
+    if (boot.toast) showToastBanner(boot.toast);
+
+    let y = new Date().getFullYear();
+    let m = new Date().getMonth() + 1;
+    let txType = 'expense';
+    let financeRows = [];
+    let financeFilter = 'all';
+    let editingFinanceId = null;
+    let lastFinanceChartData = null;
+
+    const today = new Date();
+    document.getElementById('fdate').value = today.getFullYear() + '-' +
+      String(today.getMonth() + 1).padStart(2, '0') + '-' +
+      String(today.getDate()).padStart(2, '0');
+
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>"']/g, char => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;',
+      }[char]));
+    }
+
+    function money(value) {
+      return 'R$ ' + Number(value || 0).toLocaleString('pt-BR', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+    }
+
+    function setCurrencyClass(id, value, baseClass) {
+      const el = document.getElementById(id);
+      el.textContent = money(value);
+      el.className = baseClass + ' ' + (Number(value || 0) >= 0 ? 'positive' : 'negative');
+    }
+
+    function cssVar(name, fallback) {
+      const host = document.getElementById('nx-app-wrapper') || document.documentElement;
+      const value = getComputedStyle(host).getPropertyValue(name).trim();
+      return value || fallback;
+    }
+
+    function prepareCanvas(canvas, fallbackHeight) {
+      if (!canvas) return null;
+      const parent = canvas.parentElement;
+      const rect = parent.getBoundingClientRect();
+      const width = Math.max(260, Math.round(rect.width || parent.clientWidth || 320));
+      const height = Math.max(fallbackHeight || 200, Math.round(rect.height || parent.clientHeight || fallbackHeight || 200));
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(height * dpr);
+      canvas.style.width = width + 'px';
+      canvas.style.height = height + 'px';
+      const ctx = canvas.getContext('2d');
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, width, height);
+      return { ctx, width, height };
+    }
+
+    function drawGrid(ctx, width, height, pad) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(148,163,184,0.13)';
+      ctx.lineWidth = 1;
+      for (let i = 0; i <= 4; i++) {
+        const yLine = pad.top + ((height - pad.top - pad.bottom) * i / 4);
+        ctx.beginPath();
+        ctx.moveTo(pad.left, yLine);
+        ctx.lineTo(width - pad.right, yLine);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    function drawCanvasEmpty(ctx, width, height, message) {
+      ctx.save();
+      ctx.fillStyle = cssVar('--text-dim', '#94a3b8');
+      ctx.font = '700 12px Inter, system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(message, width / 2, height / 2);
+      ctx.restore();
+    }
+
+    function applyReceiptScope() {
+      const r = boot.receipt || {};
+      if (r.kind !== 'finance' || !r.occurred_at) return;
+      const d = new Date(String(r.occurred_at).slice(0, 10) + 'T12:00:00');
+      if (isNaN(d.getTime())) return;
+      y = d.getFullYear();
+      m = d.getMonth() + 1;
+      document.getElementById('fdate').value =
+        d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
+
+    function renderBootReceipt() {
+      const r = boot.receipt || {};
+      if (r.kind !== 'finance') return;
+      const isIncome = r.type === 'income';
+      const isDelete = r.action === 'finance_delete';
+      const isUpdate = r.action === 'finance_update';
+      const amount = Number(r.amount || 0);
+      document.getElementById('commandReceipt').hidden = false;
+      document.getElementById('receiptFinanceMain').textContent =
+        isDelete ? 'Movimento removido' : (isUpdate ? 'Movimento atualizado' : ((isIncome ? 'Receita' : 'Gasto') + ' em ' + (r.category || 'Geral')));
+      document.getElementById('receiptFinanceMeta').textContent =
+        (r.description || 'Registro por comando') + ' · ' + (r.occurred_at || 'hoje');
+      const amountEl = document.getElementById('receiptFinanceAmount');
+      amountEl.textContent = (isDelete ? '' : (isIncome ? '+' : '-')) + ' ' + money(amount);
+      amountEl.className = 'receipt-amount' + (isIncome ? '' : ' expense');
+    }
+
+    function renderNexusFlowBadge() {
+      const badge = document.getElementById('nexusFlowBadge');
+      if (!badge) return;
+      const step = Number(boot.batch_step || 0);
+      const total = Number(boot.batch_total || 0);
+      if (!step || !total || total < 2) {
+        badge.hidden = true;
+        return;
+      }
+      badge.hidden = false;
+      badge.textContent = 'Comando composto · passo ' + step + '/' + total;
+    }
+
+    function isFinanceReceiptMatch(row) {
+      const r = boot.receipt || {};
+      if (String(boot.highlight_id || '') && String(boot.highlight_id || '') === String(row.id || '')) return true;
+      if (r.kind !== 'finance' || r.action !== 'finance_add') return false;
+      const sameType = !r.type || String(r.type) === String(row.type || '');
+      const sameAmount = Math.abs(Number(r.amount || 0) - Number(row.amount || 0)) < 0.009;
+      const sameCategory = String(r.category || '').toLowerCase() === String(row.category || '').toLowerCase();
+      const sameDate = String(r.occurred_at || '').slice(0, 10) === String(row.occurred_at || '').slice(0, 10);
+      const receiptDesc = String(r.description || '').toLowerCase();
+      const rowDesc = String(row.description || '').toLowerCase();
+      const sameDesc = !receiptDesc || rowDesc.includes(receiptDesc);
+      return sameType && sameAmount && sameCategory && sameDate && sameDesc;
+    }
+
+    function setType(type) {
+      txType = type;
+      document.getElementById('tabExpense').className = 'type-tab' + (type === 'expense' ? ' active-expense' : '');
+      document.getElementById('tabIncome').className = 'type-tab' + (type === 'income' ? ' active-income' : '');
+      document.getElementById('financeDebtToggle').disabled = type === 'income';
+      if (type === 'income') document.getElementById('financeDebtToggle').checked = false;
+    }
+
+    function defaultFormDate() {
+      return today.getFullYear() + '-' +
+        String(today.getMonth() + 1).padStart(2, '0') + '-' +
+        String(today.getDate()).padStart(2, '0');
+    }
+
+
+    function openFinanceModal() {
+      resetFinanceForm(); closeFinanceModal();
+      document.getElementById('financeModal').classList.add('active');
+    }
+    function closeFinanceModal() {
+      document.getElementById('financeModal').classList.remove('active');
+    }
+
+    function resetFinanceForm() {
+      editingFinanceId = null;
+      setType('expense');
+      document.getElementById('fa').value = '';
+      document.getElementById('fc').value = 'Geral';
+      document.getElementById('fd').value = '';
+      document.getElementById('fdate').value = defaultFormDate();
+      document.getElementById('fnote').value = '';
+      document.getElementById('financeDebtToggle').checked = false;
+      document.getElementById('financeFormMode').textContent = 'Novo movimento';
+      document.getElementById('btnFin').textContent = 'Registrar';
+      document.getElementById('btnFinCancel').hidden = true;
+    }
+
+    function startFinanceEdit(id) {
+      const row = financeRows.find(item => Number(item.id) === Number(id));
+      if (!row) return;
+      editingFinanceId = Number(row.id);
+      setType(row.type === 'income' ? 'income' : 'expense');
+      document.getElementById('fa').value = String(Number(row.amount || 0)).replace('.', ',');
+      document.getElementById('fc').value = row.category || 'Geral';
+      document.getElementById('fd').value = row.description || '';
+      document.getElementById('fdate').value = String(row.occurred_at || '').slice(0, 10) || defaultFormDate();
+      document.getElementById('fnote').value = row.notes || '';
+      document.getElementById('financeDebtToggle').checked = Number(row.is_debt || 0) === 1;
+      document.getElementById('financeFormMode').textContent = 'Editando #' + row.id;
+      document.getElementById('btnFin').textContent = 'Salvar alteracao';
+      document.getElementById('btnFinCancel').hidden = false;
+      document.getElementById('financeModal').classList.add('active');
+    }
+
+    function renderFinanceInsights(data) {
+      const list = document.getElementById('financeInsightList');
+      const monthly = data.monthly || {};
+      const insights = data.finance_insights || {};
+      const rows = data.transactions || [];
+      const income = Number(monthly.income || 0);
+      const expense = Number(monthly.expense || 0);
+      const debt = Number(monthly.debt_payments || 0);
+      const net = Number(monthly.net || 0);
+      const cashAfterDebt = Number(insights.cash_after_debt ?? (income - debt));
+      const freeAfterAllExpenses = Number(insights.free_after_all_expenses ?? net);
+      const nonDebtExpense = Number(insights.non_debt_expense ?? Math.max(0, expense - debt));
+      const debtRatio = Number(insights.debt_ratio_pct ?? (income > 0 ? Math.round((debt / income) * 100) : 0));
+      const biggestCategory = (data.category_breakdown || [])[0];
+      const movementText = rows.length === 1 ? '1 movimento registrado' : rows.length + ' movimentos registrados';
+
+      const tone = freeAfterAllExpenses >= 0
+        ? 'Depois dos gastos totais, o mês ainda está positivo. Continue separando investimento ou reserva antes de gastar o excedente.'
+        : 'Depois dos gastos totais, o mês está negativo. Priorize cortar uma categoria variável e pausar compras não essenciais.';
+      const debtText = debt > 0
+        ? 'Dívidas consumiram ' + debtRatio + '% das receitas deste mês.'
+        : 'Nenhuma dívida foi marcada neste mês.';
+      const categoryText = biggestCategory
+        ? 'Maior categoria de gasto: ' + biggestCategory.category + ' com ' + money(biggestCategory.expense) + '.'
+        : 'Ainda não há categoria dominante para analisar.';
+
+      list.innerHTML = [
+        '<div class="insight-item"><strong>Saldo após dívidas:</strong> ' + money(cashAfterDebt) + '. ' + escapeHtml(tone) + '</div>',
+        '<div class="insight-item"><strong>Dívidas:</strong> ' + escapeHtml(debtText) + '</div>',
+        '<div class="insight-item"><strong>Leitura:</strong> ' + escapeHtml(categoryText) + ' Gastos sem dívida: ' + money(nonDebtExpense) + '.</div>',
+        '<div class="insight-item"><strong>Base:</strong> ' + escapeHtml(movementText) + ' neste período.</div>',
+      ].join('');
+    }
+
+    function drawFinanceTrendCanvas(data) {
+      const canvas = document.getElementById('financeTrendCanvas');
+      const setup = prepareCanvas(canvas, 210);
+      if (!setup) return;
+      const { ctx, width, height } = setup;
+      const pad = { left: 34, right: 18, top: 18, bottom: 34 };
+      const series = Array.isArray(data?.daily_series) ? data.daily_series : [];
+      drawGrid(ctx, width, height, pad);
+      if (!series.length) {
+        drawCanvasEmpty(ctx, width, height, 'Sem dados no periodo');
+        return;
+      }
+
+      const plotW = width - pad.left - pad.right;
+      const plotH = height - pad.top - pad.bottom;
+      const bottom = height - pad.bottom;
+      const mid = pad.top + plotH / 2;
+      const maxFlow = Math.max(1, ...series.map(day => Math.max(Number(day.income || 0), Number(day.expense || 0))));
+      const maxNet = Math.max(1, ...series.map(day => Math.abs(Number(day.income || 0) - Number(day.expense || 0))));
+      const step = plotW / Math.max(1, series.length);
+      const barW = Math.max(2, Math.min(11, step * 0.34));
+      const incomeGradient = ctx.createLinearGradient(0, pad.top, 0, bottom);
+      incomeGradient.addColorStop(0, '#22c55e');
+      incomeGradient.addColorStop(1, '#06b6d4');
+      const expenseGradient = ctx.createLinearGradient(0, pad.top, 0, bottom);
+      expenseGradient.addColorStop(0, '#f97316');
+      expenseGradient.addColorStop(1, '#ef4444');
+
+      ctx.save();
+      ctx.strokeStyle = 'rgba(34,211,238,0.22)';
+      ctx.setLineDash([5, 5]);
+      ctx.beginPath();
+      ctx.moveTo(pad.left, mid);
+      ctx.lineTo(width - pad.right, mid);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      series.forEach((day, index) => {
+        const x = pad.left + step * index + step / 2;
+        const income = Number(day.income || 0);
+        const expense = Number(day.expense || 0);
+        const incomeH = Math.max(2, (income / maxFlow) * (plotH * 0.72));
+        const expenseH = Math.max(2, (expense / maxFlow) * (plotH * 0.72));
+        ctx.fillStyle = incomeGradient;
+        ctx.fillRect(x - barW - 1, bottom - incomeH, barW, incomeH);
+        ctx.fillStyle = expenseGradient;
+        ctx.fillRect(x + 1, bottom - expenseH, barW, expenseH);
+      });
+
+      ctx.beginPath();
+      series.forEach((day, index) => {
+        const net = Number(day.income || 0) - Number(day.expense || 0);
+        const x = pad.left + step * index + step / 2;
+        const yPos = mid - (net / maxNet) * (plotH * 0.36);
+        if (index === 0) ctx.moveTo(x, yPos);
+        else ctx.lineTo(x, yPos);
+      });
+      ctx.strokeStyle = '#e0f2fe';
+      ctx.lineWidth = 2;
+      ctx.shadowColor = 'rgba(34,211,238,0.45)';
+      ctx.shadowBlur = 12;
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function drawFinanceCategoryCanvas(data) {
+      const canvas = document.getElementById('financeCategoryCanvas');
+      const setup = prepareCanvas(canvas, 210);
+      if (!setup) return;
+      const { ctx, width, height } = setup;
+      const rows = Array.isArray(data?.category_breakdown) ? data.category_breakdown.slice(0, 6) : [];
+      const total = rows.reduce((sum, row) => sum + Number(row.expense || 0), 0);
+      if (!rows.length || total <= 0) {
+        drawCanvasEmpty(ctx, width, height, 'Sem categorias no periodo');
+        return;
+      }
+
+      const colors = ['#22c55e', '#06b6d4', '#f59e0b', '#a855f7', '#fb7185', '#38bdf8'];
+      const cx = Math.min(width * 0.36, 150);
+      const cy = height / 2 - 8;
+      const radius = Math.min(66, Math.max(44, Math.min(width, height) * 0.28));
+      let start = -Math.PI / 2;
+
+      ctx.save();
+      ctx.lineWidth = 16;
+      ctx.lineCap = 'round';
+      rows.forEach((row, index) => {
+        const pct = Number(row.expense || 0) / total;
+        const end = start + Math.max(0.08, pct * Math.PI * 2);
+        const color = colors[index % colors.length];
+        ctx.beginPath();
+        ctx.strokeStyle = color;
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 9;
+        ctx.arc(cx, cy, radius, start + 0.02, end - 0.02);
+        ctx.stroke();
+        start = end;
+      });
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = cssVar('--text', '#e5e7eb');
+      ctx.font = '900 18px Inter, system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(money(total).replace('R$ ', ''), cx, cy + 4);
+      ctx.fillStyle = cssVar('--text-dim', '#94a3b8');
+      ctx.font = '800 10px Inter, system-ui, sans-serif';
+      ctx.fillText('gastos', cx, cy + 22);
+
+      const labelX = Math.min(width - 150, cx + radius + 42);
+      rows.forEach((row, index) => {
+        const yPos = 34 + index * 24;
+        ctx.fillStyle = colors[index % colors.length];
+        ctx.fillRect(labelX, yPos - 8, 9, 9);
+        ctx.fillStyle = cssVar('--text', '#e5e7eb');
+        ctx.font = '800 11px Inter, system-ui, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(String(row.category || 'Geral').slice(0, 18), labelX + 15, yPos);
+        ctx.fillStyle = cssVar('--text-dim', '#94a3b8');
+        ctx.fillText(Math.round((Number(row.expense || 0) / total) * 100) + '%', labelX + 112, yPos);
+      });
+      ctx.restore();
+    }
+
+    function resizeFinanceCanvases(data) {
+      lastFinanceChartData = data || lastFinanceChartData;
+      if (!lastFinanceChartData) return;
+      drawFinanceTrendCanvas(lastFinanceChartData);
+      drawFinanceCategoryCanvas(lastFinanceChartData);
+    }
+
+    function ensureFinanceCanvasShells(data) {
+      const trend = document.getElementById('financeTrendChart');
+      const cats = document.getElementById('financeCategoryChart');
+      if (trend && !document.getElementById('financeTrendCanvas')) {
+        trend.classList.add('telemetry-canvas-shell');
+        trend.innerHTML =
+          '<canvas id="financeTrendCanvas" aria-label="Fluxo financeiro diario"></canvas>' +
+          '<div class="telemetry-readout" id="financeTrendReadout"></div>';
+      }
+      if (cats && !document.getElementById('financeCategoryCanvas')) {
+        cats.classList.add('telemetry-canvas-shell');
+        cats.innerHTML =
+          '<canvas id="financeCategoryCanvas" aria-label="Pressao por categoria financeira"></canvas>' +
+          '<div class="telemetry-readout" id="financeCategoryReadout"></div>';
+      }
+      const series = data.daily_series || [];
+      const breakdown = data.category_breakdown || [];
+      const activeDays = series.filter(day => Number(day.income || 0) || Number(day.expense || 0)).length;
+      const topCategory = breakdown[0];
+      const monthly = data.monthly || {};
+      const net = Number(monthly.net || 0);
+      const trendReadout = document.getElementById('financeTrendReadout');
+      const categoryReadout = document.getElementById('financeCategoryReadout');
+      if (trendReadout) {
+        trendReadout.innerHTML = series.length
+          ? '<span>' + activeDays + ' dias ativos</span><span>Net ' + money(net) + '</span>'
+          : '<span>Sem dados no periodo</span>';
+      }
+      if (categoryReadout) {
+        categoryReadout.innerHTML = topCategory
+          ? '<span>Top: ' + escapeHtml(topCategory.category || 'Geral') + '</span><span>' + money(topCategory.expense) + '</span>'
+          : '<span>Nenhum gasto categorizado</span>';
+      }
+      resizeFinanceCanvases(data);
+    }
+
+    function installFinanceResizeObserver() {
+      const redraw = () => resizeFinanceCanvases(lastFinanceChartData);
+      if (typeof ResizeObserver !== 'undefined') {
+        const observer = new ResizeObserver(redraw);
+        ['financeTrendChart', 'financeCategoryChart'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) observer.observe(el);
+        });
+      }
+      window.addEventListener('resize', redraw);
+    }
+
+    function renderFinanceCharts(data) {
+      const trend = document.getElementById('financeTrendChart');
+      const cats = document.getElementById('financeCategoryChart');
+      const series = data.daily_series || [];
+      const breakdown = data.category_breakdown || [];
+      ensureFinanceCanvasShells(data);
+      return;
+      const maxFlow = Math.max(1, ...series.map(day => Math.max(Number(day.income || 0), Number(day.expense || 0))));
+
+      trend.innerHTML = series.length ? series.map(day => {
+        const label = String(day.date || '').slice(8, 10);
+        const inc = Math.max(2, Math.round((Number(day.income || 0) / maxFlow) * 106));
+        const exp = Math.max(2, Math.round((Number(day.expense || 0) / maxFlow) * 106));
+        return (
+          '<div class="trend-day" title="' + escapeHtml(label + ' · +' + money(day.income) + ' / -' + money(day.expense)) + '">' +
+            '<span class="trend-income" style="height:' + inc + 'px"></span>' +
+            '<span class="trend-expense" style="height:' + exp + 'px"></span>' +
+          '</div>'
+        );
+      }).join('') : '<div class="chart-empty">Sem dados no período.</div>';
+
+      const maxCat = Math.max(1, ...breakdown.map(row => Number(row.expense || 0)));
+      cats.innerHTML = breakdown.length ? breakdown.slice(0, 6).map(row => {
+        const width = Math.max(4, Math.round((Number(row.expense || 0) / maxCat) * 100));
+        return (
+          '<div class="cat-row">' +
+            '<div class="cat-name">' + escapeHtml(row.category || 'Geral') + '</div>' +
+            '<div class="cat-track"><div class="cat-fill" style="width:' + width + '%"></div></div>' +
+            '<div>' + money(row.expense) + '</div>' +
+          '</div>'
+        );
+      }).join('') : '<div class="chart-empty">Nenhum gasto categorizado.</div>';
+    }
+
+    function movementIcon(tx) {
+      if (Number(tx.is_debt || 0)) return 'DIV';
+      return tx.type === 'income' ? 'REC' : 'GAS';
+    }
+
+    function applyFinanceFilters() {
+      const tx = document.getElementById('txlist');
+      const rows = financeRows.filter(row => {
+        if (financeFilter === 'all') return true;
+        if (financeFilter === 'debt') return Number(row.is_debt || 0) === 1;
+        return row.type === financeFilter;
+      });
+
+      if (!rows.length) {
+        tx.innerHTML = '<div class="empty-state">Nenhum movimento encontrado neste filtro.</div>';
+        return;
+      }
+
+      tx.innerHTML = rows.slice(0, 100).map(row => {
+        const isIncome = row.type === 'income';
+        const isDebt = Number(row.is_debt || 0) === 1;
+        const sign = isIncome ? '+' : '-';
+        const cls = isIncome ? 'income' : 'expense';
+        const iconCls = isDebt ? 'debt' : cls;
+        const notes = row.notes ? '<div class="tx-notes">' + escapeHtml(row.notes) + '</div>' : '';
+        const debtLabel = isDebt ? ' · dívida' : '';
+        const inserted = isFinanceReceiptMatch(row);
+        return (
+          '<div class="tx-item' + (inserted ? ' ai-inserted' : '') + '" data-id="' + escapeHtml(row.id) + '">' +
+            '<div class="tx-icon ' + iconCls + '">' + movementIcon(row) + '</div>' +
+            '<div class="tx-info">' +
+              '<div class="tx-desc">' + escapeHtml(row.description || row.category || 'Movimento') + '</div>' +
+              '<div class="tx-meta">' + escapeHtml(String(row.occurred_at || '').slice(0, 10)) + ' · ' + escapeHtml(row.category || 'Geral') + debtLabel + '</div>' +
+              notes +
+            '</div>' +
+            '<div class="tx-amount ' + cls + '">' + sign + ' ' + money(row.amount) + '</div>' +
+            '<div class="tx-actions">' +
+              '<button type="button" class="tx-edit btnTxEdit" title="Editar movimento" data-id="' + escapeHtml(row.id) + '">ED</button>' +
+              '<button type="button" class="tx-delete btnTxDelete" title="Remover movimento" data-id="' + escapeHtml(row.id) + '">&times;</button>' +
+            '</div>' +
+          '</div>'
+        );
+      }).join('');
+
+      tx.querySelectorAll('.btnTxEdit').forEach(button => {
+        button.onclick = () => startFinanceEdit(parseInt(button.dataset.id, 10));
+      });
+
+      tx.querySelectorAll('.btnTxDelete').forEach(button => {
+        button.onclick = async () => {
+          const id = parseInt(button.dataset.id, 10);
+          if (!confirm('Remover este movimento financeiro?')) return;
+          const out = await nxBridge('finance_delete', { transaction_id: id });
+          if (!out.ok) return alert(out.error || 'Erro ao remover');
+          load();
+        };
+      });
+    }
+
+    async function load() {
+      document.getElementById('ymLabel').textContent =
+        new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' }).format(new Date(y, m - 1, 1));
+
+      const response = await nxBridge('finance_snapshot', { year: y, month: m });
+      if (!response.ok) {
+        document.getElementById('txlist').innerHTML = '<div class="empty-state">' + escapeHtml(response.error || 'Erro ao carregar finanças.') + '</div>';
+        return;
+      }
+
+      const data = response.data || {};
+      const monthly = data.monthly || {};
+      const insights = data.finance_insights || {};
+      const net = Number(monthly.net || 0);
+      const debt = Number(monthly.debt_payments || 0);
+      const income = Number(monthly.income || 0);
+      const cashAfterDebt = Number(insights.cash_after_debt ?? (income - debt));
+
+      setCurrencyClass('sNet', net, 'sum-value');
+      setCurrencyClass('financeFreeCash', cashAfterDebt, 'sum-value');
+      document.getElementById('sIncome').textContent = money(monthly.income || 0);
+      document.getElementById('sExpense').textContent = money(monthly.expense || 0);
+      document.getElementById('sDebt').textContent = money(debt);
+
+      financeRows = data.transactions || [];
+      renderFinanceInsights(data);
+      renderFinanceCharts(data);
+      applyFinanceFilters();
+    }
+
+    document.getElementById('financeFilterBar').querySelectorAll('.filter-chip').forEach(button => {
+      button.onclick = () => {
+        financeFilter = button.dataset.filter || 'all';
+        document.getElementById('financeFilterBar').querySelectorAll('.filter-chip').forEach(item => {
+          item.classList.toggle('active', item === button);
+        });
+        applyFinanceFilters();
+      };
+    });
+
+    document.getElementById('prevM').onclick = () => {
+      m--;
+      if (m < 1) { m = 12; y--; }
+      load();
+    };
+
+    document.getElementById('nextM').onclick = () => {
+      m++;
+      if (m > 12) { m = 1; y++; }
+      load();
+    };
+
+    document.getElementById('btnFin').onclick = async () => {
+      const raw = document.getElementById('fa').value.replace(',', '.').trim();
+      const amount = parseFloat(raw);
+      if (!raw || isNaN(amount) || amount <= 0) return alert('Valor inválido');
+      const occurredAt = document.getElementById('fdate').value ||
+        (y + '-' + String(m).padStart(2, '0') + '-' + String(new Date().getDate()).padStart(2, '0'));
+      const payload = {
+        type: txType,
+        amount,
+        category: document.getElementById('fc').value.trim() || 'Geral',
+        description: document.getElementById('fd').value.trim() || 'Registro desktop',
+        occurred_at: occurredAt,
+        necessity: 5,
+        notes: document.getElementById('fnote').value.trim(),
+        is_debt: txType === 'expense' && document.getElementById('financeDebtToggle').checked ? 1 : 0,
+      };
+      const method = editingFinanceId ? 'finance_update' : 'finance_add';
+      if (editingFinanceId) {
+        payload.transaction_id = editingFinanceId;
+      } else {
+        payload.action = 'finance_add';
+      }
+      const out = await nxBridge(method, payload);
+      if (!out.ok) return alert(out.error || 'Erro ao registrar');
+      resetFinanceForm(); closeFinanceModal();
+      load();
+    };
+
+    document.getElementById('btnFinCancel').onclick = resetFinanceForm;
+
+    installFinanceResizeObserver();
+    resetFinanceForm(); closeFinanceModal();
+    applyReceiptScope();
+    renderNexusFlowBadge();
+    renderBootReceipt();
+    load();
+
+    window.addEventListener('message', (e) => {
+      if (e.data === 'nexus-tab-focus') {
+        load();
+      }
+    });
+  </script>
+</div></div></body>
+</html>
+

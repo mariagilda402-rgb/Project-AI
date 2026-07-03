@@ -1,0 +1,65 @@
+<h2>Primeira fase do Nexus Mobile</h2>
+<p class="subtitle">Comparando o app instalado agora: a promessa é “Jarvis por voz + second brain”, mas a primeira tela comunica dashboard, e Estudos abre com métricas vazias antes do fluxo de aprender.</p>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">Tela inicial atual</div>
+    <div class="mockup-body">
+      <img src="/files/nexus_current.png" style="width:100%;max-height:520px;object-fit:contain;border-radius:14px;background:#050509" alt="Tela inicial atual do Nexus Mobile">
+    </div>
+  </div>
+  <div class="mockup">
+    <div class="mockup-header">Estudos atual</div>
+    <div class="mockup-body">
+      <img src="/files/nexus_studies.png" style="width:100%;max-height:520px;object-fit:contain;border-radius:14px;background:#050509" alt="Tela de estudos atual do Nexus Mobile">
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Escolha o foco da primeira entrega</h3>
+  <p class="subtitle">Clique em uma opção se quiser. A escolha pode ser ajustada por texto aqui no chat.</p>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="study-first" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Estudos primeiro</h3>
+      <p>Transformar Estudos no “Notion + Anki + professor Jarvis”: revisão do dia no topo, notas/cadernos fortes, geração real de flashcards, quiz com revisão guiada, grafo útil e captura por câmera entrando no fluxo de estudo.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="jarvis-first" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Jarvis primeiro</h3>
+      <p>Arrumar a promessa central: botão de voz confiável, comandos por fala para criar/editar dados, modo câmera/visão real, estado claro de conexão com desktop, e uma tela “o que posso pedir agora”.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="foundation-first" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Fundação primeiro</h3>
+      <p>Limpar navegação, sync/erros, arquitetura JS e UX base antes de recursos grandes. Menos chamativo no começo, mas reduz bug e torna as próximas fases mais rápidas.</p>
+    </div>
+  </div>
+</div>
+
+<div class="pros-cons">
+  <div class="pros">
+    <h4>Minha recomendação</h4>
+    <ul>
+      <li>Começar por A, mas já incluir uma “barra Jarvis” dentro de Estudos.</li>
+      <li>Isso entrega valor visível rápido sem ignorar a promessa de IA.</li>
+      <li>Depois fazemos Jarvis global com voz/câmera mais profundo.</li>
+    </ul>
+  </div>
+  <div class="cons">
+    <h4>Risco a evitar</h4>
+    <ul>
+      <li>Tentar “IA faz tudo” de uma vez e terminar com outra casca incompleta.</li>
+      <li>Continuar escondendo SRS, notas e câmera em botões pequenos.</li>
+      <li>Mexer no APK nativo antes de travar o fluxo principal.</li>
+    </ul>
+  </div>
+</div>

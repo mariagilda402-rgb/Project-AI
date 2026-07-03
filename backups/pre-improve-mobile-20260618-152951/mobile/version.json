@@ -1,0 +1,11 @@
+{
+  "version": "2026.05.29.1",
+  "files": [
+    "index.html",
+    "style.css",
+    "app.js",
+    "youtube-player.html",
+    "manifest.json",
+    "sw.js"
+  ]
+}

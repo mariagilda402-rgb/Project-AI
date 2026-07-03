@@ -1,0 +1,54 @@
+plugins {
+    id 'com.android.application'
+}
+
+def mobileWebDir = file("../../mobile")
+
+android {
+    namespace 'com.nexus.mobile'
+    compileSdk 34
+    
+    buildFeatures {
+        buildConfig true
+    }
+
+    defaultConfig {
+        applicationId "com.nexus.mobile"
+        minSdk 23
+        targetSdk 34
+        versionCode 13
+        versionName "1.12"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+        debug {
+            applicationIdSuffix ""
+            debuggable true
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation 'androidx.core:core:1.12.0'
+    implementation 'androidx.webkit:webkit:1.10.0'
+    implementation 'androidx.browser:browser:1.8.0'
+}
+
+tasks.register("copyMobileWebAssets", Copy) {
+    from(mobileWebDir) {
+        include "index.html", "app.js", "nexus-audio.js", "nexus-phase15.js", "style.css", "youtube-player.html", "manifest.json", "sw.js", "version.json"
+        include "js/**"
+    }
+    into layout.projectDirectory.dir("src/main/assets")
+}
+
+preBuild.dependsOn(tasks.named("copyMobileWebAssets"))

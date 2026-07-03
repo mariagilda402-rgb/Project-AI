@@ -1,0 +1,382 @@
+from __future__ import annotations
+
+import speech_recognition as sr
+from typing import Any
+
+try:
+    from groq import Groq
+except (ImportError, ModuleNotFoundError):
+    Groq = None
+
+
+class STTService:
+    """
+    Reconhecimento via SpeechRecognition + Google (rede).
+    Em geral lida melhor com PT + palavras em ingles ocasionais do que modelos locais
+    treinados so para um idioma (ex.: VosK PT).
+    """
+
+    def __init__(
+        self,
+        use_mic: bool = False,
+        language: str = "pt-BR",
+        groq_api_key: str = "",
+        energy_threshold: int = 1100,
+        dynamic_energy_threshold: bool = True,
+        pause_threshold: float = 0.8,
+        non_speaking_duration: float = 0.35,
+        min_audio_seconds: float = 0.35,
+    ) -> None:
+        self.use_mic = use_mic
+        self.language = language.strip() or "pt-BR"
+        self.recognizer = sr.Recognizer()
+        
+        self.energy_threshold = max(150, min(8000, int(energy_threshold or 1100)))
+        self.dynamic_energy_threshold = bool(dynamic_energy_threshold)
+        self.pause_threshold = max(0.25, min(3.0, float(pause_threshold or 0.8)))
+        self.non_speaking_duration = max(0.1, min(2.0, float(non_speaking_duration or 0.35)))
+        self.min_audio_seconds = max(0.05, min(3.0, float(min_audio_seconds or 0.35)))
+
+        # Ajustes configuraveis: o painel pode priorizar sensibilidade ou rejeicao de ruido.
+        self.recognizer.energy_threshold = self.energy_threshold
+        self.recognizer.dynamic_energy_threshold = self.dynamic_energy_threshold
+        self.recognizer.dynamic_energy_adjustment_damping = 0.15
+        self.recognizer.pause_threshold = self.pause_threshold
+        self.recognizer.non_speaking_duration = self.non_speaking_duration
+        
+        self.groq_client = None
+        if groq_api_key and Groq:
+            try:
+                self.groq_client = Groq(api_key=groq_api_key)
+            except Exception as e:
+                print(f"[STT] Erro ao inicializar cliente Groq: {e}")
+        elif groq_api_key and not Groq:
+            print("[STT] Aviso: biblioteca 'groq' não encontrada. Usando Google Speech como fallback.")
+        
+        # Calibração inicial
+        self.calibrated = False
+
+    def configure(
+        self,
+        *,
+        use_mic: bool | None = None,
+        language: str | None = None,
+        energy_threshold: int | None = None,
+        dynamic_energy_threshold: bool | None = None,
+        pause_threshold: float | None = None,
+        non_speaking_duration: float | None = None,
+        min_audio_seconds: float | None = None,
+    ) -> None:
+        if use_mic is not None:
+            self.use_mic = bool(use_mic)
+        if language is not None:
+            self.language = str(language).strip() or "pt-BR"
+        if energy_threshold is not None:
+            self.energy_threshold = max(150, min(8000, int(energy_threshold or 1100)))
+        if dynamic_energy_threshold is not None:
+            self.dynamic_energy_threshold = bool(dynamic_energy_threshold)
+        if pause_threshold is not None:
+            self.pause_threshold = max(0.25, min(3.0, float(pause_threshold or 0.8)))
+        if non_speaking_duration is not None:
+            self.non_speaking_duration = max(
+                0.1, min(2.0, float(non_speaking_duration or 0.35))
+            )
+        if min_audio_seconds is not None:
+            self.min_audio_seconds = max(0.05, min(3.0, float(min_audio_seconds or 0.35)))
+
+        self.recognizer.energy_threshold = self.energy_threshold
+        self.recognizer.dynamic_energy_threshold = self.dynamic_energy_threshold
+        self.recognizer.pause_threshold = self.pause_threshold
+        self.recognizer.non_speaking_duration = self.non_speaking_duration
+
+    def _apply_energy_floor(self) -> None:
+        if self.recognizer.energy_threshold < self.energy_threshold:
+            self.recognizer.energy_threshold = self.energy_threshold
+
+    def calibrate(self, duration: float = 0.8):
+        """Ajusta o reconhecedor ao ruido ambiente respeitando o piso configurado."""
+        try:
+            with sr.Microphone() as source:
+                print(f"[STT] Calibrando ruído ambiente ({duration}s)...")
+                self.recognizer.adjust_for_ambient_noise(source, duration=duration)
+                self._apply_energy_floor()
+                
+                self.calibrated = True
+                print(f"[STT] Calibração concluída. Threshold final: {self.recognizer.energy_threshold}")
+        except Exception as e:
+            print(f"[STT] Erro na calibração: {e}")
+
+    def _viz_set(self, func_name: str, *args, **kwargs):
+        """Helper seguro para chamar funções do visualizador."""
+        try:
+            from src.services import visualizer
+            getattr(visualizer, func_name)(*args, **kwargs)
+        except Exception:
+            pass
+
+    def _transcribe(self, audio: sr.AudioData) -> str:
+        # Filtro de duracao configuravel: evita cliques/tosses sem engolir falas curtas.
+        duration = len(audio.get_raw_data()) / (audio.sample_rate * audio.sample_width)
+        if duration < self.min_audio_seconds:
+            return ""
+
+        text = ""
+        if self.groq_client:
+            import tempfile
+            import os
+            try:
+                with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+                    tmp.write(audio.get_wav_data())
+                    tmp_name = tmp.name
+                
+                with open(tmp_name, "rb") as file:
+                    transcription = self.groq_client.audio.transcriptions.create(
+                        file=(tmp_name, file.read()),
+                        model="whisper-large-v3-turbo",
+                        response_format="json",
+                        language="pt" if "pt" in self.language.lower() else "en"
+                    )
+                os.remove(tmp_name)
+                text = transcription.text.strip()
+            except Exception as e:
+                print(f"Groq Whisper falhou ({e}), usando Google como fallback...")
+                pass
+                
+        if not text:
+            try:
+                text = self.recognizer.recognize_google(audio, language=self.language)
+            except Exception:
+                return ""
+        
+        # Filtro de alucinação (frases curtas ou comuns em erros de STT)
+        lowered = text.strip().lower().replace(".", "").replace("!", "").replace("?", "").replace(",", "")
+        
+        # Lista de "lixo" que o Whisper costuma inventar no silêncio (PT-BR)
+        hard_hallucinations = [
+            "legenda por", "legendas por", "sônia ruberti", "sonia ruberti",
+            "transmissão por", "geraldump", "geral dump", "cachou",
+            "inscreva-se", "deixe seu like"
+        ]
+        
+        soft_hallucinations = [
+            "obrigado", "obrigada", "valeu", "tchau", "e aí", "e ai", "oi",
+            "hmmm", "hum", "ok", "ah", "eh", "teste 1 2 3", "testando 1 2 3"
+        ]
+        
+        # Se contiver QUALQUER termo "hard", é 100% lixo de STT
+        if any(h in lowered for h in hard_hallucinations):
+            return ""
+            
+        # Se for exatamente um termo "soft" ou quase do mesmo tamanho
+        if lowered in soft_hallucinations or any(lowered.startswith(h) and len(lowered) < len(h) + 6 for h in soft_hallucinations):
+            return ""
+            
+        # Filtro para frases extremamente curtas (ruído)
+        words = lowered.split()
+        if len(words) <= 2 and lowered in ["a", "o", "e", "é", "não", "sim"]:
+            return ""
+
+        return text.strip()
+
+    def listen(self) -> str:
+        if not self.use_mic:
+            return input("Voce: ").strip()
+
+        # Estado: LISTENING
+        self._viz_set("set_listening")
+        with sr.Microphone() as source:
+            print("Ouvindo...")
+            try:
+                # Aumentado o timeout para dar tempo de começar a falar
+                audio = self.recognizer.listen(source, timeout=10, phrase_time_limit=20)
+            except sr.WaitTimeoutError:
+                return ""
+            except Exception as e:
+                print(f"[STT] Erro ao ouvir: {e}")
+                return ""
+        try:
+            text = self._transcribe(audio)
+            print(f"Voce (STT): {text}")
+            return text.strip()
+        except Exception:
+            return ""
+
+    def listen_mic_only(self) -> str:
+        """Forca a escuta pelo microfone (usado pelo atalho de teclado)."""
+        import winsound
+        try:
+            # Beep curto para avisar que comecou a ouvir
+            winsound.Beep(1000, 200)
+        except Exception:
+            pass
+
+        # Estado: LISTENING
+        self._viz_set("set_listening")
+        with sr.Microphone() as source:
+            print("Ouvindo (atalho)...")
+            try:
+                audio = self.recognizer.listen(source, timeout=8, phrase_time_limit=20)
+            except Exception:
+                return ""
+        try:
+            text = self._transcribe(audio)
+            print(f"Voce (Voz): {text}")
+            return text.strip()
+        except Exception:
+            return ""
+
+    def start_continuous_listening(self, callback, on_speech_start=None, on_speech_end=None) -> Any:
+        """Inicia escuta em background com detecção de fala em tempo real.
+        callback(text: str) -> chamado quando o texto é reconhecido.
+        on_speech_start() -> chamado quando detecta voz (visualizador verde).
+        on_speech_end()   -> chamado quando a voz para (visualizador idle).
+        Retorna uma função para parar a escuta.
+        """
+        import threading
+        import audioop
+        import time
+
+        _running = [True]
+        _speech_active = [False]
+        _silence_count = [0]
+        SILENCE_LIMIT = 15  # ~1s de silêncio para evitar jitter na UI
+        recognizer = self.recognizer
+        stt_self = self
+
+        class _MonitoredStream:
+            """Proxy que intercepta reads do microfone para monitorar energia."""
+            def __init__(self, inner, sample_width):
+                self._inner = inner
+                self._sw = sample_width
+
+            def read(self, size):
+                data = self._inner.read(size)
+                if not _running[0]:
+                    return data
+                try:
+                    energy = audioop.rms(data, self._sw)
+                    if energy > recognizer.energy_threshold:
+                        _silence_count[0] = 0
+                        if not _speech_active[0]:
+                            _speech_active[0] = True
+                            if on_speech_start:
+                                on_speech_start()
+                    else:
+                        _silence_count[0] += 1
+                        if _speech_active[0] and _silence_count[0] > SILENCE_LIMIT:
+                            _speech_active[0] = False
+                            if on_speech_end:
+                                on_speech_end()
+                except Exception:
+                    pass
+                return data
+
+            def close(self):
+                return self._inner.close()
+
+            def __getattr__(self, name):
+                return getattr(self._inner, name)
+
+        def _process_audio(audio):
+            """Transcreve em thread separada para não bloquear o listener."""
+            try:
+                text = stt_self._transcribe(audio)
+                # Garante idle após transcrição
+                if _speech_active[0]:
+                    _speech_active[0] = False
+                    if on_speech_end:
+                        on_speech_end()
+                if text.strip():
+                    try:
+                        callback(text.strip(), audio)
+                    except TypeError:
+                        callback(text.strip())
+            except Exception:
+                if _speech_active[0]:
+                    _speech_active[0] = False
+                    if on_speech_end:
+                        on_speech_end()
+
+        def _listener_thread():
+            source = sr.Microphone()
+            with source as s:
+                recognizer.adjust_for_ambient_noise(s, duration=0.5)
+                stt_self._apply_energy_floor()
+                # Wrappea o stream APÓS aberto — dentro do with
+                s.stream = _MonitoredStream(s.stream, s.SAMPLE_WIDTH)
+
+                while _running[0]:
+                    try:
+                        audio = recognizer.listen(s, timeout=5, phrase_time_limit=30)
+                        # Processa em thread separada para voltar a ouvir imediatamente
+                        threading.Thread(target=_process_audio, args=(audio,), daemon=True).start()
+                    except sr.WaitTimeoutError:
+                        pass
+                    except Exception:
+                        time.sleep(0.5)
+
+        thread = threading.Thread(target=_listener_thread, daemon=True)
+        thread.start()
+
+        def stop(wait_for_stop=True):
+            _running[0] = False
+            if wait_for_stop:
+                thread.join(timeout=3)
+
+        return stop
+
+    def listen_push_to_talk(self, hotkey: str = 'ctrl+shift') -> str:
+        import keyboard
+        import pyaudio
+        import time
+        import speech_recognition as sr
+        
+        CHUNK = 1024
+        FORMAT = pyaudio.paInt16
+        CHANNELS = 1
+        RATE = 16000
+        
+        try:
+            p = pyaudio.PyAudio()
+            stream = p.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True, frames_per_buffer=CHUNK)
+        except Exception as e:
+            print(f"Erro no PyAudio: {e}")
+            return ""
+
+        import winsound
+        try:
+            winsound.Beep(1500, 100)
+        except Exception:
+            pass
+
+        # Estado: LISTENING
+        self._viz_set("set_listening")
+
+        frames = []
+        while keyboard.is_pressed(hotkey):
+            try:
+                data = stream.read(CHUNK, exception_on_overflow=False)
+                frames.append(data)
+            except Exception:
+                pass
+            time.sleep(0.001)
+
+        try:
+            winsound.Beep(1000, 100)
+        except Exception:
+            pass
+            
+        stream.stop_stream()
+        stream.close()
+        p.terminate()
+
+        if not frames:
+            return ""
+            
+        raw_data = b''.join(frames)
+        audio_data = sr.AudioData(raw_data, RATE, 2)
+        try:
+            text = self._transcribe(audio_data)
+            return text.strip()
+        except Exception:
+            return ""
